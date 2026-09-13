@@ -1,0 +1,521 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        x:Class="MaksIT.PostClient.UI.MainWindow"
+        x:Name="Root"
+        x:DataType="vm:MainViewModel"
+        Title="Postclient"
+        Icon="/Assets/icon.ico"
+        Width="1280"
+        Height="860"
+        MinWidth="960"
+        MinHeight="640">
+  <DockPanel LastChildFill="True">
+    <Border DockPanel.Dock="Bottom" Padding="8,5" Background="#15171a">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Text="{Binding Status}" Classes="hint" TextTrimming="CharacterEllipsis" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
+          <TextBlock Text="{Binding IndexLine}" Classes="hint" />
+          <TextBlock Text="{Binding QuotaLine}" Classes="hint" />
+          <TextBlock Text="{Binding FolderStats}" Classes="hint" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Menu DockPanel.Dock="Top" Classes="mail-menu">
+      <MenuItem Header="{Binding Copy.File}">
+        <MenuItem Header="{Binding Copy.GetMessages}" Command="{Binding GetMessagesCommand}" />
+        <MenuItem Header="{Binding Copy.Write}" Command="{Binding StartComposeCommand}" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.Print}" Command="{Binding PrintMessageCommand}" />
+        <MenuItem Header="{Binding Copy.SavePdf}" Command="{Binding SaveMessagePdfCommand}" />
+        <MenuItem Header="{Binding Copy.SaveAttachmentsZip}" Command="{Binding SaveAttachmentsZipCommand}" />
+        <MenuItem Header="{Binding Copy.ExportFascicolo}" Command="{Binding ExportFascicoloCommand}" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.ImportEml}" Command="{Binding ImportEmlCommand}" />
+        <MenuItem Header="{Binding Copy.ImportThunderbird}" Command="{Binding ImportThunderbirdCommand}" />
+        <MenuItem Header="{Binding Copy.ImportPst}" Command="{Binding ImportPstCommand}" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.OpenArchiveFolder}" Command="{Binding OpenArchiveFolderCommand}" />
+        <MenuItem Header="{Binding Copy.ExportArchive}" Command="{Binding ExportArchiveCommand}" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.NewAccount}" Command="{Binding NewMailboxCommand}" />
+        <MenuItem Header="{Binding Copy.AccountSettings}" Command="{Binding OpenAccountSettingsCommand}" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.Exit}" Click="OnExitClick" />
+      </MenuItem>
+      <MenuItem Header="{Binding Copy.View}">
+        <MenuItem Header="{Binding Copy.UnwrapEnvelope}"
+                  ToggleType="CheckBox"
+                  IsChecked="{Binding UnwrapEnvelope}" />
+        <MenuItem Header="{Binding Copy.GroupConversations}"
+                  ToggleType="CheckBox"
+                  IsChecked="{Binding GroupConversations}"
+                  ToolTip.Tip="{Binding Copy.GroupConversationsTip}" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.ListAboveReading}"
+                  ToggleType="Radio"
+                  IsChecked="{Binding IsStackedLayout}"
+                  Command="{Binding SetReadingLayoutCommand}"
+                  CommandParameter="stacked" />
+        <MenuItem Header="{Binding Copy.ThreeColumns}"
+                  ToggleType="Radio"
+                  IsChecked="{Binding IsWideLayout}"
+                  Command="{Binding SetReadingLayoutCommand}"
+                  CommandParameter="wide" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.Html}"
+                  ToggleType="Radio"
+                  IsChecked="{Binding IsHtmlKind}"
+                  Command="{Binding SetReadingKindCommand}"
+                  CommandParameter="html" />
+        <MenuItem Header="{Binding Copy.Text}"
+                  ToggleType="Radio"
+                  IsChecked="{Binding IsTextKind}"
+                  Command="{Binding SetReadingKindCommand}"
+                  CommandParameter="text" />
+        <MenuItem Header="{Binding Copy.Source}"
+                  ToggleType="Radio"
+                  IsChecked="{Binding IsSourceKind}"
+                  Command="{Binding SetReadingKindCommand}"
+                  CommandParameter="source" />
+        <MenuItem Header="{Binding Copy.FatturaPa}"
+                  ToggleType="Radio"
+                  IsChecked="{Binding IsFatturaKind}"
+                  Command="{Binding SetReadingKindCommand}"
+                  CommandParameter="fattura" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.Language}">
+          <MenuItem Header="English"
+                    ToggleType="Radio"
+                    IsChecked="{Binding IsEnglish}"
+                    Command="{Binding SetLanguageCommand}"
+                    CommandParameter="en" />
+          <MenuItem Header="Italiano"
+                    ToggleType="Radio"
+                    IsChecked="{Binding IsItalian}"
+                    Command="{Binding SetLanguageCommand}"
+                    CommandParameter="it" />
+        </MenuItem>
+      </MenuItem>
+      <MenuItem Header="{Binding Copy.Message}">
+        <MenuItem Header="{Binding Copy.Reply}" Command="{Binding ReplyCommand}" />
+        <MenuItem Header="{Binding Copy.ReplyAll}" Command="{Binding ReplyAllCommand}" />
+        <MenuItem Header="{Binding Copy.Forward}" Command="{Binding ForwardCommand}" />
+        <MenuItem Header="{Binding Copy.OpenInNewWindow}" Command="{Binding OpenMessageWindowCommand}" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.MarkRead}" Command="{Binding MarkReadCommand}" />
+        <MenuItem Header="{Binding Copy.MarkUnread}" Command="{Binding MarkUnreadCommand}" />
+        <MenuItem Header="{Binding Copy.FlagToggle}" Command="{Binding ToggleFlagCommand}" />
+        <MenuItem Header="{Binding Copy.Priority}">
+          <MenuItem Header="{Binding Copy.PriorityHigh}" Command="{Binding SetPriorityCommand}" CommandParameter="high" />
+          <MenuItem Header="{Binding Copy.PriorityNormal}" Command="{Binding SetPriorityCommand}" CommandParameter="normal" />
+          <MenuItem Header="{Binding Copy.PriorityLow}" Command="{Binding SetPriorityCommand}" CommandParameter="low" />
+        </MenuItem>
+        <Separator />
+        <MenuItem Header="{Binding Copy.Delete}" Command="{Binding DeleteMessagesCommand}" />
+      </MenuItem>
+      <MenuItem Header="{Binding Copy.Tools}">
+        <MenuItem Header="{Binding Copy.AccountSettings}" Command="{Binding OpenAccountSettingsCommand}" />
+      </MenuItem>
+      <MenuItem Header="{Binding Copy.Folders}">
+        <MenuItem Header="{Binding Copy.NewFolder}" Command="{Binding CreateFolderCommand}" />
+        <MenuItem Header="{Binding Copy.EmptyFolder}" Command="{Binding EmptyFolderCommand}" />
+        <MenuItem Header="{Binding Copy.MarkFolderRead}" Command="{Binding MarkFolderReadCommand}" />
+        <MenuItem Header="{Binding Copy.MarkFolderUnread}" Command="{Binding MarkFolderUnreadCommand}" />
+        <Separator />
+        <MenuItem Header="{Binding Copy.DeleteFolder}" Command="{Binding DeleteCustomFolderCommand}" />
+      </MenuItem>
+    </Menu>
+
+    <Border DockPanel.Dock="Top" Classes="mail-toolbar">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <Button Content="{Binding Copy.GetMessages}" Classes="mail-tool" Command="{Binding GetMessagesCommand}" />
+        <Button Content="{Binding Copy.Write}" Classes="mail-tool" Command="{Binding StartComposeCommand}" />
+        <Button Content="{Binding Copy.Reply}" Classes="mail-tool" Command="{Binding ReplyCommand}" />
+        <Button Content="{Binding Copy.ReplyAll}" Classes="mail-tool" Command="{Binding ReplyAllCommand}" />
+        <Button Content="{Binding Copy.Forward}" Classes="mail-tool" Command="{Binding ForwardCommand}" />
+        <Button Content="{Binding Copy.Delete}" Classes="mail-tool" Command="{Binding DeleteMessagesCommand}" />
+        <Button Content="{Binding Copy.ListReading}"
+                Classes="mail-tool"
+                Classes.selected="{Binding IsStackedLayout}"
+                ToolTip.Tip="{Binding Copy.ListAboveReading}"
+                Command="{Binding SetReadingLayoutCommand}"
+                CommandParameter="stacked" />
+        <Button Content="{Binding Copy.ThreeColumns}"
+                Classes="mail-tool"
+                Classes.selected="{Binding IsWideLayout}"
+                ToolTip.Tip="{Binding Copy.ThreeColumnsTip}"
+                Command="{Binding SetReadingLayoutCommand}"
+                CommandParameter="wide" />
+        <Button Content="{Binding Copy.AccountSettings}" Classes="mail-tool" Command="{Binding OpenAccountSettingsCommand}" />
+      </StackPanel>
+    </Border>
+
+    <Grid x:Name="MailGrid" ColumnDefinitions="248,4,*" RowDefinitions="*,4,1.15*">
+      <DockPanel x:Name="FolderPane"
+                 Grid.Column="0"
+                 Grid.Row="0"
+                 Grid.RowSpan="3"
+                 Background="#121416">
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Copy.Folders}" Classes="kicker" Margin="12,10,12,6" />
+        <TreeView x:Name="FolderTree"
+                  ItemsSource="{Binding FolderTree}"
+                  SelectedItem="{Binding SelectedFolderNode, Mode=TwoWay}"
+                  SelectionChanged="OnFolderTreeSelectionChanged"
+                  ContextRequested="OnFolderTreeContextRequested"
+                  DragDrop.AllowDrop="True"
+                  DragDrop.DragOver="OnFolderDragOver"
+                  DragDrop.Drop="OnFolderDrop"
+                  Margin="4,0,4,8">
+          <TreeView.ContextFlyout>
+            <MenuFlyout>
+              <MenuItem Header="{Binding Copy.NewFolder}" Command="{Binding CreateFolderCommand}" />
+              <MenuItem Header="{Binding Copy.EmptyFolder}" Command="{Binding EmptyFolderCommand}" />
+              <MenuItem Header="{Binding Copy.MarkFolderRead}" Command="{Binding MarkFolderReadCommand}" />
+              <MenuItem Header="{Binding Copy.MarkFolderUnread}" Command="{Binding MarkFolderUnreadCommand}" />
+              <Separator />
+              <MenuItem Header="{Binding Copy.DeleteFolder}" Command="{Binding DeleteCustomFolderCommand}" />
+            </MenuFlyout>
+          </TreeView.ContextFlyout>
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate ItemsSource="{Binding Children}">
+              <Grid ColumnDefinitions="20,*,Auto" Margin="0,1" HorizontalAlignment="Stretch">
+                <TextBlock Text="{Binding Glyph}"
+                           FontSize="12"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Title}"
+                           FontWeight="{Binding Weight}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2"
+                           Text="{Binding UnreadLabel}"
+                           Classes="unread-count"
+                           Margin="8,0,4,0"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding HasUnread}" />
+              </Grid>
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+      </DockPanel>
+
+      <GridSplitter x:Name="FolderSplitter"
+                    Grid.Column="1"
+                    Grid.Row="0"
+                    Grid.RowSpan="3"
+                    Width="4"
+                    Background="#2a2e33"
+                    ResizeDirection="Columns" />
+
+      <DockPanel x:Name="ListPane" Grid.Column="2" Grid.Row="0" MinWidth="220">
+          <Border DockPanel.Dock="Top" Classes="quick-filter">
+            <Grid ColumnDefinitions="*,8,160,4,Auto">
+              <TextBox PlaceholderText="{Binding Copy.SearchPlaceholder}"
+                       Text="{Binding MessageFilter}" />
+              <TextBox Grid.Column="2"
+                       PlaceholderText="Condominio X"
+                       Text="{Binding PracticeLabel}" />
+              <Button Grid.Column="4"
+                      Content="{Binding Copy.Label}"
+                      Classes="mail-tool"
+                      Command="{Binding ApplyPracticeLabelCommand}"
+                      ToolTip.Tip="{Binding Copy.LabelTip}" />
+            </Grid>
+          </Border>
+          <DataGrid x:Name="MessagesGrid"
+                    ItemsSource="{Binding VisibleMessages}"
+                    SelectedItem="{Binding SelectedMessage}"
+                    SelectionMode="Extended"
+                    AutoGenerateColumns="False"
+                    IsReadOnly="True"
+                    CanUserResizeColumns="True"
+                    CanUserSortColumns="True"
+                    CanUserReorderColumns="True"
+                    HeadersVisibility="Column"
+                    RowHeight="26"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Auto"
+                    SelectionChanged="OnMessagesSelectionChanged"
+                    DoubleTapped="OnMessagesDoubleTapped">
+            <DataGrid.ContextFlyout>
+              <MenuFlyout Opening="OnMessageMenuOpening">
+                <MenuItem Header="{Binding Copy.Reply}" Command="{Binding ReplyCommand}" />
+                <MenuItem Header="{Binding Copy.ReplyAll}" Command="{Binding ReplyAllCommand}" />
+                <MenuItem Header="{Binding Copy.Forward}" Command="{Binding ForwardCommand}" />
+                <MenuItem Header="{Binding Copy.OpenInNewWindow}" Command="{Binding OpenMessageWindowCommand}" />
+                <Separator />
+                <MenuItem Header="{Binding Copy.MarkRead}" Command="{Binding MarkReadCommand}" />
+                <MenuItem Header="{Binding Copy.MarkUnread}" Command="{Binding MarkUnreadCommand}" />
+                <MenuItem Header="{Binding Copy.FlagToggle}" Command="{Binding ToggleFlagCommand}" />
+                <MenuItem Header="{Binding Copy.Priority}">
+                  <MenuItem Header="{Binding Copy.PriorityHigh}" Command="{Binding SetPriorityCommand}" CommandParameter="high" />
+                  <MenuItem Header="{Binding Copy.PriorityNormal}" Command="{Binding SetPriorityCommand}" CommandParameter="normal" />
+                  <MenuItem Header="{Binding Copy.PriorityLow}" Command="{Binding SetPriorityCommand}" CommandParameter="low" />
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{Binding Copy.MoveTo}" />
+                <MenuItem Header="{Binding Copy.Delete}" Command="{Binding DeleteMessagesCommand}" />
+              </MenuFlyout>
+            </DataGrid.ContextFlyout>
+            <DataGrid.Columns>
+              <DataGridTemplateColumn Tag="Unread" Width="22" MinWidth="22" CanUserSort="True" SortMemberPath="UnreadSort">
+                <DataGridTemplateColumn.Header>
+                  <Border Classes="col-tip" ToolTip.Tip="{Binding Copy.Unread, ElementName=Root}" />
+                </DataGridTemplateColumn.Header>
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Border Classes="cell-tip" ToolTip.Tip="{Binding UnreadTip}">
+                      <TextBlock Text="{Binding UnreadMark}"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                    </Border>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Tag="Flag" Width="28" MinWidth="28" CanUserSort="True" SortMemberPath="FlagSort">
+                <DataGridTemplateColumn.Header>
+                  <Border Classes="col-tip" ToolTip.Tip="{Binding Copy.Flag, ElementName=Root}">
+                    <TextBlock Text="★" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                </DataGridTemplateColumn.Header>
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Button Content="{Binding FlagMark}"
+                            Classes="flag-cell"
+                            ToolTip.Tip="{Binding FlagTip}"
+                            Click="OnToggleFlagClick" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Tag="Priority" Width="22" MinWidth="22" CanUserSort="True" SortMemberPath="PrioritySort">
+                <DataGridTemplateColumn.Header>
+                  <Border Classes="col-tip" ToolTip.Tip="{Binding Copy.Priority, ElementName=Root}">
+                    <TextBlock Text="!" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                </DataGridTemplateColumn.Header>
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Border Classes="cell-tip" ToolTip.Tip="{Binding PriorityTip}">
+                      <TextBlock Text="{Binding PriorityMark}"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                    </Border>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Tag="Attachments" Width="28" MinWidth="28" CanUserSort="True" SortMemberPath="AttachmentSort">
+                <DataGridTemplateColumn.Header>
+                  <Border Classes="col-tip" ToolTip.Tip="{Binding Copy.Attachments, ElementName=Root}" />
+                </DataGridTemplateColumn.Header>
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Border Classes="cell-tip" ToolTip.Tip="{Binding AttachmentTip}">
+                      <TextBlock Text="{Binding AttachmentMark}"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                    </Border>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Tag="Delivery" Width="32" MinWidth="32" CanUserSort="True" SortMemberPath="DeliverySort">
+                <DataGridTemplateColumn.Header>
+                  <Border Classes="col-tip" ToolTip.Tip="{Binding Copy.Delivery, ElementName=Root}" />
+                </DataGridTemplateColumn.Header>
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Border Classes="cell-tip" ToolTip.Tip="{Binding DeliveryTip}">
+                      <TextBlock Text="{Binding DeliveryMark}"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                    </Border>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Tag="Type" Width="44" MinWidth="44" CanUserSort="True" SortMemberPath="Badge">
+                <DataGridTemplateColumn.Header>
+                  <Border Classes="col-tip" ToolTip.Tip="{Binding Copy.Type, ElementName=Root}" />
+                </DataGridTemplateColumn.Header>
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Border Classes="cell-tip" ToolTip.Tip="{Binding BadgeTip}">
+                      <TextBlock Text="{Binding Badge}"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                    </Border>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{Binding Copy.From, ElementName=Root}" Tag="From" Width="170" MinWidth="80" SortMemberPath="From">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding From}"
+                               FontWeight="{Binding Weight}"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="6,0"
+                               VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{Binding Copy.Label, ElementName=Root}" Tag="Label" Width="120" MinWidth="60" SortMemberPath="Labels">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding Labels}"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="6,0"
+                               VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="{Binding Copy.Subject, ElementName=Root}" Tag="Subject" Width="280" MinWidth="120" SortMemberPath="Subject">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding ChainSubject}"
+                               FontWeight="{Binding Weight}"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="{Binding SubjectPad}"
+                               VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTextColumn Header="{Binding Copy.Date, ElementName=Root}" Tag="Date" Binding="{Binding When}" Width="132" MinWidth="110" SortMemberPath="SortDate" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </DockPanel>
+
+        <GridSplitter x:Name="StackedSplitter"
+                      Grid.Column="2"
+                      Grid.Row="1"
+                      Height="4"
+                      Background="#2a2e33"
+                      ResizeDirection="Rows" />
+        <GridSplitter x:Name="WideSplitter"
+                      Grid.Column="3"
+                      Grid.Row="0"
+                      Width="4"
+                      Background="#2a2e33"
+                      ResizeDirection="Columns"
+                      IsVisible="False" />
+
+        <DockPanel x:Name="ReadingPane"
+                   Grid.Column="2"
+                   Grid.Row="2"
+                   MinWidth="280"
+                   Margin="0">
+          <TextBlock DockPanel.Dock="Top"
+                     Text="{Binding Copy.SelectMessage}"
+                     Classes="hint"
+                     Margin="16"
+                     IsVisible="{Binding !HasReading}" />
+
+          <DockPanel IsVisible="{Binding HasReading}">
+            <Border DockPanel.Dock="Top" Classes="message-header">
+              <StackPanel Spacing="6">
+                <TextBlock Text="{Binding ReadingEnvelope}"
+                           Classes="hint"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding HasReadingEnvelope}" />
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding ReadingSubject}"
+                             Classes="section"
+                             TextWrapping="Wrap" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Content="{Binding Copy.Reply}" Classes="mail-tool" Command="{Binding ReplyCommand}" />
+                    <Button Content="{Binding Copy.ReplyAll}" Classes="mail-tool" Command="{Binding ReplyAllCommand}" />
+                    <Button Content="{Binding Copy.Forward}" Classes="mail-tool" Command="{Binding ForwardCommand}" />
+                  </StackPanel>
+                </Grid>
+                <Grid ColumnDefinitions="56,*">
+                  <TextBlock Text="{Binding Copy.From}" Classes="header-label" />
+                  <TextBlock Grid.Column="1" Text="{Binding ReadingFrom}" TextWrapping="Wrap" />
+                </Grid>
+                <Grid ColumnDefinitions="56,*">
+                  <TextBlock Text="{Binding Copy.To}" Classes="header-label" />
+                  <TextBlock Grid.Column="1" Text="{Binding ReadingTo}" TextWrapping="Wrap" />
+                </Grid>
+                <Grid ColumnDefinitions="56,*" IsVisible="{Binding HasReadingCc}">
+                  <TextBlock Text="{Binding Copy.Cc}" Classes="header-label" />
+                  <TextBlock Grid.Column="1" Text="{Binding ReadingCc}" TextWrapping="Wrap" />
+                </Grid>
+                <Grid ColumnDefinitions="56,*">
+                  <TextBlock Text="{Binding Copy.Date}" Classes="header-label" />
+                  <TextBlock Grid.Column="1" Text="{Binding ReadingDate}" />
+                </Grid>
+                <CheckBox Content="{Binding Copy.UnwrapEnvelope}"
+                          IsChecked="{Binding UnwrapEnvelope}" />
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <Button Content="{Binding Copy.Html}"
+                          Classes="body-kind"
+                          Classes.selected="{Binding IsHtmlKind}"
+                          Command="{Binding SetReadingKindCommand}"
+                          CommandParameter="html" />
+                  <Button Content="{Binding Copy.Text}"
+                          Classes="body-kind"
+                          Classes.selected="{Binding IsTextKind}"
+                          Command="{Binding SetReadingKindCommand}"
+                          CommandParameter="text" />
+                  <Button Content="{Binding Copy.Source}"
+                          Classes="body-kind"
+                          Classes.selected="{Binding IsSourceKind}"
+                          Command="{Binding SetReadingKindCommand}"
+                          CommandParameter="source" />
+                  <Button Content="{Binding Copy.FatturaPa}"
+                          Classes="body-kind"
+                          Classes.selected="{Binding IsFatturaKind}"
+                          Command="{Binding SetReadingKindCommand}"
+                          CommandParameter="fattura"
+                          IsVisible="{Binding HasReadingFattura}" />
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding ReadingFiles}" IsVisible="{Binding HasReadingFiles}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Classes="attach-chip">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Text="{Binding Line}" VerticalAlignment="Center" />
+                          <Button Content="{Binding Copy.Open, ElementName=Root}" Classes="chip-action" Click="OnOpenAttachment" />
+                          <Button Content="{Binding Copy.Save, ElementName=Root}" Classes="chip-action" Click="OnSaveAttachment" />
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="{Binding Copy.SaveAllZip}"
+                        Classes="chip-action"
+                        Command="{Binding SaveAttachmentsZipCommand}"
+                        IsVisible="{Binding HasReadingFiles}" />
+              </StackPanel>
+            </Border>
+              <Grid>
+              <Grid x:Name="ReadingHtmlHost" Background="White" IsVisible="{Binding ShowHtmlBody}" />
+              <TextBox Classes="reading-text"
+                       IsVisible="{Binding ShowTextBody}"
+                       Text="{Binding ReadingBody, Mode=OneWay}"
+                       IsReadOnly="True"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       FontFamily="Segoe UI, Ubuntu, sans-serif" />
+              <TextBox Classes="reading-text reading-source"
+                       IsVisible="{Binding ShowSourceBody}"
+                       Text="{Binding ReadingSource, Mode=OneWay}"
+                       IsReadOnly="True"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap" />
+              <TextBox Classes="reading-text"
+                       IsVisible="{Binding ShowFatturaBody}"
+                       Text="{Binding ReadingFattura, Mode=OneWay}"
+                       IsReadOnly="True"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       FontFamily="Segoe UI, Ubuntu, sans-serif" />
+            </Grid>
+          </DockPanel>
+        </DockPanel>
+    </Grid>
+  </DockPanel>
+</Window>

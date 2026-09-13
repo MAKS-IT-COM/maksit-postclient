@@ -1,0 +1,122 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        x:Class="MaksIT.PostClient.UI.Windows.MessageWindow"
+        x:Name="Root"
+        x:DataType="vm:MessageWindowViewModel"
+        Title="{Binding Title}"
+        Icon="/Assets/icon.ico"
+        Width="860"
+        Height="720"
+        MinWidth="560"
+        MinHeight="420">
+  <DockPanel LastChildFill="True">
+    <Border DockPanel.Dock="Top" Classes="mail-toolbar">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <Button Content="{Binding Copy.Reply}" Classes="mail-tool" Command="{Binding ReplyCommand}" />
+        <Button Content="{Binding Copy.ReplyAll}" Classes="mail-tool" Command="{Binding ReplyAllCommand}" />
+        <Button Content="{Binding Copy.Forward}" Classes="mail-tool" Command="{Binding ForwardCommand}" />
+        <Button Content="{Binding Copy.SaveZip}" Classes="mail-tool" Command="{Binding SaveAttachmentsZipCommand}" />
+        <Button Content="{Binding Copy.Close}" Classes="mail-tool" Click="OnCloseClick" />
+      </StackPanel>
+    </Border>
+    <DockPanel>
+      <Border DockPanel.Dock="Top" Classes="message-header">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding ReadingEnvelope}"
+                     Classes="hint"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding HasReadingEnvelope}" />
+          <TextBlock Text="{Binding ReadingSubject}"
+                     Classes="section"
+                     TextWrapping="Wrap" />
+          <Grid ColumnDefinitions="56,*">
+            <TextBlock Text="{Binding Copy.From}" Classes="header-label" />
+            <TextBlock Grid.Column="1" Text="{Binding ReadingFrom}" TextWrapping="Wrap" />
+          </Grid>
+          <Grid ColumnDefinitions="56,*">
+            <TextBlock Text="{Binding Copy.To}" Classes="header-label" />
+            <TextBlock Grid.Column="1" Text="{Binding ReadingTo}" TextWrapping="Wrap" />
+          </Grid>
+          <Grid ColumnDefinitions="56,*" IsVisible="{Binding HasReadingCc}">
+            <TextBlock Text="{Binding Copy.Cc}" Classes="header-label" />
+            <TextBlock Grid.Column="1" Text="{Binding ReadingCc}" TextWrapping="Wrap" />
+          </Grid>
+          <Grid ColumnDefinitions="56,*">
+            <TextBlock Text="{Binding Copy.Date}" Classes="header-label" />
+            <TextBlock Grid.Column="1" Text="{Binding ReadingDate}" />
+          </Grid>
+          <CheckBox Content="{Binding Copy.UnwrapEnvelope}"
+                    IsChecked="{Binding UnwrapEnvelope}" />
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Content="{Binding Copy.Html}"
+                    Classes="body-kind"
+                    Classes.selected="{Binding IsHtmlKind}"
+                    Command="{Binding SetReadingKindCommand}"
+                    CommandParameter="html" />
+            <Button Content="{Binding Copy.Text}"
+                    Classes="body-kind"
+                    Classes.selected="{Binding IsTextKind}"
+                    Command="{Binding SetReadingKindCommand}"
+                    CommandParameter="text" />
+            <Button Content="{Binding Copy.Source}"
+                    Classes="body-kind"
+                    Classes.selected="{Binding IsSourceKind}"
+                    Command="{Binding SetReadingKindCommand}"
+                    CommandParameter="source" />
+            <Button Content="{Binding Copy.FatturaPa}"
+                    Classes="body-kind"
+                    Classes.selected="{Binding IsFatturaKind}"
+                    Command="{Binding SetReadingKindCommand}"
+                    CommandParameter="fattura"
+                    IsVisible="{Binding HasReadingFattura}" />
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding ReadingFiles}" IsVisible="{Binding HasReadingFiles}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="attach-chip">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding Line}" VerticalAlignment="Center" />
+                    <Button Content="{Binding Copy.Open, ElementName=Root}" Classes="chip-action" Click="OnOpenAttachment" />
+                    <Button Content="{Binding Copy.Save, ElementName=Root}" Classes="chip-action" Click="OnSaveAttachment" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Content="{Binding Copy.SaveAllZip}"
+                  Classes="chip-action"
+                  Command="{Binding SaveAttachmentsZipCommand}"
+                  IsVisible="{Binding HasReadingFiles}" />
+        </StackPanel>
+      </Border>
+      <Grid>
+        <Grid x:Name="ReadingHtmlHost" Background="White" IsVisible="{Binding ShowHtmlBody}" />
+        <TextBox Classes="reading-text"
+                 IsVisible="{Binding ShowTextBody}"
+                 Text="{Binding ReadingBody, Mode=OneWay}"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 FontFamily="Segoe UI, Ubuntu, sans-serif" />
+        <TextBox Classes="reading-text reading-source"
+                 IsVisible="{Binding ShowSourceBody}"
+                 Text="{Binding ReadingSource, Mode=OneWay}"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap" />
+        <TextBox Classes="reading-text"
+                 IsVisible="{Binding ShowFatturaBody}"
+                 Text="{Binding ReadingFattura, Mode=OneWay}"
+                 IsReadOnly="True"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap" />
+      </Grid>
+    </DockPanel>
+  </DockPanel>
+</Window>

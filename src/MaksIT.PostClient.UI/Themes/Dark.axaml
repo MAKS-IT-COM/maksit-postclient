@@ -1,0 +1,212 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <SolidColorBrush x:Key="DataGridGridLinesBrush" Color="#33383e" />
+    <SolidColorBrush x:Key="DataGridColumnHeaderBackgroundBrush" Color="#1e2124" />
+    <SolidColorBrush x:Key="DataGridColumnHeaderForegroundBrush" Color="#9aa0a6" />
+    <SolidColorBrush x:Key="DataGridRowHoveredBackgroundColor" Color="#2a2e33" />
+    <SolidColorBrush x:Key="DataGridRowSelectedBackgroundBrush" Color="#006199" />
+  </Styles.Resources>
+  <Style Selector="Window">
+    <Setter Property="Background" Value="#0E1620" />
+    <Setter Property="Foreground" Value="#E8F4FC" />
+    <Setter Property="FontFamily" Value="Segoe UI, Ubuntu, sans-serif" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+  <Style Selector="TextBlock.hint">
+    <Setter Property="Foreground" Value="#9aa0a6" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TextBlock.kicker">
+    <Setter Property="Foreground" Value="#9aa0a6" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="1.1" />
+  </Style>
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Button">
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="Margin" Value="0,0,6,0" />
+  </Style>
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="#006199" />
+    <Setter Property="Foreground" Value="#E8F4FC" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="16,10" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.accent:pointerover">
+    <Setter Property="Background" Value="#0078c4" />
+  </Style>
+  <Style Selector="Button.quiet">
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.chip-remove">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="MinWidth" Value="20" />
+    <Setter Property="MinHeight" Value="20" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="#E8F4FC" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.flag-cell">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="MinWidth" Value="22" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.flag-cell:pointerover">
+    <Setter Property="Background" Value="#2a2e33" />
+  </Style>
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+  <Style Selector="TextBox.reading-text">
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Padding" Value="14,10" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="AcceptsReturn" Value="True" />
+  </Style>
+  <Style Selector="TextBox.reading-source">
+    <Setter Property="FontFamily" Value="Consolas, Ubuntu Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="#006199" />
+  </Style>
+  <Style Selector="DataGrid">
+    <Setter Property="Background" Value="#25282c" />
+    <Setter Property="RowBackground" Value="#25282c" />
+    <Setter Property="GridLinesVisibility" Value="Horizontal" />
+    <Setter Property="HorizontalGridLinesBrush" Value="#33383e" />
+    <Setter Property="ClipboardCopyMode" Value="IncludeHeader" />
+    <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+  </Style>
+  <Style Selector="DataGridRow:nth-child(even)">
+    <Setter Property="Background" Value="#22262a" />
+  </Style>
+  <Style Selector="DataGridColumnHeader">
+    <Setter Property="Background" Value="#1e2124" />
+    <Setter Property="Foreground" Value="#9aa0a6" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Border.col-tip">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="MinWidth" Value="16" />
+    <Setter Property="MinHeight" Value="18" />
+  </Style>
+  <Style Selector="Border.cell-tip">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Menu.mail-menu">
+    <Setter Property="Background" Value="#15191e" />
+    <Setter Property="Padding" Value="6,2" />
+  </Style>
+  <Style Selector="Border.mail-toolbar">
+    <Setter Property="Background" Value="#161b22" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="BorderBrush" Value="#2a2e33" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <Style Selector="Button.mail-tool">
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Background" Value="#2a2e33" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.mail-tool:pointerover">
+    <Setter Property="Background" Value="#3a4148" />
+  </Style>
+  <Style Selector="Button.mail-tool:disabled">
+    <Setter Property="Opacity" Value="0.45" />
+  </Style>
+  <Style Selector="Button.mail-tool.selected">
+    <Setter Property="Background" Value="#006199" />
+  </Style>
+  <Style Selector="Border.quick-filter">
+    <Setter Property="Background" Value="#1a1f26" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="BorderBrush" Value="#2a2e33" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <Style Selector="Border.quick-filter TextBox">
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="MinHeight" Value="26" />
+  </Style>
+  <Style Selector="Border.message-header">
+    <Setter Property="Background" Value="#15191e" />
+    <Setter Property="Padding" Value="14,12" />
+    <Setter Property="BorderBrush" Value="#2a2e33" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <Style Selector="TextBlock.header-label">
+    <Setter Property="Foreground" Value="#9aa0a6" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Margin" Value="0,2,8,0" />
+  </Style>
+  <Style Selector="Border.attach-chip">
+    <Setter Property="Background" Value="#1e262e" />
+    <Setter Property="BorderBrush" Value="#33404c" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="Margin" Value="0,0,8,6" />
+  </Style>
+  <Style Selector="Button.chip-action">
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Background" Value="#2a2e33" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+  <Style Selector="Button.body-kind">
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Background" Value="#2a2e33" />
+  </Style>
+  <Style Selector="Button.body-kind.selected">
+    <Setter Property="Background" Value="#006199" />
+    <Setter Property="Foreground" Value="#E8F4FC" />
+  </Style>
+  <Style Selector="TextBlock.unread-count">
+    <Setter Property="Foreground" Value="#8ab4f8" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TreeView">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="TreeViewItem">
+    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+    <Setter Property="Padding" Value="2,2" />
+    <Setter Property="MinHeight" Value="24" />
+  </Style>
+  <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="#006199" />
+  </Style>
+</Styles>

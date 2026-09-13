@@ -1,0 +1,88 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        x:Class="MaksIT.PostClient.UI.Windows.AccountSettingsWindow"
+        x:DataType="vm:MainViewModel"
+        Title="{Binding Copy.AccountSettings}"
+        Icon="/Assets/icon.ico"
+        Width="560"
+        Height="740"
+        MinWidth="480"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="16" LastChildFill="True">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{Binding Status}"
+               Classes="section"
+               TextWrapping="Wrap"
+               Margin="0,0,0,12" />
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <Button Content="{Binding Copy.SaveAccount}" Classes="accent" Command="{Binding SaveMailboxCommand}" />
+      <Button Content="{Binding Copy.RemoveAccount}" Classes="quiet" Command="{Binding RemoveMailboxCommand}" />
+    </StackPanel>
+    <ScrollViewer>
+      <StackPanel Spacing="8">
+        <TextBlock Text="{Binding Copy.LanguageLabel}" Classes="kicker" />
+        <ComboBox ItemsSource="{Binding Languages}"
+                  SelectedItem="{Binding SelectedLanguage}"
+                  HorizontalAlignment="Stretch">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ChoiceRow">
+              <TextBlock Text="{Binding Title}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Text="{Binding Copy.AccountSettings}" Classes="section" />
+        <TextBlock Text="{Binding Copy.AccountHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+        <ComboBox ItemsSource="{Binding Providers}"
+                  SelectedItem="{Binding EditorProvider}"
+                  HorizontalAlignment="Stretch" />
+        <TextBox PlaceholderText="{Binding Copy.DisplayName}" Text="{Binding EditorName}" />
+        <TextBox PlaceholderText="{Binding Copy.Address}" Text="{Binding EditorAddress}" />
+        <TextBox PlaceholderText="{Binding Copy.Username}" Text="{Binding EditorUsername}" />
+        <TextBlock Text="{Binding OauthHint}" Classes="hint" TextWrapping="Wrap" IsVisible="{Binding ShowAuthHint}" />
+        <TextBox PlaceholderText="{Binding Copy.GoogleClientId}"
+                 Text="{Binding EditorGoogleClientId, UpdateSourceTrigger=PropertyChanged}"
+                 IsVisible="{Binding ShowGoogleSignIn}" />
+        <TextBox PlaceholderText="{Binding Copy.GoogleClientSecret}"
+                 PasswordChar="•"
+                 Text="{Binding EditorGoogleClientSecret, UpdateSourceTrigger=PropertyChanged}"
+                 IsVisible="{Binding ShowGoogleSignIn}" />
+        <TextBox PlaceholderText="{Binding Copy.MicrosoftClientId}"
+                 Text="{Binding EditorMicrosoftClientId, UpdateSourceTrigger=PropertyChanged}"
+                 IsVisible="{Binding ShowMicrosoftSignIn}" />
+        <Button Content="{Binding Copy.SignInGoogle}"
+                Classes="mail-tool"
+                Command="{Binding SignInGoogleCommand}"
+                IsVisible="{Binding ShowGoogleSignIn}" />
+        <Button Content="{Binding Copy.SignInMicrosoft}"
+                Classes="mail-tool"
+                Command="{Binding SignInMicrosoftCommand}"
+                IsVisible="{Binding ShowMicrosoftSignIn}" />
+        <TextBox PlaceholderText="{Binding Copy.PasswordKeep}"
+                 PasswordChar="•"
+                 Text="{Binding EditorPassword}"
+                 IsVisible="{Binding ShowPasswordFields}" />
+        <ComboBox ItemsSource="{Binding IncomingProtocols}"
+                  SelectedItem="{Binding EditorIncomingProtocol}"
+                  HorizontalAlignment="Stretch" />
+        <TextBox PlaceholderText="{Binding Copy.IncomingHost}" Text="{Binding EditorIncomingHost}" />
+        <Grid ColumnDefinitions="*,8,*">
+          <NumericUpDown Value="{Binding EditorIncomingPort}" Minimum="1" Maximum="65535" />
+          <ComboBox Grid.Column="2"
+                    ItemsSource="{Binding SecurityModes}"
+                    SelectedItem="{Binding EditorIncomingSecurity}" />
+        </Grid>
+        <TextBox PlaceholderText="{Binding Copy.SmtpHost}" Text="{Binding EditorSmtpHost}" />
+        <Grid ColumnDefinitions="*,8,*">
+          <NumericUpDown Value="{Binding EditorSmtpPort}" Minimum="1" Maximum="65535" />
+          <ComboBox Grid.Column="2"
+                    ItemsSource="{Binding SecurityModes}"
+                    SelectedItem="{Binding EditorSmtpSecurity}" />
+        </Grid>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

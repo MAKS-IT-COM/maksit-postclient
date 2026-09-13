@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        xmlns:ctrl="using:MaksIT.PostClient.UI.Controls"
+        x:Class="MaksIT.PostClient.UI.Windows.ComposeWindow"
+        x:Name="Root"
+        x:DataType="vm:ComposeViewModel"
+        Title="{Binding Title}"
+        Icon="/Assets/icon.ico"
+        Width="780"
+        Height="640"
+        MinWidth="560"
+        MinHeight="440"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel LastChildFill="True">
+    <Border DockPanel.Dock="Top" Classes="mail-toolbar">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <Button Content="{Binding Copy.Send}" Classes="mail-tool" Command="{Binding SendCommand}" IsEnabled="{Binding !IsBusy}" />
+        <Button Content="{Binding Copy.Attach}" Classes="mail-tool" Click="OnAttachClick" />
+        <Button Content="{Binding Copy.Close}" Classes="mail-tool" Click="OnCancelClick" />
+      </StackPanel>
+    </Border>
+    <TextBlock DockPanel.Dock="Bottom" Text="{Binding Status}" Classes="hint" Margin="12,8" />
+    <DockPanel DockPanel.Dock="Bottom" Margin="12,0,12,4">
+      <ItemsControl ItemsSource="{Binding Files}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Classes="attach-chip">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{Binding Line}" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Content="×" Classes="chip-remove" Click="OnRemoveFileClick" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </DockPanel>
+    <StackPanel DockPanel.Dock="Top" Margin="12,10,12,0" Spacing="8">
+      <Grid ColumnDefinitions="56,*">
+        <TextBlock Text="{Binding Copy.From}" VerticalAlignment="Center" Classes="header-label" />
+        <ComboBox Grid.Column="1"
+                  ItemsSource="{Binding FromAccounts}"
+                  SelectedItem="{Binding SelectedFrom}"
+                  ToolTip.Tip="{Binding Copy.FromMailboxTip}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ComposeIdentity">
+              <TextBlock Text="{Binding Line}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <ctrl:RecipientBox Header="{Binding Copy.To, ElementName=Root}" DataContext="{Binding ToField}" />
+      <ctrl:RecipientBox Header="{Binding Copy.Cc, ElementName=Root}" DataContext="{Binding CcField}" />
+      <ctrl:RecipientBox Header="{Binding Copy.Bcc, ElementName=Root}" DataContext="{Binding BccField}" />
+      <TextBox PlaceholderText="{Binding Copy.Subject}" Text="{Binding Subject}" />
+    </StackPanel>
+    <TextBox Classes="editor"
+             AcceptsReturn="True"
+             TextWrapping="Wrap"
+             Text="{Binding Body}"
+             Margin="12,8" />
+  </DockPanel>
+</Window>

@@ -1,0 +1,65 @@
+namespace MaksIT.PostClient.Shared;
+
+
+public sealed class Configuration {
+  public string? installType { get; set; }
+
+  public string? SelectedMailboxId { get; set; }
+
+  public List<MailboxAccount> Mailboxes { get; set; } = [];
+
+  public bool UnwrapEnvelope { get; set; }
+
+  public string ReadingBodyKind { get; set; } = MailBodyKind.Html;
+
+  public string ReadingLayout { get; set; } = MailLayout.Stacked;
+
+  public LayoutSettings Layout { get; set; } = new();
+
+  public bool GroupConversations { get; set; } = true;
+
+  public string Language { get; set; } = "";
+
+  public string GoogleClientId { get; set; } = "";
+
+  public string MicrosoftClientId { get; set; } = "";
+
+  public void EnsureDefaults() {
+    Mailboxes ??= [];
+    foreach (var mailbox in Mailboxes) {
+      if (string.IsNullOrWhiteSpace(mailbox.Id))
+        mailbox.Id = Guid.NewGuid().ToString("N");
+      mailbox.IncomingProtocol = MailProtocol.NormalizeIncoming(mailbox.IncomingProtocol);
+      mailbox.IncomingSecurity = MailSecurity.Normalize(mailbox.IncomingSecurity, mailbox.ImapSsl);
+      mailbox.SmtpSecurity = MailSecurity.Normalize(mailbox.SmtpSecurity, mailbox.SmtpSsl);
+      if (mailbox.ImapPort <= 0)
+        mailbox.ImapPort = MailSecurity.DefaultIncomingPort(mailbox.IncomingProtocol, mailbox.IncomingSecurity);
+      if (mailbox.SmtpPort <= 0)
+        mailbox.SmtpPort = MailSecurity.DefaultSmtpPort(mailbox.SmtpSecurity);
+      mailbox.ImapSsl = MailSecurity.IsImplicitTls(mailbox.IncomingSecurity);
+      mailbox.SmtpSsl = MailSecurity.IsImplicitTls(mailbox.SmtpSecurity);
+      mailbox.Provider = MailProvider.Normalize(mailbox.Provider);
+      mailbox.AuthKind = MailAuthKind.Normalize(mailbox.AuthKind);
+    }
+
+    ReadingBodyKind = MailBodyKind.Normalize(ReadingBodyKind);
+    ReadingLayout = MailLayout.Normalize(ReadingLayout);
+    Language = string.IsNullOrWhiteSpace(Language)
+      ? UiLanguage.Detect()
+      : UiLanguage.Normalize(Language);
+    Layout ??= new LayoutSettings();
+    Layout.Normalize();
+  }
+
+  public MailboxAccount? FindMailbox(string? id) {
+    if (string.IsNullOrWhiteSpace(id))
+      return null;
+    return Mailboxes.FirstOrDefault(m => m.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+  }
+
+  public MailboxAccount? FindMailboxByAddress(string? address) {
+    if (string.IsNullOrWhiteSpace(address))
+      return null;
+    return Mailboxes.FirstOrDefault(m => m.Address.Equals(address.Trim(), StringComparison.OrdinalIgnoreCase));
+  }
+}

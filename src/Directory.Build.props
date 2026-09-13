@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Version>0.1.0</Version>
+    <Product>Postclient</Product>
+    <AssemblyTitle>Postclient</AssemblyTitle>
+    <Authors>Maksym Sadovnychyy</Authors>
+    <Company>Postclient</Company>
+    <Copyright>Copyright 2026 Maksym Sadovnychyy</Copyright>
+  </PropertyGroup>
+</Project>

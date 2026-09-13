@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>eu.postclient.desktop</id>
+  <name>Postclient</name>
+  <summary>The client for the mailbox you already have</summary>
+  <developer id="eu.postclient">
+    <name>Postclient</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <description>
+    <p>Free open-source desktop mail client for ordinary email and Italian PEC/REM. It talks IMAP, POP3, and SMTP to the mailbox you already hold at a QTSP or ordinary provider, and keeps the archive on this computer.</p>
+    <p>This app is not a qualified trust service, not a PEC operator, and not a timestamp authority. Receipts and envelopes come from the gestore; Postclient shows them.</p>
+    <ul>
+      <li>Read and send mail over IMAP/SMTP</li>
+      <li>Unwrap Italian PEC and eIDAS REM envelopes</li>
+      <li>Match gestore ricevute to sent messages</li>
+      <li>Passwords stay in the OS secret store on this device</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">eu.postclient.desktop.desktop</launchable>
+  <branding>
+    <color type="primary" scheme_preference="light">#33A5CF</color>
+    <color type="primary" scheme_preference="dark">#002A6A</color>
+  </branding>
+  <content_rating type="oars-1.1"/>
+  <requires>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <releases>
+    <release version="0.1.0" date="2026-09-13">
+      <description>
+        <p>First packaging slice: self-contained Windows setup and Linux Flatpak. Product name is a placeholder until the public sign is registered.</p>
+      </description>
+    </release>
+  </releases>
+</component>

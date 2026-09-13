@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+             x:Class="MaksIT.PostClient.UI.Controls.RecipientBox"
+             x:DataType="vm:RecipientFieldViewModel">
+  <Grid ColumnDefinitions="48,*">
+    <TextBlock x:Name="HeaderBlock"
+               Classes="kicker"
+               VerticalAlignment="Top"
+               Margin="0,10,8,0" />
+    <Border Grid.Column="1"
+            Background="#15171a"
+            BorderBrush="#2a2e33"
+            BorderThickness="1"
+            CornerRadius="4"
+            Padding="4"
+            MinHeight="36">
+      <WrapPanel x:Name="Host" Orientation="Horizontal">
+        <TextBox x:Name="DraftBox"
+                 MinWidth="140"
+                 Margin="2"
+                 BorderThickness="0"
+                 Background="Transparent"
+                 Padding="4,4"
+                 Text="{Binding Draft, Mode=TwoWay}"
+                 KeyDown="OnDraftKeyDown"
+                 LostFocus="OnDraftLostFocus"
+                 TextChanged="OnDraftTextChanged" />
+      </WrapPanel>
+    </Border>
+  </Grid>
+</UserControl>

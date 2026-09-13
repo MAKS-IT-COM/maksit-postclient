@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>MaksIT.PostClient.Client</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MaksIT.PostClient.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MailKit" Version="4.17.0" />
+    <PackageReference Include="MaksIT.Core" Version="1.6.8" />
+    <PackageReference Include="MaksIT.Results" Version="2.0.4" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="XstReader.Api" Version="1.0.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MaksIT.PostClient.Shared\MaksIT.PostClient.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

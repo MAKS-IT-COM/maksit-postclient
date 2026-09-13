@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "title": "Postclient Release Script Settings",
+  "description": "Community desktop pipeline (same shape as maksit-wvc210). GitHub assets are siblings: portable zip, Windows setup exe, Flatpak. The zip never contains the installer or Flatpak. Self-contained publish — no .NET SDK on the user PC. Manufacturer is the product placeholder, not MAKS-IT.",
+  "plugins": [
+    {
+      "name": "DotNetReleaseVersion",
+      "stageLabel": "build",
+      "enabled": true,
+      "projectFiles": [
+        "..\\..\\..\\src\\MaksIT.PostClient.UI\\MaksIT.PostClient.UI.csproj"
+      ]
+    },
+    {
+      "name": "DotNetTest",
+      "stageLabel": "test",
+      "enabled": true,
+      "project": "..\\..\\..\\src\\MaksIT.PostClient.Tests",
+      "resultsDir": "..\\..\\..\\test-results"
+    },
+    {
+      "name": "QualityGate",
+      "stageLabel": "qualityGate",
+      "enabled": true,
+      "coverageThreshold": 0,
+      "failOnVulnerabilities": true,
+      "projectFiles": [
+        "..\\..\\..\\src\\MaksIT.PostClient.UI\\MaksIT.PostClient.UI.csproj"
+      ]
+    },
+    {
+      "name": "DotNetPublish",
+      "stageLabel": "build",
+      "enabled": true,
+      "projectFiles": [
+        "..\\..\\..\\src\\MaksIT.PostClient.UI\\MaksIT.PostClient.UI.csproj"
+      ],
+      "artifactsDir": "..\\..\\..\\releases",
+      "runtimeIdentifiers": [
+        "win-x64",
+        "linux-x64"
+      ],
+      "selfContained": true,
+      "publishSingleFile": false
+    },
+    {
+      "name": "DotNetCreateArchive",
+      "stageLabel": "build",
+      "enabled": true,
+      "zipNamePattern": "postclient-{version}.zip",
+      "portableRuntimeIdentifier": "win-x64"
+    },
+    {
+      "name": "WindowsInstaller",
+      "stageLabel": "build",
+      "enabled": true,
+      "appName": "Postclient",
+      "manufacturer": "Postclient",
+      "installFolderName": "Postclient",
+      "upgradeCode": "48c2b468-76c1-4451-b840-54fddfd65c41",
+      "executableName": "MaksIT.PostClient.UI.exe",
+      "runtimeIdentifier": "win-x64",
+      "installScope": "perMachine",
+      "iconPath": "..\\..\\..\\src\\MaksIT.PostClient.UI\\Assets\\icon.ico",
+      "exeNamePattern": "postclient-{version}.exe"
+    },
+    {
+      "name": "FlatpakPack",
+      "stageLabel": "build",
+      "enabled": true,
+      "appId": "eu.postclient.desktop",
+      "appName": "Postclient",
+      "command": "postclient",
+      "executableName": "MaksIT.PostClient.UI",
+      "runtimeIdentifier": "linux-x64",
+      "summary": "Desktop mail client for the mailbox you already have",
+      "description": "Free open-source desktop client for ordinary mail and Italian PEC/REM. Connects IMAP/SMTP to the mailbox you already hold. Not a QTSP, PEC operator, or timestamp authority.",
+      "projectLicense": "Apache-2.0",
+      "categories": "Network;Email;",
+      "iconPath": "..\\..\\..\\src\\MaksIT.PostClient.UI\\Assets\\icon.png",
+      "metainfoPath": "..\\..\\..\\data\\eu.postclient.desktop.metainfo.xml",
+      "desktopPath": "..\\..\\..\\data\\eu.postclient.desktop.desktop",
+      "finishArgs": [
+        "--share=ipc",
+        "--share=network",
+        "--socket=wayland",
+        "--socket=x11",
+        "--filesystem=xdg-config",
+        "--filesystem=xdg-data",
+        "--filesystem=xdg-cache"
+      ],
+      "bundleNamePattern": "postclient-{version}.flatpak",
+      "buildBundle": true,
+      "attachSourceZip": false,
+      "wslDistro": "Debian",
+      "whenBuilderMissing": "skip"
+    },
+    {
+      "name": "ReleasePublishGuard",
+      "stageLabel": "release",
+      "enabled": true,
+      "branches": [
+        "main"
+      ],
+      "requireExactTagOnHead": true,
+      "tagVersionMustMatchDotNetRelease": true,
+      "whenRequirementsNotMet": "skip",
+      "requireCleanWorkingTree": false,
+      "ensureTagOnRemote": false,
+      "remoteName": "origin"
+    },
+    {
+      "name": "GitHub",
+      "githubSecret": "GitClone",
+      "stageLabel": "release",
+      "enabled": true,
+      "repository": "",
+      "releaseNotesFile": "..\\..\\..\\CHANGELOG.md",
+      "releaseTitlePattern": "Release {version}",
+      "requireReleaseAssets": true
+    },
+    {
+      "name": "CleanupArtifacts",
+      "stageLabel": "release",
+      "enabled": true,
+      "includePatterns": [
+        "*"
+      ],
+      "excludePatterns": [
+        "*.zip",
+        "*.exe",
+        "*.flatpak"
+      ]
+    }
+  ],
+  "repoUtilsSecretsShared": "RepoUtilsSecretsShared",
+  "repoUtilsSecrets": "RepoUtilsSecrets",
+  "vaultRepoUtilsApplication": "Shared"
+}

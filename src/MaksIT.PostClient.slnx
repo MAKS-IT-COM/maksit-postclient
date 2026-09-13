@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="MaksIT.PostClient.Client/MaksIT.PostClient.Client.csproj" />
+  <Project Path="MaksIT.PostClient.Shared/MaksIT.PostClient.Shared.csproj" />
+  <Project Path="MaksIT.PostClient.UI/MaksIT.PostClient.UI.csproj" />
+  <Project Path="MaksIT.PostClient.Tests/MaksIT.PostClient.Tests.csproj" />
+</Solution>

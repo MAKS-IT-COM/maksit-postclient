@@ -1,0 +1,45 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Postclient",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/MaksIT.PostClient.UI/bin/Debug/net10.0/MaksIT.PostClient.UI.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/MaksIT.PostClient.UI",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "justMyCode": true,
+            "suppressJITOptimizations": false,
+            "symbolOptions": {
+                "searchMicrosoftSymbolServer": false,
+                "searchNuGetOrgSymbolServer": false,
+                "moduleFilter": {
+                    "mode": "loadAllButExcluded",
+                    "excludedModules": [
+                        "CommunityToolkit.Mvvm.dll"
+                    ]
+                }
+            }
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach",
+            "justMyCode": true,
+            "suppressJITOptimizations": false,
+            "symbolOptions": {
+                "searchMicrosoftSymbolServer": false,
+                "searchNuGetOrgSymbolServer": false,
+                "moduleFilter": {
+                    "mode": "loadAllButExcluded",
+                    "excludedModules": [
+                        "CommunityToolkit.Mvvm.dll"
+                    ]
+                }
+            }
+        }
+    ]
+}

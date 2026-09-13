@@ -1,0 +1,10 @@
+{
+  "csharp.debug.justMyCode": true,
+  "csharp.debug.suppressJITOptimizations": false,
+  "csharp.debug.symbolOptions.searchMicrosoftSymbolServer": false,
+  "csharp.debug.symbolOptions.searchNuGetOrgSymbolServer": false,
+  "csharp.debug.symbolOptions.moduleFilter.mode": "loadAllButExcluded",
+  "csharp.debug.symbolOptions.moduleFilter.excludedModules": [
+    "CommunityToolkit.Mvvm.dll"
+  ]
+}

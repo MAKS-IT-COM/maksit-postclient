@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Postclient
+GenericName=Mail client
+Comment=The client for the mailbox you already have
+Exec=postclient
+Icon=eu.postclient.desktop
+StartupWMClass=eu.postclient.desktop
+StartupNotify=true
+Terminal=false
+Categories=Network;Email;
+Keywords=email;mail;pec;rem;imap;smtp;
