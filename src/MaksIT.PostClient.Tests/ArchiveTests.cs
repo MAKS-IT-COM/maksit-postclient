@@ -170,6 +170,10 @@ public class MailArchiveStoreTests {
       Assert.Equal("Keep me", row.Subject);
       Assert.True(row.IsSeen);
       Assert.True(row.IsFlagged);
+      var counts = store.FolderCounts("box", "INBOX");
+      Assert.Equal(1, counts.Total);
+      Assert.Equal(0, counts.Unread);
+      Assert.Equal((0, 0), store.FolderCounts("box", "Missing"));
     }
     finally {
       DeleteArchive(path);
@@ -189,6 +193,80 @@ public class MailArchiveStoreTests {
       var row = Assert.Single(store.ListFolder("box", "INBOX"));
       Assert.Equal(1u, row.Uid);
       Assert.Equal("Keep", row.Subject);
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
+  public void RemoveUids_DropsKeywordAndMeaning() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertBody(
+        "box",
+        new MailArchiveHeader { Uid = 1, Folder = "INBOX", Subject = "IMU avviso", From = "comune@pec.it" },
+        "a.eml",
+        "pagamento tributo",
+        "");
+      var item = Assert.Single(store.PendingEmbeddings(EmbeddingModelSpec.Id, 8));
+      store.UpsertEmbedding(item.MessageId, EmbeddingModelSpec.Id, Towards(1));
+      Assert.Equal(1, store.EmbeddingCount(EmbeddingModelSpec.Id));
+      Assert.Single(store.Search("box", "INBOX", "IMU"));
+      store.RemoveUids("box", "INBOX", [1u]);
+      Assert.Empty(store.Search("box", "INBOX", "IMU"));
+      Assert.Equal(0, store.EmbeddingCount(EmbeddingModelSpec.Id));
+      var stats = store.IndexStats(EmbeddingModelSpec.Id);
+      Assert.Equal(0, stats.Messages);
+      Assert.Equal(0, stats.KeywordRows);
+      Assert.Equal(0, stats.MeaningRows);
+      Assert.Equal(0, stats.Orphans);
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
+  public void RebuildKeywordIndex_RestoresSearch() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertBody(
+        "box",
+        new MailArchiveHeader { Uid = 1, Folder = "INBOX", Subject = "IMU avviso", From = "comune@pec.it" },
+        "a.eml",
+        "pagamento tributo",
+        "");
+      Assert.Equal(1, store.RebuildKeywordIndex());
+      Assert.Single(store.Search("box", "INBOX", "IMU"));
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
+  public void ClearEmbeddings_LeavesKeywordAndPending() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertBody(
+        "box",
+        new MailArchiveHeader { Uid = 1, Folder = "INBOX", Subject = "IMU avviso", From = "comune@pec.it" },
+        "a.eml",
+        "pagamento tributo",
+        "");
+      var item = Assert.Single(store.PendingEmbeddings(EmbeddingModelSpec.Id, 8));
+      store.UpsertEmbedding(item.MessageId, EmbeddingModelSpec.Id, Towards(1));
+      Assert.Equal(1, store.ClearEmbeddings());
+      Assert.Equal(0, store.EmbeddingCount(EmbeddingModelSpec.Id));
+      Assert.Equal(1, store.EmbeddingPendingCount(EmbeddingModelSpec.Id));
+      Assert.Single(store.Search("box", "INBOX", "IMU"));
+      var stats = store.SanitizeIndices(EmbeddingModelSpec.Id);
+      Assert.Equal(1, stats.Messages);
+      Assert.Equal(0, stats.Orphans);
     }
     finally {
       DeleteArchive(path);
@@ -222,8 +300,11 @@ public class MailArchiveStoreTests {
         "");
       var missing = store.MissingBodies("box");
       var row = Assert.Single(missing);
+      Assert.Equal("box", row.MailboxId);
       Assert.Equal("Clients", row.Folder);
       Assert.Equal(2u, row.Uid);
+      Assert.Equal(1, store.MissingBodyCount(["box"]));
+      Assert.Equal(1, store.MissingBodyCount());
     }
     finally {
       DeleteArchive(path);
@@ -264,6 +345,75 @@ public class MailArchiveStoreTests {
     }
   }
 
+  [Fact]
+  public void RewriteFolderPrefix_MovesFolderAndChild() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertHeaders("box", [
+        new MailArchiveHeader {
+          Uid = 1,
+          Folder = "Project",
+          Subject = "Root",
+          From = "a@b.c",
+          Date = DateTimeOffset.Parse("2026-01-01T10:00:00Z")
+        },
+        new MailArchiveHeader {
+          Uid = 2,
+          Folder = "Project/2024",
+          Subject = "Child",
+          From = "a@b.c",
+          Date = DateTimeOffset.Parse("2026-01-02T10:00:00Z")
+        }
+      ]);
+      Assert.Equal(2, store.RewriteFolderPrefix("box", "Project", "Inbox/Project"));
+      Assert.Equal("Root", Assert.Single(store.ListFolder("box", "Inbox/Project")).Subject);
+      Assert.Equal("Child", Assert.Single(store.ListFolder("box", "Inbox/Project/2024")).Subject);
+      Assert.Empty(store.ListFolder("box", "Project"));
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
+  public void Search_MergesSemanticHits() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertBody(
+        "box",
+        new MailArchiveHeader { Uid = 1, Folder = "INBOX", Subject = "IMU avviso", From = "comune@pec.it" },
+        "a.eml",
+        "pagamento tributo comunale",
+        "");
+      store.UpsertBody(
+        "box",
+        new MailArchiveHeader { Uid = 2, Folder = "INBOX", Subject = "Vacanze", From = "amico@mail.it" },
+        "b.eml",
+        "spiaggia e mare",
+        "");
+      var pending = store.PendingEmbeddings(EmbeddingModelSpec.Id, 8);
+      Assert.Equal(2, pending.Count);
+      var imu = Assert.Single(pending, p => p.Subject.Contains("IMU", StringComparison.Ordinal));
+      var other = Assert.Single(pending, p => p.Subject.Contains("Vacanze", StringComparison.Ordinal));
+      store.UpsertEmbedding(imu.MessageId, EmbeddingModelSpec.Id, Towards(1));
+      store.UpsertEmbedding(other.MessageId, EmbeddingModelSpec.Id, Towards(-1));
+      var hits = store.Search("box", "INBOX", "tassa sulla casa", Towards(1));
+      var row = Assert.Single(hits);
+      Assert.Equal(1u, row.Uid);
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  private static float[] Towards(float sign) {
+    var values = new float[EmbeddingModelSpec.StoredDimensions];
+    values[0] = sign;
+    return EmbeddingVector.Normalize(values);
+  }
+
   private static void DeleteArchive(string path) {
     if (File.Exists(path))
       File.Delete(path);
@@ -291,6 +441,30 @@ public class AttachmentTextTests {
 }
 
 
+public class MailFileAttachmentTests {
+  [Fact]
+  public void Glyph_MatchesType() {
+    Assert.Equal("📄", File("avviso.pdf", "application/pdf").Glyph);
+    Assert.Equal("🖼", File("scan.png", "image/png").Glyph);
+    Assert.Equal("📋", File("IT012.xml", "application/xml").Glyph);
+    Assert.Equal("📦", File("fascicolo.zip", "application/zip").Glyph);
+    Assert.Equal("✉", File("postacert.eml", "message/rfc822").Glyph);
+    Assert.Equal("📎", File("notes.bin", "application/octet-stream").Glyph);
+    Assert.Equal("📫", File("casella.pst", "application/octet-stream").Glyph);
+    Assert.True(File("backup.ost", "application/vnd.ms-outlook").IsPst);
+    Assert.False(File("notes.bin", "application/octet-stream").IsPst);
+    Assert.False(File("notes.bin", "application/octet-stream").IsFatturaPa);
+    var xml = """
+      <?xml version="1.0"?><FatturaElettronica><FatturaElettronicaHeader /></FatturaElettronica>
+      """u8.ToArray();
+    Assert.True(new MailFileAttachment { Name = "IT012_fattura.xml", Bytes = xml, ContentType = "text/xml" }.IsFatturaPa);
+  }
+
+  private static MailFileAttachment File(string name, string type) =>
+    new() { Name = name, Bytes = [1], ContentType = type };
+}
+
+
 public class AttachmentZipTests {
   [Fact]
   public void FromFiles_WritesEntriesAndDedupsNames() {
@@ -312,6 +486,40 @@ public class AttachmentZipTests {
   public void SuggestedName_UsesSubject() {
     Assert.Equal("Avviso IMU-attachments.zip", AttachmentZip.SuggestedName("Avviso IMU"));
     Assert.Equal("message-attachments.zip", AttachmentZip.SuggestedName("   "));
+  }
+
+  [Fact]
+  public void FileName_AddsZipExtension() {
+    Assert.Equal("fatture.zip", AttachmentZip.FileName("fatture"));
+    Assert.Equal("a.zip", AttachmentZip.FileName("a.zip"));
+  }
+
+  [Fact]
+  public void FromFiles_PasswordRoundTrip() {
+    var zip = AttachmentZip.FromFiles(
+      [new MailFileAttachment { Name = "note.txt", Bytes = "hello"u8.ToArray() }],
+      "secret");
+    using var file = new ICSharpCode.SharpZipLib.Zip.ZipFile(new MemoryStream(zip), false);
+    file.Password = "secret";
+    var entry = file.GetEntry("note.txt");
+    Assert.NotNull(entry);
+    using var stream = file.GetInputStream(entry);
+    using var reader = new StreamReader(stream);
+    Assert.Equal("hello", reader.ReadToEnd());
+  }
+}
+
+
+public class MailArchiveMapTests {
+  [Fact]
+  public void ToHeader_RestoresPecDeliveryMarkFromTipo() {
+    var header = MailArchiveMap.ToHeader(new MailArchiveHeader {
+      Uid = 9,
+      Folder = "INBOX",
+      EnvelopeKind = EnvelopeKind.PecReceipt,
+      EnvelopeTipo = "avvenuta-consegna"
+    });
+    Assert.Equal(ReceiptStatus.Delivered, header.DeliveryStatus);
   }
 }
 

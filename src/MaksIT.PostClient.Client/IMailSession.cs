@@ -17,7 +17,8 @@ public interface IMailSession : IAsyncDisposable {
   Task<Result<MailFolderSync>> ListMessagesAsync(
     string folder,
     IReadOnlySet<uint>? knownIds = null,
-    CancellationToken cancellationToken = default);
+    CancellationToken cancellationToken = default,
+    int itemBudget = 0);
 
   Task<Result<MailMessageBody>> GetMessageAsync(
     string folder,
@@ -48,6 +49,12 @@ public interface IMailSession : IAsyncDisposable {
   Task<Result> CreateFolderAsync(
     string name,
     string? parentFolder,
+    CancellationToken cancellationToken = default);
+
+  Task<Result> RenameFolderAsync(
+    string folder,
+    string? parentFolder,
+    string name,
     CancellationToken cancellationToken = default);
 
   Task<Result> DeleteFolderAsync(string folder, CancellationToken cancellationToken = default);

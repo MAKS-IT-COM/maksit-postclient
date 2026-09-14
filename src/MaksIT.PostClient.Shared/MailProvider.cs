@@ -3,6 +3,7 @@ namespace MaksIT.PostClient.Shared;
 
 public static class MailProvider {
   public const string Imap = "imap";
+  public const string Pst = "pst";
   public const string Gmail = "gmail";
   public const string Outlook = "outlook";
   public const string Aruba = "aruba";
@@ -18,6 +19,7 @@ public static class MailProvider {
       return Imap;
     return value.Trim().ToLowerInvariant() switch {
       "gmail" or "google" => Gmail,
+      "pst" or "ost" or "outlook-store" or "outlook-data" or "outlookpst" => Pst,
       "outlook" or "microsoft" or "office365" or "hotmail" or "live" => Outlook,
       "aruba" or "arubapec" or "pecaruba" => Aruba,
       "legalmail" or "infocert" or "tinexta" => Legalmail,
@@ -35,18 +37,37 @@ public static class MailProvider {
     return id is Gmail or Outlook;
   }
 
-  public static bool HasHostPreset(string? value) =>
-    Normalize(value) != Imap;
+  public static bool HasHostPreset(string? value) {
+    var id = Normalize(value);
+    return id is not Imap and not Pst;
+  }
+
+  public static bool IsPst(string? value) =>
+    Normalize(value) == Pst;
 
   public static bool IsPec(string? value) {
     var id = Normalize(value);
-    return id is Aruba or Legalmail or Namirial or Postecert or Register or Libero or Intesi;
+    return IsItalianPec(id) || IsRemPreset(id);
   }
+
+  public static bool IsItalianPec(string? value) {
+    var id = Normalize(value);
+    return id is Aruba or Legalmail or Namirial or Postecert or Register or Libero;
+  }
+
+  public static bool IsRemPreset(string? value) =>
+    Normalize(value) == Intesi;
 
   public static void Apply(MailboxAccount box) {
     ArgumentNullException.ThrowIfNull(box);
     var provider = Normalize(box.Provider);
     box.Provider = provider;
+    box.CertifiedKind = MailCertifiedKind.ForProvider(provider, box.CertifiedKind);
+    if (IsPst(provider)) {
+      box.IncomingProtocol = MailProtocol.Pst;
+      return;
+    }
+
     box.IncomingProtocol = MailProtocol.NormalizeIncoming(box.IncomingProtocol);
     if (!TryHosts(provider, MailProtocol.IsPop3(box.IncomingProtocol), out var incoming, out var smtp))
       return;

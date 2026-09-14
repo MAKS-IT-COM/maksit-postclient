@@ -14,8 +14,23 @@
     <PackageReference Include="MaksIT.Core" Version="1.6.8" />
     <PackageReference Include="MaksIT.Results" Version="2.0.4" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageReference Include="OfficeIMO.Email" Version="3.4.3" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.3" />
     <PackageReference Include="XstReader.Api" Version="1.0.6" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OnnxUseDirectML Condition="$([MSBuild]::IsOSPlatform('Windows')) AND ('$(RuntimeIdentifier)' == '' OR $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win')))">true</OnnxUseDirectML>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(OnnxUseDirectML)' == 'true'">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.1" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(OnnxUseDirectML)' != 'true'">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.24.1" />
   </ItemGroup>
 
   <ItemGroup>

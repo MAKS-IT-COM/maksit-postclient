@@ -83,8 +83,11 @@ public sealed class Pop3MailSession : IMailSession {
   public Task<Result<MailFolderSync>> ListMessagesAsync(
     string folder,
     IReadOnlySet<uint>? knownIds = null,
-    CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => ListMessagesCoreAsync(folder, knownIds, cancellationToken), cancellationToken);
+    CancellationToken cancellationToken = default,
+    int itemBudget = 0) {
+    _ = itemBudget;
+    return _io.RunAsync(() => ListMessagesCoreAsync(folder, knownIds, cancellationToken), cancellationToken);
+  }
 
   private async Task<Result<MailFolderSync>> ListMessagesCoreAsync(
     string folder,
@@ -207,6 +210,18 @@ public sealed class Pop3MailSession : IMailSession {
     _ = parentFolder;
     _ = cancellationToken;
     return Task.FromResult(Result.UnprocessableEntity("POP3 cannot create folders."));
+  }
+
+  public Task<Result> RenameFolderAsync(
+    string folder,
+    string? parentFolder,
+    string name,
+    CancellationToken cancellationToken = default) {
+    _ = folder;
+    _ = parentFolder;
+    _ = name;
+    _ = cancellationToken;
+    return Task.FromResult(Result.UnprocessableEntity("POP3 cannot move folders."));
   }
 
   public Task<Result> DeleteFolderAsync(string folder, CancellationToken cancellationToken = default) {

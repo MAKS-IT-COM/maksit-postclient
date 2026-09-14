@@ -31,4 +31,6 @@ public interface ISentReceiptStore {
     string? tipo);
 
   string StatusFor(string mailboxId, string? messageId, string? subject = null);
+
+  void ForgetMailbox(string mailboxId);
 }

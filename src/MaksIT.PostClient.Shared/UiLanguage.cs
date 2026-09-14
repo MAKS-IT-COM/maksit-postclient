@@ -9,22 +9,31 @@ public static class UiLanguage {
 
   public const string It = "it";
 
-  public static IReadOnlyList<string> All { get; } = [En, It];
+  public const string Fr = "fr";
+
+  public const string De = "de";
+
+  public const string Es = "es";
+
+  public static IReadOnlyList<string> All { get; } = [En, It, Fr, De, Es];
 
   public static string Normalize(string? value) {
     var id = (value ?? "").Trim().ToLowerInvariant();
-    if (id.StartsWith("it", StringComparison.Ordinal))
-      return It;
-    if (id.StartsWith("en", StringComparison.Ordinal))
-      return En;
+    foreach (var known in All) {
+      if (id.StartsWith(known, StringComparison.Ordinal))
+        return known;
+    }
+
     return En;
   }
 
   public static string Detect() {
     try {
       var ui = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
-      if (ui.Equals(It, StringComparison.OrdinalIgnoreCase))
-        return It;
+      foreach (var known in All) {
+        if (ui.Equals(known, StringComparison.OrdinalIgnoreCase))
+          return known;
+      }
     }
     catch {
     }
@@ -33,5 +42,11 @@ public static class UiLanguage {
   }
 
   public static string Title(string? value) =>
-    Normalize(value) == It ? "Italiano" : "English";
+    Normalize(value) switch {
+      It => "Italiano",
+      Fr => "Français",
+      De => "Deutsch",
+      Es => "Español",
+      _ => "English"
+    };
 }

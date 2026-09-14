@@ -86,6 +86,188 @@ public sealed class MailArchiveStore : IDisposable {
     }
   }
 
+  public IReadOnlyList<EmbeddingWorkItem> PendingEmbeddings(string modelId, int limit) {
+    var take = Math.Clamp(limit, 1, 64);
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT m.id, m.subject, m.from_addr, m.body_text, m.attachment_text
+        FROM messages m
+        LEFT JOIN message_embeddings e ON e.message_id = m.id
+        WHERE (e.message_id IS NULL OR e.model_id <> $model)
+          AND (m.body_text <> '' OR m.subject <> '')
+        ORDER BY m.date_utc DESC, m.id DESC
+        LIMIT $n;
+        """;
+      cmd.Parameters.AddWithValue("$model", modelId);
+      cmd.Parameters.AddWithValue("$n", take);
+      var rows = new List<EmbeddingWorkItem>();
+      using var reader = cmd.ExecuteReader();
+      while (reader.Read()) {
+        rows.Add(new EmbeddingWorkItem(
+          reader.GetInt64(0),
+          reader.IsDBNull(1) ? "" : reader.GetString(1),
+          reader.IsDBNull(2) ? "" : reader.GetString(2),
+          reader.IsDBNull(3) ? "" : reader.GetString(3),
+          reader.IsDBNull(4) ? "" : reader.GetString(4)));
+      }
+
+      return rows;
+    }
+  }
+
+  public int EmbeddingCount(string modelId) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = "SELECT COUNT(*) FROM message_embeddings WHERE model_id = $model;";
+      cmd.Parameters.AddWithValue("$model", modelId);
+      return (int)(long)(cmd.ExecuteScalar() ?? 0L);
+    }
+  }
+
+  public int EmbeddingPendingCount(string modelId) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT COUNT(*)
+        FROM messages m
+        LEFT JOIN message_embeddings e ON e.message_id = m.id
+        WHERE (e.message_id IS NULL OR e.model_id <> $model)
+          AND (m.body_text <> '' OR m.subject <> '');
+        """;
+      cmd.Parameters.AddWithValue("$model", modelId);
+      return (int)(long)(cmd.ExecuteScalar() ?? 0L);
+    }
+  }
+
+  public void UpsertEmbedding(long messageId, string modelId, float[] vector) {
+    ArgumentNullException.ThrowIfNull(vector);
+    var stored = EmbeddingVector.Truncate(vector, EmbeddingModelSpec.StoredDimensions);
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        INSERT INTO message_embeddings (message_id, model_id, dims, vector)
+        VALUES ($id, $model, $dims, $vec)
+        ON CONFLICT(message_id) DO UPDATE SET
+          model_id = excluded.model_id,
+          dims = excluded.dims,
+          vector = excluded.vector;
+        """;
+      cmd.Parameters.AddWithValue("$id", messageId);
+      cmd.Parameters.AddWithValue("$model", modelId);
+      cmd.Parameters.AddWithValue("$dims", stored.Length);
+      cmd.Parameters.AddWithValue("$vec", EmbeddingVector.ToBlob(stored));
+      cmd.ExecuteNonQuery();
+    }
+  }
+
+  public void DropForeignEmbeddings(string modelId) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = "DELETE FROM message_embeddings WHERE model_id <> $model;";
+      cmd.Parameters.AddWithValue("$model", modelId);
+      cmd.ExecuteNonQuery();
+    }
+  }
+
+  public int ClearEmbeddings() {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = "DELETE FROM message_embeddings;";
+      return cmd.ExecuteNonQuery();
+    }
+  }
+
+  public ArchiveIndexStats IndexStats(string modelId) {
+    lock (_gate) {
+      return ReadIndexStats(modelId);
+    }
+  }
+
+  public int RebuildKeywordIndex() {
+    lock (_gate) {
+      using var tx = _db.BeginTransaction();
+      using (var del = _db.CreateCommand()) {
+        del.Transaction = tx;
+        del.CommandText = "DELETE FROM messages_fts;";
+        del.ExecuteNonQuery();
+      }
+
+      using var list = _db.CreateCommand();
+      list.Transaction = tx;
+      list.CommandText = """
+        SELECT id, subject, from_addr, body_text, attachment_text, envelope_badge
+        FROM messages;
+        """;
+      var rows = new List<(long Id, MailArchiveHeader Header, string Body, string Att)>();
+      using (var reader = list.ExecuteReader()) {
+        while (reader.Read()) {
+          rows.Add((
+            reader.GetInt64(0),
+            new MailArchiveHeader {
+              Subject = reader.IsDBNull(1) ? "" : reader.GetString(1),
+              From = reader.IsDBNull(2) ? "" : reader.GetString(2),
+              EnvelopeBadge = reader.IsDBNull(5) ? "" : reader.GetString(5)
+            },
+            reader.IsDBNull(3) ? "" : reader.GetString(3),
+            reader.IsDBNull(4) ? "" : reader.GetString(4)));
+        }
+      }
+
+      foreach (var row in rows)
+        IndexFts(tx, row.Id, row.Header, row.Body, row.Att);
+      tx.Commit();
+      return rows.Count;
+    }
+  }
+
+  public ArchiveIndexStats SanitizeIndices(string modelId) {
+    lock (_gate) {
+      using var tx = _db.BeginTransaction();
+      using (var fts = _db.CreateCommand()) {
+        fts.Transaction = tx;
+        fts.CommandText = "DELETE FROM messages_fts WHERE rowid NOT IN (SELECT id FROM messages);";
+        fts.ExecuteNonQuery();
+      }
+
+      using (var orphans = _db.CreateCommand()) {
+        orphans.Transaction = tx;
+        orphans.CommandText = """
+          DELETE FROM message_embeddings
+          WHERE message_id NOT IN (SELECT id FROM messages);
+          """;
+        orphans.ExecuteNonQuery();
+      }
+
+      using (var foreign = _db.CreateCommand()) {
+        foreign.Transaction = tx;
+        foreign.CommandText = "DELETE FROM message_embeddings WHERE model_id <> $model;";
+        foreign.Parameters.AddWithValue("$model", modelId);
+        foreign.ExecuteNonQuery();
+      }
+
+      tx.Commit();
+      return ReadIndexStats(modelId);
+    }
+  }
+
+  public IReadOnlyList<string> ListFolders(string mailboxId) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = "SELECT DISTINCT folder FROM messages WHERE mailbox_id = $m ORDER BY folder COLLATE NOCASE;";
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      var rows = new List<string>();
+      using var reader = cmd.ExecuteReader();
+      while (reader.Read()) {
+        var folder = reader.GetString(0);
+        if (!string.IsNullOrWhiteSpace(folder))
+          rows.Add(folder);
+      }
+
+      return rows;
+    }
+  }
+
   public IReadOnlyList<MailArchiveHeader> ListFolder(string mailboxId, string folder) {
     lock (_gate) {
       using var cmd = _db.CreateCommand();
@@ -101,6 +283,23 @@ public sealed class MailArchiveStore : IDisposable {
       cmd.Parameters.AddWithValue("$m", mailboxId);
       cmd.Parameters.AddWithValue("$f", folder);
       return ReadHeaders(cmd);
+    }
+  }
+
+  public (int Total, int Unread) FolderCounts(string mailboxId, string folder) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_seen = 0 THEN 1 ELSE 0 END), 0)
+        FROM messages
+        WHERE mailbox_id = $m AND folder = $f;
+        """;
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      cmd.Parameters.AddWithValue("$f", folder);
+      using var reader = cmd.ExecuteReader();
+      if (!reader.Read())
+        return (0, 0);
+      return ((int)reader.GetInt64(0), (int)reader.GetInt64(1));
     }
   }
 
@@ -136,21 +335,65 @@ public sealed class MailArchiveStore : IDisposable {
     }
   }
 
-  public IReadOnlyList<MailArchiveUid> MissingBodies(string mailboxId) {
+  public IReadOnlyList<MailArchiveUid> MissingBodies(string mailboxId) =>
+    MissingBodies([mailboxId]);
+
+  public IReadOnlyList<MailArchiveUid> MissingBodies(
+    IReadOnlyCollection<string>? mailboxIds = null,
+    int limit = 0) {
     lock (_gate) {
       using var cmd = _db.CreateCommand();
-      cmd.CommandText = """
-        SELECT folder, uid FROM messages
-        WHERE mailbox_id = $m AND (eml_path IS NULL OR eml_path = '')
-        ORDER BY date_utc DESC, uid DESC;
+      var sql = """
+        SELECT mailbox_id, folder, uid FROM messages
+        WHERE (eml_path IS NULL OR eml_path = '')
         """;
-      cmd.Parameters.AddWithValue("$m", mailboxId);
+      sql += MailboxInSql(cmd, mailboxIds);
+      sql += " ORDER BY date_utc DESC, uid DESC";
+      if (limit > 0) {
+        sql += " LIMIT $n";
+        cmd.Parameters.AddWithValue("$n", Math.Clamp(limit, 1, 256));
+      }
+
+      cmd.CommandText = sql;
       var rows = new List<MailArchiveUid>();
       using var reader = cmd.ExecuteReader();
-      while (reader.Read())
-        rows.Add(new MailArchiveUid(reader.GetString(0), (uint)reader.GetInt64(1)));
+      while (reader.Read()) {
+        rows.Add(new MailArchiveUid(
+          reader.GetString(0),
+          reader.GetString(1),
+          (uint)reader.GetInt64(2)));
+      }
+
       return rows;
     }
+  }
+
+  public int MissingBodyCount(IReadOnlyCollection<string>? mailboxIds = null) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      var sql = """
+        SELECT COUNT(*) FROM messages
+        WHERE (eml_path IS NULL OR eml_path = '')
+        """;
+      sql += MailboxInSql(cmd, mailboxIds);
+      cmd.CommandText = sql;
+      return (int)(long)(cmd.ExecuteScalar() ?? 0L);
+    }
+  }
+
+  private static string MailboxInSql(SqliteCommand cmd, IReadOnlyCollection<string>? mailboxIds) {
+    if (mailboxIds is not { Count: > 0 })
+      return "";
+    var names = new List<string>(mailboxIds.Count);
+    var i = 0;
+    foreach (var id in mailboxIds) {
+      var name = "$mb" + i;
+      names.Add(name);
+      cmd.Parameters.AddWithValue(name, id);
+      i++;
+    }
+
+    return " AND mailbox_id IN (" + string.Join(",", names) + ")";
   }
 
   public void SetSeen(string mailboxId, string folder, bool seen) {
@@ -171,6 +414,52 @@ public sealed class MailArchiveStore : IDisposable {
   public IReadOnlyList<string> RemoveFolder(string mailboxId, string folder) =>
     RemoveUids(mailboxId, folder, uids: null);
 
+  public int RewriteFolderPrefix(string mailboxId, string from, string to) {
+    if (string.IsNullOrWhiteSpace(mailboxId) || string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to))
+      return 0;
+    var folders = ListFolders(mailboxId);
+    var count = 0;
+    lock (_gate) {
+      using var tx = _db.BeginTransaction();
+      foreach (var folder in folders) {
+        var next = MailFolderPath.Rewrite(folder, from, to);
+        if (string.IsNullOrWhiteSpace(next) || next.Equals(folder, StringComparison.Ordinal))
+          continue;
+        using (var labels = _db.CreateCommand()) {
+          labels.Transaction = tx;
+          labels.CommandText = """
+            UPDATE message_labels
+            SET folder = $to
+            WHERE mailbox_id = $m AND folder = $from;
+            """;
+          labels.Parameters.AddWithValue("$to", next);
+          labels.Parameters.AddWithValue("$m", mailboxId);
+          labels.Parameters.AddWithValue("$from", folder);
+          labels.ExecuteNonQuery();
+        }
+
+        using (var messages = _db.CreateCommand()) {
+          messages.Transaction = tx;
+          messages.CommandText = """
+            UPDATE messages
+            SET folder = $to
+            WHERE mailbox_id = $m AND folder = $from;
+            """;
+          messages.Parameters.AddWithValue("$to", next);
+          messages.Parameters.AddWithValue("$m", mailboxId);
+          messages.Parameters.AddWithValue("$from", folder);
+          messages.ExecuteNonQuery();
+        }
+
+        count++;
+      }
+
+      tx.Commit();
+    }
+
+    return count;
+  }
+
   public IReadOnlyList<string> RemoveUids(
     string mailboxId,
     string folder,
@@ -181,6 +470,7 @@ public sealed class MailArchiveStore : IDisposable {
       var paths = EmlPaths(mailboxId, folder, uids);
       using var tx = _db.BeginTransaction();
       DeleteFts(tx, mailboxId, folder, uids);
+      DeleteEmbeddings(tx, mailboxId, folder, uids);
       using (var labels = _db.CreateCommand()) {
         labels.Transaction = tx;
         labels.CommandText = "DELETE FROM message_labels WHERE mailbox_id = $m AND folder = $f"
@@ -221,11 +511,19 @@ public sealed class MailArchiveStore : IDisposable {
     }
   }
 
-  public IReadOnlyList<MailArchiveHeader> Search(string mailboxId, string folder, string query) {
+  public IReadOnlyList<MailArchiveHeader> Search(string mailboxId, string folder, string query) =>
+    Search(mailboxId, folder, query, queryVector: null);
+
+  public IReadOnlyList<MailArchiveHeader> Search(
+    string mailboxId,
+    string folder,
+    string query,
+    float[]? queryVector) {
     var text = query.Trim();
     if (text.Length == 0)
       return ListFolder(mailboxId, folder);
 
+    IReadOnlyList<MailArchiveHeader> lexical;
     lock (_gate) {
       try {
         using var cmd = _db.CreateCommand();
@@ -254,12 +552,16 @@ public sealed class MailArchiveStore : IDisposable {
         cmd.Parameters.AddWithValue("$like", "%" + text.Replace("%", "\\%").Replace("_", "\\_") + "%");
         cmd.Parameters.AddWithValue("$m", mailboxId);
         cmd.Parameters.AddWithValue("$f", folder);
-        return ReadHeaders(cmd);
+        lexical = ReadHeaders(cmd);
       }
       catch (SqliteException) {
-        return SearchLike(mailboxId, folder, text);
+        lexical = SearchLike(mailboxId, folder, text);
       }
     }
+
+    if (queryVector is null || queryVector.Length == 0)
+      return lexical;
+    return MergeSemantic(mailboxId, folder, lexical, queryVector);
   }
 
   public uint NextUid(string mailboxId, string folder) {
@@ -455,29 +757,31 @@ public sealed class MailArchiveStore : IDisposable {
   private static List<MailArchiveHeader> ReadHeaders(SqliteCommand cmd) {
     var rows = new List<MailArchiveHeader>();
     using var reader = cmd.ExecuteReader();
-    while (reader.Read()) {
-      DateTimeOffset.TryParse(reader.GetString(4), out var date);
-      rows.Add(new MailArchiveHeader {
-        Uid = (uint)reader.GetInt64(0),
-        Folder = reader.GetString(1),
-        Subject = reader.GetString(2),
-        From = reader.GetString(3),
-        Date = date,
-        IsSeen = reader.GetInt64(5) != 0,
-        IsFlagged = reader.GetInt64(6) != 0,
-        HasAttachments = reader.GetInt64(7) != 0,
-        Priority = reader.GetString(8),
-        EnvelopeKind = reader.GetString(9),
-        EnvelopeBadge = reader.GetString(10),
-        EnvelopeTipo = reader.GetString(11),
-        MessageId = reader.GetString(12),
-        InReplyTo = reader.GetString(13),
-        EmlPath = reader.IsDBNull(14) ? "" : reader.GetString(14),
-        Labels = reader.FieldCount > 15 && !reader.IsDBNull(15) ? reader.GetString(15) : ""
-      });
-    }
-
+    while (reader.Read())
+      rows.Add(ReadHeader(reader));
     return rows;
+  }
+
+  private static MailArchiveHeader ReadHeader(SqliteDataReader reader) {
+    DateTimeOffset.TryParse(reader.GetString(4), out var date);
+    return new MailArchiveHeader {
+      Uid = (uint)reader.GetInt64(0),
+      Folder = reader.GetString(1),
+      Subject = reader.GetString(2),
+      From = reader.GetString(3),
+      Date = date,
+      IsSeen = reader.GetInt64(5) != 0,
+      IsFlagged = reader.GetInt64(6) != 0,
+      HasAttachments = reader.GetInt64(7) != 0,
+      Priority = reader.GetString(8),
+      EnvelopeKind = reader.GetString(9),
+      EnvelopeBadge = reader.GetString(10),
+      EnvelopeTipo = reader.GetString(11),
+      MessageId = reader.GetString(12),
+      InReplyTo = reader.GetString(13),
+      EmlPath = reader.IsDBNull(14) ? "" : reader.GetString(14),
+      Labels = reader.FieldCount > 15 && !reader.IsDBNull(15) ? reader.GetString(15) : ""
+    };
   }
 
   internal static string FtsQuery(string text) {
@@ -502,6 +806,80 @@ public sealed class MailArchiveStore : IDisposable {
     return paths;
   }
 
+  private IReadOnlyList<MailArchiveHeader> MergeSemantic(
+    string mailboxId,
+    string folder,
+    IReadOnlyList<MailArchiveHeader> lexical,
+    float[] queryVector) {
+    var query = EmbeddingVector.Truncate(queryVector, EmbeddingModelSpec.StoredDimensions);
+    List<(float Score, MailArchiveHeader Header)> extra;
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT m.uid, m.folder, m.subject, m.from_addr, m.date_utc, m.is_seen, m.is_flagged, m.has_attachments,
+               m.priority, m.envelope_kind, m.envelope_badge, m.envelope_tipo, m.message_id, m.in_reply_to, m.eml_path,
+               (SELECT GROUP_CONCAT(name, ', ') FROM message_labels l
+                WHERE l.mailbox_id = m.mailbox_id AND l.folder = m.folder AND l.uid = m.uid),
+               e.vector
+        FROM message_embeddings e
+        JOIN messages m ON m.id = e.message_id
+        WHERE m.mailbox_id = $m AND m.folder = $f AND e.model_id = $model;
+        """;
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      cmd.Parameters.AddWithValue("$f", folder);
+      cmd.Parameters.AddWithValue("$model", EmbeddingModelSpec.Id);
+      extra = [];
+      using var reader = cmd.ExecuteReader();
+      while (reader.Read()) {
+        var blob = reader.IsDBNull(16) ? null : reader.GetFieldValue<byte[]>(16);
+        if (blob is null || blob.Length == 0)
+          continue;
+        var vector = EmbeddingVector.FromBlob(blob);
+        var score = EmbeddingVector.Cosine(query, vector);
+        if (score < EmbeddingModelSpec.MinScore)
+          continue;
+        extra.Add((score, ReadHeader(reader)));
+      }
+    }
+
+    if (extra.Count == 0)
+      return lexical;
+
+    var seen = new HashSet<uint>(lexical.Select(h => h.Uid));
+    extra.Sort((a, b) => b.Score.CompareTo(a.Score));
+    var merged = new List<MailArchiveHeader>(lexical);
+    var added = 0;
+    foreach (var row in extra) {
+      if (!seen.Add(row.Header.Uid))
+        continue;
+      merged.Add(row.Header);
+      added++;
+      if (added >= EmbeddingModelSpec.VectorTopK)
+        break;
+    }
+
+    return merged;
+  }
+
+  private void DeleteEmbeddings(
+    SqliteTransaction tx,
+    string mailboxId,
+    string folder,
+    IReadOnlyCollection<uint>? uids = null) {
+    using var cmd = _db.CreateCommand();
+    cmd.Transaction = tx;
+    cmd.CommandText = """
+      DELETE FROM message_embeddings
+      WHERE message_id IN (
+        SELECT id FROM messages WHERE mailbox_id = $m AND folder = $f
+      """ + UidFilter(cmd, uids) + """
+      );
+      """;
+    cmd.Parameters.AddWithValue("$m", mailboxId);
+    cmd.Parameters.AddWithValue("$f", folder);
+    cmd.ExecuteNonQuery();
+  }
+
   private void DeleteFts(
     SqliteTransaction tx,
     string mailboxId,
@@ -519,6 +897,43 @@ public sealed class MailArchiveStore : IDisposable {
     cmd.Parameters.AddWithValue("$m", mailboxId);
     cmd.Parameters.AddWithValue("$f", folder);
     cmd.ExecuteNonQuery();
+  }
+
+  private ArchiveIndexStats ReadIndexStats(string modelId) {
+    var messages = Scalar("SELECT COUNT(*) FROM messages;");
+    var keyword = Scalar("SELECT COUNT(*) FROM messages_fts;");
+    int meaning;
+    using (var cmd = _db.CreateCommand()) {
+      cmd.CommandText = "SELECT COUNT(*) FROM message_embeddings WHERE model_id = $model;";
+      cmd.Parameters.AddWithValue("$model", modelId);
+      meaning = (int)(long)(cmd.ExecuteScalar() ?? 0L);
+    }
+
+    int pending;
+    using (var cmd = _db.CreateCommand()) {
+      cmd.CommandText = """
+        SELECT COUNT(*)
+        FROM messages m
+        LEFT JOIN message_embeddings e ON e.message_id = m.id
+        WHERE (e.message_id IS NULL OR e.model_id <> $model)
+          AND (m.body_text <> '' OR m.subject <> '');
+        """;
+      cmd.Parameters.AddWithValue("$model", modelId);
+      pending = (int)(long)(cmd.ExecuteScalar() ?? 0L);
+    }
+
+    var ftsOrphans = Scalar("SELECT COUNT(*) FROM messages_fts WHERE rowid NOT IN (SELECT id FROM messages);");
+    var embeddingOrphans = Scalar("""
+      SELECT COUNT(*) FROM message_embeddings
+      WHERE message_id NOT IN (SELECT id FROM messages);
+      """);
+    return new ArchiveIndexStats(messages, keyword, meaning, pending, ftsOrphans + embeddingOrphans);
+  }
+
+  private int Scalar(string sql) {
+    using var cmd = _db.CreateCommand();
+    cmd.CommandText = sql;
+    return (int)(long)(cmd.ExecuteScalar() ?? 0L);
   }
 
   private static string UidFilter(SqliteCommand cmd, IReadOnlyCollection<uint>? uids) {
@@ -570,13 +985,35 @@ public sealed class MailArchiveStore : IDisposable {
         name TEXT NOT NULL,
         PRIMARY KEY (mailbox_id, folder, uid, name)
       );
+      CREATE TABLE IF NOT EXISTS message_embeddings (
+        message_id INTEGER PRIMARY KEY,
+        model_id TEXT NOT NULL,
+        dims INTEGER NOT NULL,
+        vector BLOB NOT NULL
+      );
       """;
     cmd.ExecuteNonQuery();
   }
 }
 
 
-public readonly record struct MailArchiveUid(string Folder, uint Uid);
+public readonly record struct MailArchiveUid(string MailboxId, string Folder, uint Uid);
+
+
+public readonly record struct EmbeddingWorkItem(
+  long MessageId,
+  string Subject,
+  string From,
+  string Body,
+  string Attachments);
+
+
+public readonly record struct ArchiveIndexStats(
+  int Messages,
+  int KeywordRows,
+  int MeaningRows,
+  int MeaningPending,
+  int Orphans);
 
 
 public sealed class MailArchiveHeader {

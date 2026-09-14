@@ -13,6 +13,8 @@ public sealed class MailSessionFactory : IMailSessionFactory {
 
   public IMailSession Create(MailboxAccount account) {
     ArgumentNullException.ThrowIfNull(account);
+    if (MailProtocol.IsPst(account.IncomingProtocol) || MailProvider.IsPst(account.Provider))
+      return new PstMailSession();
     if (MailProtocol.IsPop3(account.IncomingProtocol))
       return new Pop3MailSession(_auth);
     return new ImapMailSession(_auth);

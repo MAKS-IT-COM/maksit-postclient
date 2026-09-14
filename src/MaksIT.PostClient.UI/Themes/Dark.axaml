@@ -1,6 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Styles.Resources>
+    <SolidColorBrush x:Key="MutedBrush" Color="#8AB4D0" />
     <SolidColorBrush x:Key="DataGridGridLinesBrush" Color="#33383e" />
     <SolidColorBrush x:Key="DataGridColumnHeaderBackgroundBrush" Color="#1e2124" />
     <SolidColorBrush x:Key="DataGridColumnHeaderForegroundBrush" Color="#9aa0a6" />
@@ -16,6 +17,16 @@
   <Style Selector="TextBlock.hint">
     <Setter Property="Foreground" Value="#9aa0a6" />
     <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TextBlock.unresolved">
+    <Setter Property="Foreground" Value="#e85d5d" />
+  </Style>
+  <Style Selector="TextBox.unresolved">
+    <Setter Property="BorderBrush" Value="#e85d5d" />
+    <Setter Property="Foreground" Value="#ffb4b4" />
+  </Style>
+  <Style Selector="TextBox.unresolved:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="#e85d5d" />
   </Style>
   <Style Selector="TextBlock.kicker">
     <Setter Property="Foreground" Value="#9aa0a6" />
@@ -41,6 +52,23 @@
   </Style>
   <Style Selector="Button.accent:pointerover">
     <Setter Property="Background" Value="#0078c4" />
+  </Style>
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="#1A232B" />
+    <Setter Property="Foreground" Value="#E8F4FC" />
+    <Setter Property="Padding" Value="12,7" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover">
+    <Setter Property="Background" Value="#24303A" />
+  </Style>
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="#141C28" />
+    <Setter Property="BorderBrush" Value="#1A3A5C" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="16" />
   </Style>
   <Style Selector="Button.quiet">
     <Setter Property="Padding" Value="10,6" />
@@ -145,6 +173,22 @@
   </Style>
   <Style Selector="Button.mail-tool.selected">
     <Setter Property="Background" Value="#006199" />
+  </Style>
+  <Style Selector="ToggleButton.mail-tool">
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Background" Value="#2a2e33" />
+    <Setter Property="Foreground" Value="#E8F4FC" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ToggleButton.mail-tool:pointerover">
+    <Setter Property="Background" Value="#3a4148" />
+  </Style>
+  <Style Selector="ToggleButton.mail-tool:checked">
+    <Setter Property="Background" Value="#006199" />
+  </Style>
+  <Style Selector="ToggleButton.mail-tool:checked:pointerover">
+    <Setter Property="Background" Value="#0078c4" />
   </Style>
   <Style Selector="Border.quick-filter">
     <Setter Property="Background" Value="#1a1f26" />

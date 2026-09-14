@@ -42,11 +42,20 @@ public static class MailFolderRole {
 
   public static string Kind(string? name, string? fullName) {
     var leaf = Leaf(fullName);
-    if (Matches(name, fullName, leaf, "INBOX", "Inbox", "Posta in arrivo"))
+    if (Matches(
+      name,
+      fullName,
+      leaf,
+      "INBOX",
+      "Inbox",
+      "Posta in arrivo",
+      "Boîte de réception",
+      "Posteingang",
+      "Bandeja de entrada"))
       return "inbox";
-    if (Matches(name, fullName, leaf, "Ricevute", "Receipts", "PEC Ricevute"))
+    if (Matches(name, fullName, leaf, "Ricevute", "Receipts", "PEC Ricevute", "Avis", "Nachweise", "Acuses"))
       return "receipts";
-    if (Matches(name, fullName, leaf, "Drafts", "Draft", "Bozze"))
+    if (Matches(name, fullName, leaf, "Drafts", "Draft", "Bozze", "Brouillons", "Entwürfe", "Borradores"))
       return "drafts";
     if (Matches(
       name,
@@ -75,9 +84,21 @@ public static class MailFolderRole {
       return "flagged";
     if (Matches(name, fullName, leaf, "Important", "Importanti"))
       return "important";
-    if (Matches(name, fullName, leaf, "Archives", "Archive", "Archivio"))
+    if (Matches(name, fullName, leaf, "Archives", "Archive", "Archivio", "Archiv", "Archivo"))
       return "archives";
-    if (Matches(name, fullName, leaf, "Junk", "Spam", "Indesiderata", "Posta indesiderata", "Bulk Mail"))
+    if (Matches(
+      name,
+      fullName,
+      leaf,
+      "Junk",
+      "Spam",
+      "Indesiderata",
+      "Posta indesiderata",
+      "Bulk Mail",
+      "Indésirable",
+      "Courrier indésirable",
+      "No deseado",
+      "Correo no deseado"))
       return "junk";
     if (Matches(name, fullName, leaf, "Trash", "Deleted", "Deleted Items", "Cestino", "Bin", "Corbeille", "Papelera", "Papierkorb"))
       return "trash";

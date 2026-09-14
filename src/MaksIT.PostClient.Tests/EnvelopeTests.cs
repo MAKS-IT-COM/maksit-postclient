@@ -272,6 +272,33 @@ public class SentReceiptStoreTests {
         File.Delete(path);
     }
   }
+
+  [Fact]
+  public void ForgetMailbox_DropsOnlyThatAccount() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-receipts-" + Guid.NewGuid().ToString("N") + ".json");
+    try {
+      var store = new FileSentReceiptStore(path);
+      store.Remember(new SentDispatch {
+        MailboxId = "gmail-1",
+        MessageId = "gmail@msg",
+        Subject = "Hello from gmail",
+        Status = ReceiptStatus.Submitted
+      });
+      store.Remember(new SentDispatch {
+        MailboxId = "pec-1",
+        MessageId = "pec@msg",
+        Subject = "Certified",
+        Status = ReceiptStatus.Submitted
+      });
+      store.ForgetMailbox("gmail-1");
+      Assert.Equal("", store.StatusFor("gmail-1", "gmail@msg", "Hello from gmail"));
+      Assert.Equal(ReceiptStatus.Submitted, store.StatusFor("pec-1", "pec@msg"));
+    }
+    finally {
+      if (File.Exists(path))
+        File.Delete(path);
+    }
+  }
 }
 
 

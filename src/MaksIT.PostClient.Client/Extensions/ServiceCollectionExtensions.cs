@@ -16,6 +16,9 @@ public static class ServiceCollectionExtensions {
     services.AddSingleton<IMailAuthService, MailAuthService>();
     services.AddSingleton<IMailSessionFactory, MailSessionFactory>();
     services.AddSingleton<MailArchiveStore>();
+    services.AddSingleton<SemanticSearchService>();
+    services.AddSingleton<ISemanticSearchService>(sp => sp.GetRequiredService<SemanticSearchService>());
+    services.AddSingleton<IAppUpdateService, AppUpdateService>();
     return services;
   }
 }

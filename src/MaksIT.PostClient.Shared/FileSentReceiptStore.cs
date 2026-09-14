@@ -88,6 +88,20 @@ public sealed class FileSentReceiptStore : ISentReceiptStore {
     }
   }
 
+  public void ForgetMailbox(string mailboxId) {
+    if (string.IsNullOrWhiteSpace(mailboxId))
+      return;
+    lock (_gate) {
+      var items = Load();
+      var kept = items
+        .Where(row => !row.MailboxId.Equals(mailboxId, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+      if (kept.Count == items.Count)
+        return;
+      Save(kept);
+    }
+  }
+
   private static SentDispatch? Find(
     List<SentDispatch> items,
     string mailboxId,

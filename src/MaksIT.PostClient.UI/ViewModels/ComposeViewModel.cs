@@ -71,6 +71,14 @@ public partial class ComposeViewModel : ObservableObject {
 
   public ObservableCollection<ComposeIdentity> FromAccounts { get; } = [];
 
+  [ObservableProperty]
+  private bool zipAttachments;
+
+  public bool HasFiles =>
+    Files.Count > 0;
+
+  public event Func<ZipSendRequest, Task<ZipSendRequest?>>? ZipOptionsRequested;
+
   public UiCopy Copy =>
     UiLocale.Copy;
 
@@ -85,6 +93,7 @@ public partial class ComposeViewModel : ObservableObject {
       FromAccounts.Add(row);
     SelectedFrom = selected;
     Status = Copy.FromMailboxTip;
+    Files.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasFiles));
     UiLocale.Changed += OnLocaleChanged;
   }
 
@@ -130,6 +139,10 @@ public partial class ComposeViewModel : ObservableObject {
       return;
     }
 
+    var attachments = await AttachmentsForSendAsync();
+    if (attachments is null)
+      return;
+
     IsBusy = true;
     Status = "Sending as " + identity.Line + "…";
     try {
@@ -153,11 +166,7 @@ public partial class ComposeViewModel : ObservableObject {
         BodyText = Body ?? "",
         InReplyTo = InReplyTo,
         References = References,
-        Attachments = Files.Select(f => new MailFileAttachment {
-          Name = f.Name,
-          Bytes = f.Bytes,
-          ContentType = f.ContentType
-        }).ToList()
+        Attachments = attachments
       };
       var result = await session.SendAsync(request);
       if (!result.IsSuccess) {
@@ -165,7 +174,9 @@ public partial class ComposeViewModel : ObservableObject {
         return;
       }
 
-      Status = "Sent from " + identity.Account.Label + ". Waiting for PEC/REM ricevute.";
+      Status = identity.Account.TracksCertifiedReceipts
+        ? string.Format(Copy.SentFromCertified, identity.Account.Label)
+        : string.Format(Copy.SentFrom, identity.Account.Label);
       Sent?.Invoke(request, result.Value ?? "", identity.Account.Id);
     }
     catch (Exception ex) {
@@ -177,6 +188,34 @@ public partial class ComposeViewModel : ObservableObject {
   }
 
   public event Action<MailSendRequest, string, string>? Sent;
+
+  private async Task<IReadOnlyList<MailFileAttachment>?> AttachmentsForSendAsync() {
+    var files = Files
+      .Select(f => new MailFileAttachment {
+        Name = f.Name,
+        Bytes = f.Bytes,
+        ContentType = f.ContentType
+      })
+      .ToList();
+    if (!ZipAttachments || files.Count == 0)
+      return files;
+    var prompt = new ZipSendRequest { FileName = AttachmentZip.SuggestedName(Subject) };
+    if (ZipOptionsRequested is not null) {
+      var chosen = await ZipOptionsRequested(prompt);
+      if (chosen is null)
+        return null;
+      prompt = chosen;
+    }
+
+    var zip = AttachmentZip.FromFiles(files, string.IsNullOrWhiteSpace(prompt.Password) ? null : prompt.Password);
+    return [
+      new MailFileAttachment {
+        Name = AttachmentZip.FileName(prompt.FileName),
+        Bytes = zip,
+        ContentType = "application/zip"
+      }
+    ];
+  }
 
   private static string GuessType(string name) {
     var ext = Path.GetExtension(name).ToLowerInvariant();
@@ -191,4 +230,11 @@ public partial class ComposeViewModel : ObservableObject {
       _ => "application/octet-stream"
     };
   }
+}
+
+
+public sealed class ZipSendRequest {
+  public string FileName { get; set; } = "";
+
+  public string Password { get; set; } = "";
 }

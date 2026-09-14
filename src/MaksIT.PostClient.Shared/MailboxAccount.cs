@@ -15,6 +15,8 @@ public sealed class MailboxAccount {
 
   public string IncomingProtocol { get; set; } = MailProtocol.Imap;
 
+  public string StorePath { get; set; } = "";
+
   public string IncomingSecurity { get; set; } = MailSecurity.Ssl;
 
   public string ImapHost { get; set; } = "";
@@ -33,15 +35,33 @@ public sealed class MailboxAccount {
 
   public string Provider { get; set; } = MailProvider.Imap;
 
+  public string CertifiedKind { get; set; } = MailCertifiedKind.Ordinary;
+
   public string AuthKind { get; set; } = MailAuthKind.Password;
+
+  [JsonIgnore]
+  public bool TracksCertifiedReceipts =>
+    MailCertifiedKind.TracksReceipts(CertifiedKind);
 
   [JsonIgnore]
   public string LoginName =>
     string.IsNullOrWhiteSpace(Username) ? Address.Trim() : Username.Trim();
 
   [JsonIgnore]
+  public bool IsPstStore =>
+    MailProtocol.IsPst(IncomingProtocol) || MailProvider.IsPst(Provider);
+
+  [JsonIgnore]
+  public string DataFile =>
+    !string.IsNullOrWhiteSpace(StorePath) ? StorePath.Trim() : ImapHost.Trim();
+
+  [JsonIgnore]
   public string Label =>
     !string.IsNullOrWhiteSpace(DisplayName)
       ? DisplayName.Trim()
-      : !string.IsNullOrWhiteSpace(Address) ? Address.Trim() : ImapHost;
+      : !string.IsNullOrWhiteSpace(Address)
+        ? Address.Trim()
+        : !string.IsNullOrWhiteSpace(DataFile)
+          ? Path.GetFileName(DataFile)
+          : ImapHost;
 }

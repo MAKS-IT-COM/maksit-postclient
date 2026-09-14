@@ -1,61 +1,70 @@
-# Postclient
+# Postclient — client PEC, REM e IMAP da scrivania
 
-![Line Coverage](https://img.shields.io/badge/Line%20Coverage-0%25-red)
-![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-0%25-red)
-![Method Coverage](https://img.shields.io/badge/Method%20Coverage-0%25-red)
+![Line Coverage](https://img.shields.io/badge/Line%20Coverage-49.7%25-yellowgreen)
+![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-47%25-yellowgreen)
+![Method Coverage](https://img.shields.io/badge/Method%20Coverage-52.6%25-yellowgreen)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)
 
 **Lingua:** [English](README.md) · [Italiano](README.it.md) · [Français](README.fr.md) · [Deutsch](README.de.md) · [Español](README.es.md)
 
-L’interfaccia del programma è in inglese o in italiano. Questo testo descrive il client per chi usa la **posta elettronica certificata** in Italia (PEC) e la **REM** eIDAS in Europa, come privato o come studio / agenzia.
+L’interfaccia del programma è in inglese, italiano, francese, tedesco o spagnolo. Questi documenti descrivono lo stesso **client di posta elettronica da scrivania** open source per chi invia e conserva **posta elettronica certificata (PEC)**, **registered electronic mail (REM) eIDAS** e posta **IMAP / POP3 / SMTP** ordinaria su Windows, Linux e macOS.
 
-Postclient è un client di posta da scrivania per Windows, Linux e macOS (Apple Silicon e Intel). Si collega con **IMAP**, **POP3** e **SMTP** alle caselle che già possiedi: posta ordinaria, **PEC** italiana presso un gestore qualificato, e **REM** europea quando l’operatore espone IMAP/SMTP.
+Postclient è un **client locale**, non una webmail. Si collega con IMAP, POP3 e SMTP alle caselle che già possiedi: Gmail, Microsoft 365, **PEC** italiana presso un gestore qualificato (Aruba, InfoCert Legalmail, Namirial, Poste Italiane, Register.it, Libero, e IMAP su dominio personalizzato), e **REM** europea quando l’operatore espone IMAP/SMTP. Le ricevute restano su questo PC come `.eml` più un archivio SQLite ricercabile.
 
-**Non** è un prestatore di servizi fiduciari qualificati (QTSP), **non** è un gestore PEC, **non** è una marca temporale e **non** è una casella in cloud. Buste e ricevute le emette il gestore. Questo programma le apre, mostra l’evidenza dell’operatore e ne tiene una copia sul computer.
+**Non** è un prestatore di servizi fiduciari qualificati (QTSP), **non** è un gestore PEC, **non** è una marca temporale e **non** è una casella in cloud. Buste e ricevute le emette il gestore / QTSP. Questo programma le apre, mostra l’evidenza di consegna e tiene gli originali sulla macchina.
 
 | | |
 |--|--|
-| Tipo | Client di posta da scrivania |
-| Sistemi | Windows, Linux, macOS |
+| Tipo | Client di posta da scrivania per PEC, REM e IMAP |
+| Sistemi | Windows, Linux, macOS (Apple Silicon e Intel) |
 | Stack | C#, .NET 10, Avalonia, MailKit |
 | Licenza | [Apache 2.0](LICENSE.md) |
 | Non è | Un QTSP, un nuovo indirizzo PEC/REM, posta ospitata, un’app scanner |
 
 Modifiche: [CHANGELOG.md](CHANGELOG.md). Sviluppo: [CONTRIBUTING.md](CONTRIBUTING.md) e [README in inglese](README.md) (compilazione, test, release).
 
+## Pensato per la posta certificata sul desktop
+
+La posta da scrivania e la webmail trattano di solito una **busta** PEC o una parte di evidenza ETSI REM come un allegato qualunque. Postclient è scritto intorno a quella evidenza:
+
+- **Apre buste PEC / REM** — legge il `postacert.eml` interno (il messaggio destinato al destinatario) invece del wrapper del gestore; colonna Tipo **PEC**, **RIC**, **REM** o **SIG** (firmato digitalmente).
+- **Colonna consegna dall’evidenza dell’operatore** — accettazione, avvenuta-consegna, ETSI `SubmissionAcceptance` / `Delivery` / `Retrieval`, LRE e avis AR24, Zustellung e Abholbestätigung De-Mail, acuse de recibo. Dopo l’invio SMTP, **Inviata** viene abbinata alle ricevute in Posta in arrivo/Ricevute tramite Message-Id, `daticert.xml` e prefissi oggetto. La PEC italiana **non ha ricevuta di lettura**: avvenuta consegna è il deposito nella casella certificata.
+- **Anteprima FatturaPA** — XML della fattura elettronica italiana in una vista leggibile (parser XML, non intelligenza artificiale).
+- **Fascicolo di `.eml` originali** — esporta i messaggi selezionati come i file che un notaio, uno sportello PA, una banca o un giudice può conservare.
+- **Da è un selettore di casella** — non si digita un From libero; l’invio usa l’identità SMTP dell’account collegato.
+- **Etichette di pratica su questo PC** — condominio, fascicolo cliente, avviso IMU. Le etichette sono locali, non un database di studio in rete.
+- **Archivio locale di tutta la cartella** — Scarica messaggi memorizza **tutta** la cartella IMAP in `mail.db` più gli `.eml` su disco (non una finestra degli ultimi N). FTS su oggetto, corpo, testo degli allegati PDF/XML/HTML/CSV/JSON e etichette.
+- **Ricerca per significato sul dispositivo (RAG)** — EmbeddingGemma 300M opzionale in **Impostazioni → Indici…**. I vettori restano in `mail.db`. La posta non lascia la macchina. Si possono ricostruire o riparare gli indici per parole e per significato.
+- **Regole tra caselle** — sposta, elimina, flag, etichetta; la cartella di destinazione può stare su un altro account, compreso un file dati `.pst` / `.ost` collegato. Importa JSON o un file `.rwz` legacy; l’export è JSON.
+- **Apre `.pst` / `.ost` come casella** — lo store Unicode è scrivibile (cartelle, flag, sposta, elimina). Un file offline viene copiato in un `.pst` Unicode alla prima scrittura. Non serve un altro programma di posta per leggere il file.
+- **Pacchetti per Paese** — **Impostazioni → Funzionalità** accende o spegne Italia (PEC, FatturaPA, fascicolo), Europa (REM eIDAS), Francia, Germania, Spagna e Svizzera. L’IMAP ordinario resta disponibile.
+
 ## A chi serve
 
 ### Privati
 
-Client quotidiano per uno o più indirizzi: Gmail o Microsoft 365 accanto alla PEC personale (o a una casella REM IMAP). L’archivio sta su **questo PC**: si può cercare un avviso di condominio, un file IMU o una comunicazione della PA anni dopo, senza lasciare gli originali su un server di terzi.
+Client quotidiano per uno o più indirizzi: Gmail o Microsoft 365 accanto a una **PEC** personale (Italia) o a una casella **REM** IMAP (UE). Cerca un avviso di condominio, un file IMU o una comunicazione della PA anni dopo, senza lasciare gli originali sul server di terzi.
 
-Uso tipico: PEC e posta ordinaria nella stessa finestra; vedere se il gestore ha accettato e depositato il messaggio; stampare o salvare un PDF; esportare l’`.eml` originale se lo chiede il Comune, la banca o il giudice.
+Uso tipico: posta certificata e ordinaria nella stessa finestra; vedere se il gestore ha accettato e depositato la PEC; stampare o salvare un PDF; esportare l’`.eml` originale se lo chiede il Comune, la banca o il giudice.
 
 ### Studi e agenzie
 
-Serve quando le identità certificate non devono mescolarsi: PEC personale, PEC dello studio, posta ordinaria. **Da** è un elenco delle caselle collegate, non un indirizzo digitato a mano. Un commercialista, un avvocato, un notaio, un CAF, un amministratore di condominio o uno studio UE che deposita in PA può:
+Serve quando le identità certificate non devono mescolarsi: PEC personale, PEC dello studio, posta ordinaria. Un commercialista, un avvocato, un notaio, un CAF, un amministratore di condominio o uno studio UE che deposita in PA può tenere ogni casella del gestore distinta (quota IMAP **QUOTA** in barra di stato), raggruppare un invio con le sue ricevute ed esportare un fascicolo senza caricare la pratica su un archivio di terzi.
 
-- tenere ogni casella del gestore distinta, con la quota IMAP nella barra di stato;
-- etichettare i messaggi **su questo PC** per pratica (condominio, fascicolo cliente) — non è una tabella di studio condivisa in rete;
-- tenere insieme l’invio e le ricevute del gestore che lo richiamano;
-- esportare gli originali selezionati come **fascicolo** di file `.eml` per il notaio, il giudice o lo sportello PA;
-- aprire gli allegati **FatturaPA** (XML) in una vista leggibile (parser XML, non intelligenza artificiale);
-- importare un profilo Thunderbird o un **PST/OST** Outlook senza installare Outlook.
-
-Il programma non sostituisce il gestore, non emette una ricevuta qualificata e non condivide le etichette di pratica tra i PC dell’ufficio.
+Il programma non sostituisce il gestore, non emette una ricevuta qualificata e non condivide le etichette tra i PC dell’ufficio.
 
 ## Account e protocolli
 
-In ingresso: **IMAP** (albero cartelle) o **POP3** (solo Posta in arrivo). In uscita: **SMTP**. Cifratura: automatica, SSL/TLS, STARTTLS, STARTTLS se disponibile, oppure nessuna. MailKit usa i metodi SASL che il server offre.
+In ingresso: **IMAP** (albero cartelle), **POP3** (solo Posta in arrivo), o un **`.pst` / `.ost`** collegato. I `.pst` Unicode sono scrivibili. In uscita: **SMTP**. Cifratura: automatica, SSL/TLS, STARTTLS, STARTTLS se disponibile, oppure nessuna. MailKit usa i metodi SASL che il server offre.
 
-Si possono salvare più caselle. I profili compilano host e porte:
+Si possono usare più caselle insieme. I profili compilano host e porte:
 
 | Profilo | Ruolo |
 |--|--|
-| Gmail | IMAP/SMTP; accesso Google (OAuth2 / XOAUTH2) o password per le app |
-| Outlook / Microsoft 365 | IMAP/SMTP; accesso Microsoft. Quasi tutti questi account rifiutano la password della casella |
+| Gmail | IMAP/SMTP; accesso Google (OAuth2 / XOAUTH2) o password per le app Gmail |
+| Microsoft 365 | IMAP/SMTP; accesso Microsoft. Quasi tutti questi account rifiutano la password della casella |
 | IT PEC — Aruba | `imaps.pec.aruba.it` / `smtps.pec.aruba.it` (POP3: `pop3s.pec.aruba.it`) |
 | IT PEC — InfoCert Legalmail | `mbox.cert.legalmail.it` / `sendm.cert.legalmail.it`. Spesso lo User ID InfoCert, non l’indirizzo |
 | IT/EU PEC — Namirial | `imaps.sicurezzapostale.it` / `smtps.sicurezzapostale.it` |
@@ -63,28 +72,29 @@ Si possono salvare più caselle. I profili compilano host e porte:
 | IT PEC — Register.it | `imap.pec-email.com` / `smtp.pec-email.com` |
 | IT PEC — Libero | `mail.postacert.it.net` |
 | EU — Intesi Group | `imap.ig-trustmail.com` / `smtp.ig-trustmail.com` |
-| IMAP / POP3 | Qualunque host indicato dall’operatore |
+| IMAP / POP3 | Qualunque host indicato dall’operatore. Imposta il **tipo di casella** su PEC italiana o REM UE se quella casella è certificata (anche con dominio personalizzato) |
+| File dati (`.pst` / `.ost`) | Store locale aperto come casella. Il `.pst` Unicode è scrivibile; `.ost` / `.pst` ANSI viene copiato in un `.pst` Unicode alla prima scrittura. Senza password. |
 
-Le caselle PEC IMAP usano la password del gestore, o una password per le app se c’è il 2FA. **AR24** (Francia), **De-Mail** (Germania), **IncaMail** (Svizzera) e **Lleida** (Spagna) di solito **non** sono IMAP. Se l’operatore ha dato host IMAP/POP3, scegli **IMAP / POP3** e inseriscili. Altrimenti questa applicazione non apre quella casella; può comunque mostrare l’evidenza ETSI REM su messaggi importati come `.eml`.
+Le caselle IMAP certificate usano la password del gestore, o una password per le app se c’è il 2FA. **AR24** (Francia), **De-Mail** (Germania), **IncaMail** (Svizzera) e **Lleida** (Spagna) di solito **non** sono IMAP. Se l’operatore ha dato host IMAP/POP3, scegli **IMAP / POP3**. Altrimenti questa applicazione non apre quella casella; può comunque mostrare l’evidenza ETSI REM su messaggi importati come `.eml`.
 
-OAuth: client ID Google (termina con `.apps.googleusercontent.com`) e, per client **Web**, il **client secret** — entrambi in Impostazioni account (il secret sta in `secrets.bin`). I client pubblici Desktop non richiedono secret. Variabili `POSTCLIENT_GOOGLE_CLIENT_ID` / `POSTCLIENT_GOOGLE_CLIENT_SECRET`. Abilitare le **API Gmail**, lo scope `https://mail.google.com/`, il loopback `http://127.0.0.1` e **IMAP** in Gmail. Microsoft: ID applicazione Azure (GUID); client pubblico; redirect `http://localhost`; permessi IMAP/SMTP.
+OAuth: client ID Google (termina con `.apps.googleusercontent.com`) e, per client **Web**, il **client secret** — entrambi in Impostazioni account (il secret sta in `secrets.bin`, non come password della casella). I client pubblici Desktop non richiedono secret. Variabili `POSTCLIENT_GOOGLE_CLIENT_ID` / `POSTCLIENT_GOOGLE_CLIENT_SECRET`. Abilitare le **API Gmail**, lo scope `https://mail.google.com/`, il loopback `http://127.0.0.1` e **IMAP** in Gmail. Microsoft: ID applicazione Azure (GUID); client pubblico; redirect `http://localhost`; permessi IMAP/SMTP.
 
 Password e token OAuth stanno accanto alle impostazioni (`DPAPI` su Windows, mode `600` su Linux/macOS), mai in `settings.json`.
 
-## PEC italiana
+## PEC italiana (posta elettronica certificata)
 
 La PEC è una **busta** del gestore:
 
 - messaggio di trasporto con `X-Trasporto: posta-certificata`, `daticert.xml` e l’originale in `postacert.eml`;
 - ricevute (`X-Ricevuta`) in **Posta in arrivo** e **Ricevute**: accettazione, presa-in-carico, avvenuta-consegna, non-accettazione, mancata-consegna, rilevazione-virus, preavviso-errore-consegna.
 
-Visualizza → **Apri busta PEC/REM** mostra il `postacert.eml` interno (il testo destinato al destinatario) invece del wrapper del gestore. La colonna Tipo indica **PEC** (trasporto) o **RIC** (ricevuta).
+Visualizza → **Apri busta PEC/REM** mostra il `postacert.eml` interno. La colonna Tipo indica **PEC** (trasporto) o **RIC** (ricevuta).
 
 La PEC italiana **non ha ricevuta di lettura**. **Avvenuta consegna** significa deposito nella casella certificata del destinatario, non che una persona abbia aperto il messaggio.
 
-## REM europea (eIDAS)
+## REM europea (registered electronic mail eIDAS)
 
-Se il messaggio porta evidenza ETSI REM (`REMEvidence` / `urn:etsi:rem`, o un nome parte `remevidence` / `rem-md`), il client lo tratta come **REM** (regione Europa). Gli eventi finiscono nella stessa colonna Consegna della PEC:
+Se il messaggio porta evidenza ETSI REM (`REMEvidence` / `urn:etsi:rem`, o un nome parte `remevidence` / `rem-md`), il client lo tratta come **REM**. Gli eventi finiscono nella stessa colonna Consegna della PEC:
 
 - `SubmissionAcceptance` → il QTSP ha preso in carico;
 - `Delivery` / avis de réception LRE o AR24 / Zustellung De-Mail / acuse de recibo → depositato;
@@ -95,7 +105,7 @@ S/MIME (`smime.p7s` / `smime.p7m`) è mostrato come firmato digitalmente; non è
 
 ## Colonna consegna dopo l’invio
 
-Dopo l’SMTP, Postclient memorizza il **Message-Id** in uscita e, aprendo **Inviata**, riconcilia le ricevute da **Posta in arrivo** e **Ricevute**. Abbina, in ordine: `<msgid>` in `daticert.xml`, `X-Riferimento-Message-ID`, `In-Reply-To`, `identificativo` PEC, poi i prefissi oggetto (`ACCETTAZIONE:`, `CONSEGNA:`, `AVIS DE RECEPTION:`, `ACUSE DE RECIBO:`, `ZUSTELLBESTAETIGUNG:`, `ABHOLBESTAETIGUNG:`, …).
+Dopo l’SMTP, Postclient memorizza il **Message-Id** in uscita e, aprendo **Inviata**, riconcilia le ricevute da **Posta in arrivo** e **Ricevute**. L’attesa vale solo per le caselle di tipo PEC o REM (un preset, oppure IMAP/POP3 con quel tipo). Gmail, Microsoft 365 e IMAP ordinario risultano solo inviati. Abbina, in ordine: `<msgid>` in `daticert.xml`, `X-Riferimento-Message-ID`, `In-Reply-To`, `identificativo` PEC, poi i prefissi oggetto (`ACCETTAZIONE:`, `CONSEGNA:`, `AVIS DE RECEPTION:`, `ACUSE DE RECIBO:`, `ZUSTELLBESTAETIGUNG:`, `ABHOLBESTAETIGUNG:`, …).
 
 | Evidenza | Stato | Significato |
 |--|--|--|
@@ -112,12 +122,12 @@ Le notifiche del sistema segnalano nuove PEC, ricevute e REM (toast Windows, not
 
 - L’albero segue il server (Posta in arrivo, Ricevute, Bozze, Inviata, Archivio, Indesiderata, Cestino, più cartelle personalizzate). Le cartelle di sistema non si eliminano. Si può creare una cartella, svuotarla (nel Cestino, o in modo definitivo nel Cestino), segnare tutto letto/non letto, eliminare una cartella personalizzata, trascinare i messaggi su una cartella.
 - Colonne elenco: non letto, stella, allegati, consegna, tipo (PEC / RIC / REM / SIG), da, oggetto, data (locale `yyyy-MM-dd HH:mm`), etichetta di pratica.
-- Vista: HTML (motore web del sistema), testo, sorgente, o **FatturaPA**. Disposizione: elenco sopra la lettura, oppure tre colonne.
+- Vista: HTML (motore web del sistema), testo, sorgente, o **FatturaPA**. Disposizione: elenco sopra la lettura, oppure tre colonne (cartelle, elenco, lettura).
 - **Raggruppa conversazioni** indenta le risposte nell’elenco (Message-ID / In-Reply-To / References, profondità massima 8). Le ricevute PEC dello stesso originale stanno insieme. Non c’è un riquadro conversazioni separato.
 - Azioni: rispondi, rispondi a tutti, inoltra, apri in nuova finestra, letto/non letto, stella, priorità, elimina.
-- La composizione è **testo semplice**. A, Cc, Ccn sono chip di indirizzo. L’invio usa solo l’identità SMTP della casella scelta.
+- La composizione è **testo semplice**. A, Cc, Ccn sono chip di indirizzo. Gli allegati sono elencati nel compositore. **Invia allegati come ZIP** impacca i file trascinati (password opzionale). L’invio usa solo l’identità SMTP della casella scelta.
 
-HTML: **WebView2** su Windows, **WebKitGTK** su Linux, **WKWebView** su macOS. Se manca il motore, si vede il corpo di testo.
+HTML: **WebView2** su Windows (profilo sotto la cartella dati), **WebKitGTK** su Linux, **WKWebView** su macOS. Se manca il motore, si vede il corpo di testo.
 
 Pacchetti Linux per la vista HTML:
 
@@ -127,11 +137,13 @@ sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libsoup-3.0-0
 
 Fedora: `gtk3 webkit2gtk4.1 libsoup3`.
 
-## Archivio, ricerca, etichette
+## Archivio locale, ricerca per parole e indice di significato
 
 Scarica messaggi indica **tutta** la cartella IMAP in SQLite (`mail.db`) più gli `.eml` su disco. POP3 riempie solo la Posta in arrivo. L’indicizzazione gira in background; la barra di stato mostra l’avanzamento.
 
-La ricerca (cartella corrente) copre oggetto, corpo, testo degli allegati (PDF e text/XML/HTML/CSV/JSON) e etichette di pratica. Le etichette esistono solo su questo PC.
+- **Impostazioni → Indici…**: indice per parole (FTS) e, se vuoi, EmbeddingGemma 300M (~300 MB) per il significato. Il pacchetto ONNX si scarica da Hugging Face (`onnx-community/embeddinggemma-300m-ONNX`). I vettori restano in `mail.db` su questo PC. Dispositivo: Automatico / CPU / GPU (DirectML su Windows). Ricrea o ripara gli indici se la ricerca è storta. I pesi usano i termini Google Gemma.
+
+La ricerca (cartella corrente) copre oggetto, corpo, testo degli allegati (PDF e text/XML/HTML/CSV/JSON), etichette di pratica e il significato quando il modello è pronto. Le etichette esistono solo su questo PC.
 
 L’archivio è **solo su questo PC**. File → Apri cartella archivio / Esporta archivio copia `mail.db` e gli `.eml`. Percorsi:
 
@@ -150,8 +162,11 @@ La **QUOTA** IMAP del gestore (se il server la espone) è in barra di stato. È 
 | Azione | Risultato |
 |--|--|
 | Importa EML | Originali nella cartella corrente |
-| Importa Thunderbird | Store mbox del profilo Thunderbird |
-| Importa Outlook PST/OST | Posta senza installare Outlook |
+| Importa mbox | Store mbox locali da un profilo di posta da scrivania |
+| Importa `.pst` / `.ost` | Copia la posta dal file dati nell’account IMAP/POP3 **selezionato**. Gli store annidati nel file vengono importati anch’essi. Chiudi ogni programma che tiene il file aperto. |
+| Collega file dati | Apre un `.pst` / `.ost` come casella. Il `.pst` Unicode è scrivibile. L’`.ost` non si scrive in loco: la prima modifica lo copia in un `.pst` Unicode accanto all’originale. Menu File o tipo account *file dati*. |
+| Nuovo file dati | Menu File: crea un `.pst` Unicode vuoto (Posta in arrivo, Bozze, Inviata, Cestino) e lo collega come casella. |
+| Regole | **Impostazioni → Regole**: **Importa regole…** legge l’export JSON di questa app o un file `.rwz` legacy. **Esporta regole…** scrive JSON. Ogni regola è legata a una **casella**; la cartella di destinazione può stare su un’altra casella (anche un file dati collegato). Partono su Scarica messaggi, in import e da **Esegui tutte le regole**. |
 | Stampa | HTML leggibile del messaggio (eventualmente sbustato) |
 | Salva PDF | Lo stesso contenuto in PDF |
 | Salva allegati ZIP | Tutti gli allegati del messaggio aperto |
@@ -161,11 +176,23 @@ I messaggi aperti sono anche copiati come `.eml` nella cartella dati. Gli `.eml`
 
 ## Lingua dell’interfaccia
 
-Visualizza → Lingua: **English** o **Italiano**. I nomi cartella del server (Posta in arrivo, Gesendet, Messages envoyés, Enviados, …) sono mappati su Posta in arrivo / Inviata / … nella lingua dell’UI.
+Visualizza → Lingua: **English**, **Italiano**, **Français**, **Deutsch** o **Español**. I nomi cartella del server (Posta in arrivo, Gesendet, Messages envoyés, Enviados, …) sono mappati su Posta in arrivo / Inviata / … nella lingua dell’UI.
+
+## Pacchetti per Paese
+
+**Impostazioni → Funzionalità** è una matrice di **sola posta certificata**. IMAP/POP3 ordinario, ricerca, etichette di pratica, import mbox/`.pst` e file dati collegati restano sempre disponibili. Le righe sono funzioni certificate; le colonne sono **Italia**, **Europa**, **Francia**, **Germania**, **Spagna**, **Svizzera**. La casella in intestazione accende o spegne tutta la colonna.
+
+| Pacchetto | Cosa sblocca | Predefinito |
+|--|--|--|
+| Italia | Busta PEC / ricevute / consegna, profili PEC, anteprima FatturaPA, fascicolo | Acceso |
+| Europa | Evidenza REM eIDAS, profilo Intesi | Acceso |
+| Francia / Germania / Spagna / Svizzera | Etichette di evidenza (AR24/LRE, De-Mail, Lleida, IncaMail). Quelle reti di solito non sono IMAP. | Spento |
+
+Spegnere un pacchetto nasconde menu, colonne e profili. Le caselle già configurate restano; sparisce solo l’interfaccia extra.
 
 ## Download
 
-Quando esiste una GitHub Release: zip portatile e setup Windows (`postclient-{version}.exe`, self-contained — niente SDK .NET sul PC), Flatpak Linux, DMG macOS (`osx-arm64` e `osx-x64`). Le build macOS non sono firmate: al primo avvio **Apri** dal menu contestuale.
+Quando esiste una GitHub Release: zip portatile e setup Windows (`postclient-{version}.exe`, self-contained — niente SDK .NET sul PC; percorso predefinito `C:\Program Files\MaksIT\Postclient`), Flatpak Linux, DMG macOS (`osx-arm64` e `osx-x64`). Le build macOS non sono firmate: al primo avvio **Apri** dal menu contestuale.
 
 ### Linux (Flatpak)
 

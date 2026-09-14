@@ -1,0 +1,102 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        x:Class="MaksIT.PostClient.UI.Windows.SemanticSearchWindow"
+        x:DataType="vm:SemanticSearchViewModel"
+        Title="{Binding Copy.SemanticSearch}"
+        Icon="/Assets/icon.ico"
+        Width="580"
+        SizeToContent="Height"
+        MinWidth="480"
+        MaxHeight="720"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="16" LastChildFill="True">
+    <StackPanel DockPanel.Dock="Bottom"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,16,0,0">
+      <Button Content="{Binding Copy.Close}"
+              Classes="quiet"
+              HorizontalAlignment="Right"
+              Click="OnCloseClick" />
+    </StackPanel>
+    <ScrollViewer>
+      <StackPanel Spacing="12">
+        <TextBlock Text="{Binding Copy.SemanticSearchHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+
+        <TextBlock Text="{Binding Copy.IndicesKeyword}" Classes="kicker" />
+        <TextBlock Text="{Binding Copy.IndicesKeywordHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+        <TextBlock Text="{Binding KeywordStatus}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+        <Button Content="{Binding Copy.IndicesRebuildKeyword}"
+                Classes="mail-tool"
+                HorizontalAlignment="Left"
+                Command="{Binding RebuildKeywordCommand}" />
+
+        <TextBlock Text="{Binding Copy.IndicesMeaning}" Classes="kicker" />
+        <TextBlock Text="{Binding Copy.IndicesMeaningHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+        <CheckBox Content="{Binding Copy.SemanticSearchEnabled}"
+                  IsChecked="{Binding Enabled}"
+                  IsEnabled="{Binding !IsWorking}" />
+        <TextBlock Text="{Binding Copy.SemanticDevice}" Classes="kicker" />
+        <StackPanel Spacing="4">
+          <RadioButton Content="{Binding Copy.SemanticDeviceAuto}"
+                       GroupName="semantic-device"
+                       IsEnabled="{Binding !IsWorking}"
+                       IsChecked="{Binding IsAuto}" />
+          <RadioButton Content="{Binding Copy.SemanticDeviceCpu}"
+                       GroupName="semantic-device"
+                       IsEnabled="{Binding !IsWorking}"
+                       IsChecked="{Binding IsCpu}" />
+          <RadioButton Content="{Binding Copy.SemanticDeviceGpu}"
+                       GroupName="semantic-device"
+                       IsEnabled="{Binding GpuChoiceEnabled}"
+                       IsChecked="{Binding IsGpu}" />
+        </StackPanel>
+        <TextBlock Text="{Binding Copy.SemanticDeviceGpuOff}"
+                   Classes="hint"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding !GpuAvailable}" />
+        <TextBlock Text="{Binding MeaningStatus}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="{Binding Copy.IndicesRebuildMeaning}"
+                  Classes="mail-tool"
+                  Command="{Binding RebuildMeaningCommand}" />
+          <Button Content="{Binding Copy.SemanticRetry}"
+                  Classes="mail-tool"
+                  Command="{Binding RetryCommand}" />
+        </StackPanel>
+        <TextBlock Text="{Binding Copy.SemanticLicenseHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Copy.IndicesModelFolder}" Classes="kicker" />
+        <TextBlock Text="{Binding ModelsPath}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+
+        <TextBlock Text="{Binding Copy.IndicesSanitize}" Classes="kicker" />
+        <TextBlock Text="{Binding Copy.IndicesSanitizeHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+        <Button Content="{Binding Copy.IndicesSanitize}"
+                Classes="mail-tool"
+                HorizontalAlignment="Left"
+                Command="{Binding SanitizeIndicesCommand}" />
+
+        <TextBlock Text="{Binding Status}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

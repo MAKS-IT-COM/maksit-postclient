@@ -18,14 +18,23 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private readonly IMailAuthService _auth;
   private readonly ISentReceiptStore _receipts;
   private readonly MailArchiveStore _archive;
+  private readonly ISemanticSearchService _semantic;
+  private readonly IAppUpdateService _updates;
   private readonly Dictionary<string, IMailSession> _connections = new(StringComparer.OrdinalIgnoreCase);
   private readonly Dictionary<string, List<FolderRowViewModel>> _foldersByMailbox = new(StringComparer.OrdinalIgnoreCase);
   private readonly HashSet<string> _connecting = new(StringComparer.OrdinalIgnoreCase);
   private CancellationTokenSource? _work;
+  private CancellationTokenSource? _readingLoad;
+  private CancellationTokenSource? _folderLoad;
   private CancellationTokenSource? _backfill;
+  private CancellationTokenSource? _search;
+  private int _searchGen;
+  private int _indexPause;
+  private bool _syncingList;
   private readonly HashSet<string> _indexMailboxes = new(StringComparer.OrdinalIgnoreCase);
   private readonly HashSet<string> _catalogDone = new(StringComparer.OrdinalIgnoreCase);
-  private string? _indexMailboxId;
+  private readonly HashSet<string> _catalogFolders = new(StringComparer.OrdinalIgnoreCase);
+  private const int IndexCatalogChunk = 2_000;
   private MailMessageBody? _reading;
   private MessageRowViewModel? _pendingWindow;
   private bool _syncingTree;
@@ -33,10 +42,14 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private bool _applyingProvider;
   private bool _accountSettingsOpen;
   private bool _syncingBodyKind;
+  private bool _updateBusy;
   private string _bodyPreference = MailBodyKind.Html;
   private string _listSortHeader = "Date";
   private bool _listSortDescending = true;
   private OAuthTokenSet? _pendingOauth;
+
+  public ISemanticSearchService SemanticSearch =>
+    _semantic;
 
   public bool AccountSettingsOpen {
     get => _accountSettingsOpen;
@@ -83,6 +96,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private ChoiceRow editorProvider = ChoiceRow.Provider(MailProvider.Imap);
 
   [ObservableProperty]
+  private ChoiceRow editorCertifiedKind = ChoiceRow.Certified(MailCertifiedKind.Ordinary);
+
+  [ObservableProperty]
   private string editorGoogleClientId = "";
 
   [ObservableProperty]
@@ -118,6 +134,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
 
   [ObservableProperty]
   private string editorIncomingHost = "";
+
+  [ObservableProperty]
+  private string editorStorePath = "";
 
   [ObservableProperty]
   private decimal editorIncomingPort = 993;
@@ -195,6 +214,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private string indexLine = "";
 
   [ObservableProperty]
+  private string semanticLine = "";
+
+  [ObservableProperty]
   private string readingFattura = "";
 
   [ObservableProperty]
@@ -221,12 +243,22 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     ChoiceRow.SecurityModes;
 
   public IReadOnlyList<ChoiceRow> Providers =>
-    ChoiceRow.Providers;
+    ChoiceRow.ProvidersFor(_files.Current.Features, EditorProvider.Id);
 
-  public IReadOnlyList<ChoiceRow> Languages { get; } = [
-    new() { Id = UiLanguage.En, Title = UiLanguage.Title(UiLanguage.En) },
-    new() { Id = UiLanguage.It, Title = UiLanguage.Title(UiLanguage.It) }
-  ];
+  public IReadOnlyList<ChoiceRow> CertifiedKinds =>
+    ChoiceRow.CertifiedKinds;
+
+  public bool ShowPstFields =>
+    MailProvider.IsPst(EditorProvider.Id);
+
+  public bool ShowServerFields =>
+    !ShowPstFields;
+
+  public bool ShowCertifiedKind =>
+    ShowServerFields && MailProvider.Normalize(EditorProvider.Id) == MailProvider.Imap;
+
+  public IReadOnlyList<ChoiceRow> Languages { get; } =
+    UiLanguage.All.Select(id => new ChoiceRow { Id = id, Title = UiLanguage.Title(id) }).ToList();
 
   public ChoiceRow SelectedLanguage {
     get => Languages.First(l => l.Id == UiLocale.Id);
@@ -243,6 +275,15 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   public bool IsItalian =>
     UiLocale.Id == UiLanguage.It;
 
+  public bool IsFrench =>
+    UiLocale.Id == UiLanguage.Fr;
+
+  public bool IsGerman =>
+    UiLocale.Id == UiLanguage.De;
+
+  public bool IsSpanish =>
+    UiLocale.Id == UiLanguage.Es;
+
   public bool HtmlEngineReady { get; private set; } = true;
 
   public bool ShowHtmlBody =>
@@ -256,7 +297,29 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     HasReading && MailBodyKind.IsSource(ReadingBodyKind);
 
   public bool ShowFatturaBody =>
-    HasReading && MailBodyKind.IsFattura(ReadingBodyKind);
+    HasReading && UseFatturaPa && MailBodyKind.IsFattura(ReadingBodyKind);
+
+  public bool UseFascicolo =>
+    FeatureGate.On(AppFeature.Fascicolo);
+
+  public bool UseFatturaPa =>
+    FeatureGate.On(AppFeature.FatturaPa);
+
+  public bool UseEnvelopeTools =>
+    FeatureGate.On(AppFeature.PecEnvelope) || FeatureGate.On(AppFeature.RemEvidence);
+
+  public bool UseDeliveryColumn =>
+    UseEnvelopeTools
+    || FeatureGate.On(AppFeature.FrEvidence)
+    || FeatureGate.On(AppFeature.DeEvidence)
+    || FeatureGate.On(AppFeature.EsEvidence)
+    || FeatureGate.On(AppFeature.ChEvidence);
+
+  public bool UseTypeColumn =>
+    UseEnvelopeTools;
+
+  public bool ShowFatturaPaTools =>
+    HasReadingFattura && UseFatturaPa;
 
   public bool IsHtmlKind =>
     MailBodyKind.IsHtml(ReadingBodyKind);
@@ -270,11 +333,23 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   public bool IsFatturaKind =>
     MailBodyKind.IsFattura(ReadingBodyKind);
 
-  public bool IsWideLayout =>
-    MailLayout.IsWide(ReadingLayout);
+  public bool IsWideLayout {
+    get => MailLayout.IsWide(ReadingLayout);
+    set => ReadingLayout = value ? MailLayout.Wide : MailLayout.Stacked;
+  }
 
-  public bool IsStackedLayout =>
-    MailLayout.IsStacked(ReadingLayout);
+  public bool IsStackedLayout {
+    get => MailLayout.IsStacked(ReadingLayout);
+    set {
+      if (value)
+        ReadingLayout = MailLayout.Stacked;
+      else
+        OnPropertyChanged(nameof(IsStackedLayout));
+    }
+  }
+
+  public string LayoutToggleLabel =>
+    IsWideLayout ? Copy.ThreeColumns : Copy.ListReading;
 
   public event Action<ComposeViewModel>? ComposeRequested;
 
@@ -282,9 +357,19 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
 
   public event Action? AccountSettingsRequested;
 
+  public event Action? FeaturesRequested;
+
+  public event Action? SemanticSearchRequested;
+
+  public event Action? MessageListSelectionRestoreRequested;
+
+  public event Action? RulesRequested;
+
   public event Action? AccountSaved;
 
   public event Action<string, string>? NoticeRequested;
+
+  public event Action? AboutRequested;
 
   public event Func<PromptRequest, Task<string?>>? PromptRequested;
 
@@ -295,6 +380,12 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   public event Action? ImportEmlRequested;
 
   public event Action? ImportPstRequested;
+
+  public event Action? AttachPstRequested;
+
+  public event Action? CreatePstRequested;
+
+  public event Func<Task<string?>>? PickStorePathRequested;
 
   public event Action? ImportThunderbirdRequested;
 
@@ -310,14 +401,19 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     IMailSessionFactory sessions,
     IMailAuthService auth,
     ISentReceiptStore receipts,
-    MailArchiveStore archive) {
+    MailArchiveStore archive,
+    ISemanticSearchService semantic,
+    IAppUpdateService updates) {
     _files = files;
     _secrets = secrets;
     _sessions = sessions;
     _auth = auth;
     _receipts = receipts;
     _archive = archive;
+    _semantic = semantic;
+    _updates = updates;
     files.Current.EnsureDefaults();
+    FeatureGate.Use(files.Current.Features);
     UiLocale.Apply(files.Current.Language);
     copy = UiLocale.Copy;
     status = copy.AddMailboxThenGet;
@@ -340,17 +436,43 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     editorGoogleClientSecret = StoredGoogleClientSecret();
     editorMicrosoftClientId = files.Current.MicrosoftClientId;
     ReloadMailboxes();
+    semanticLine = semantic.StatusLine;
+    semantic.Changed += OnSemanticChanged;
+    semantic.Start();
   }
 
   public async ValueTask DisposeAsync() {
     StopBackfill();
+    _folderLoad?.Cancel();
+    _folderLoad?.Dispose();
+    _folderLoad = null;
+    _search?.Cancel();
+    _search?.Dispose();
+    _search = null;
+    _readingLoad?.Cancel();
+    _readingLoad?.Dispose();
+    _readingLoad = null;
     _work?.Cancel();
-    foreach (var session in _connections.Values.ToList())
+    _semantic.Changed -= OnSemanticChanged;
+    _semantic.Dispose();
+    List<IMailSession> sessions;
+    lock (_connections) {
+      sessions = [.. _connections.Values];
+      _connections.Clear();
+    }
+
+    foreach (var session in sessions)
       await session.DisposeAsync();
-    _connections.Clear();
     _work?.Dispose();
     _archive.Dispose();
   }
+
+  private void OnSemanticChanged() =>
+    Dispatcher.UIThread.Post(() => {
+      var line = _semantic.StatusLine;
+      if (SemanticLine != line)
+        SemanticLine = line;
+    });
 
   [RelayCommand]
   private void NewMailbox() {
@@ -365,16 +487,113 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     EditorMicrosoftClientId = _files.Current.MicrosoftClientId;
     _applyingProvider = true;
     EditorProvider = ChoiceRow.Provider(MailProvider.Imap);
+    EditorCertifiedKind = ChoiceRow.Certified(MailCertifiedKind.Ordinary);
     _applyingProvider = false;
     EditorIncomingProtocol = ChoiceRow.Incoming(MailProtocol.Imap);
     EditorIncomingSecurity = ChoiceRow.Security(MailSecurity.Ssl);
     EditorIncomingHost = "";
+    EditorStorePath = "";
     EditorIncomingPort = MailSecurity.DefaultIncomingPort(MailProtocol.Imap, MailSecurity.Ssl);
     EditorSmtpSecurity = ChoiceRow.Security(MailSecurity.Ssl);
     EditorSmtpHost = "";
     EditorSmtpPort = MailSecurity.DefaultSmtpPort(MailSecurity.Ssl);
     UpdateAuthUi();
     AccountSettingsRequested?.Invoke();
+  }
+
+  [RelayCommand]
+  private void OpenFeatures() =>
+    FeaturesRequested?.Invoke();
+
+  [RelayCommand]
+  private void OpenSemanticSearch() =>
+    SemanticSearchRequested?.Invoke();
+
+  [RelayCommand]
+  private void OpenRules() =>
+    RulesRequested?.Invoke();
+
+  [RelayCommand]
+  private void ShowAbout() =>
+    AboutRequested?.Invoke();
+
+  [RelayCommand(CanExecute = nameof(CanCheckForUpdates))]
+  private async Task CheckForUpdatesAsync() {
+    _updateBusy = true;
+    CheckForUpdatesCommand.NotifyCanExecuteChanged();
+    Status = Copy.UpdateChecking;
+    try {
+      var check = await _updates.CheckAsync();
+      if (!check.IsSuccess) {
+        var msg = string.Join(" ", check.Messages);
+        Status = msg.Contains("404", StringComparison.Ordinal)
+          ? Copy.UpdateNone
+          : string.Format(Copy.UpdateFailed, msg);
+        return;
+      }
+
+      var info = check.Value;
+      if (info is null || !info.IsNewer) {
+        Status = string.Format(Copy.UpdateLatest, AppVersion.Display());
+        return;
+      }
+
+      var latest = info.Release.VersionText;
+      var installed = AppVersion.Format(info.Installed);
+      var hasAsset = info.Asset is not null;
+      var accepted = PromptRequested is null
+        ? null
+        : await PromptRequested(new PromptRequest {
+            Title = Copy.CheckUpdates.Replace("_", "", StringComparison.Ordinal),
+            Message = hasAsset
+              ? string.Format(Copy.UpdateAvailable, latest, installed)
+              : string.Format(Copy.UpdateNoAsset, latest, installed),
+            ConfirmOnly = true,
+            ConfirmLabel = hasAsset ? Copy.UpdateDownload : Copy.UpdateOpenPage
+          });
+      if (accepted is null) {
+        Status = string.Format(Copy.UpdateAvailable, latest, installed);
+        return;
+      }
+
+      if (hasAsset) {
+        Status = Copy.UpdateDownloading;
+        var downloaded = await _updates.DownloadAsync(info.Asset!);
+        if (!downloaded.IsSuccess || string.IsNullOrWhiteSpace(downloaded.Value)) {
+          Status = string.Join(" ", downloaded.Messages);
+          OpenUrl(info.Release.HtmlUrl);
+          return;
+        }
+
+        if (!_updates.TryLaunch(downloaded.Value))
+          OpenUrl(info.Release.HtmlUrl);
+        else
+          Status = "";
+        return;
+      }
+
+      OpenUrl(info.Release.HtmlUrl);
+    }
+    finally {
+      _updateBusy = false;
+      CheckForUpdatesCommand.NotifyCanExecuteChanged();
+    }
+  }
+
+  private bool CanCheckForUpdates() =>
+    !_updateBusy;
+
+  private static void OpenUrl(string? url) {
+    if (string.IsNullOrWhiteSpace(url))
+      return;
+    try {
+      Process.Start(new ProcessStartInfo {
+        FileName = url,
+        UseShellExecute = true
+      });
+    }
+    catch {
+    }
   }
 
   [RelayCommand]
@@ -413,10 +632,17 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     UpdateAuthUi();
     EditorIncomingSecurity = ChoiceRow.Security(EditorIncomingSecurity.Id);
     EditorSmtpSecurity = ChoiceRow.Security(EditorSmtpSecurity.Id);
+    EditorCertifiedKind = ChoiceRow.Certified(EditorCertifiedKind.Id);
     OnPropertyChanged(nameof(SecurityModes));
+    OnPropertyChanged(nameof(CertifiedKinds));
     OnPropertyChanged(nameof(SelectedLanguage));
     OnPropertyChanged(nameof(IsEnglish));
     OnPropertyChanged(nameof(IsItalian));
+    OnPropertyChanged(nameof(IsFrench));
+    OnPropertyChanged(nameof(IsGerman));
+    OnPropertyChanged(nameof(IsSpanish));
+    OnPropertyChanged(nameof(LayoutToggleLabel));
+    NotifyFeatures();
     foreach (var row in Messages)
       row.RefreshMarks();
   }
@@ -439,7 +665,13 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     WriteMailbox(closeSettings: true);
 
   private void WriteMailbox(bool closeSettings) {
-    if (string.IsNullOrWhiteSpace(EditorIncomingHost) || string.IsNullOrWhiteSpace(EditorAddress)) {
+    if (ShowPstFields) {
+      if (string.IsNullOrWhiteSpace(EditorStorePath) || !File.Exists(EditorStorePath.Trim())) {
+        Status = Copy.PstPathRequired;
+        return;
+      }
+    }
+    else if (string.IsNullOrWhiteSpace(EditorIncomingHost) || string.IsNullOrWhiteSpace(EditorAddress)) {
       Status = "Address and incoming host are required.";
       return;
     }
@@ -450,26 +682,43 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     box.DisplayName = EditorName.Trim();
     box.Address = EditorAddress.Trim();
     box.Username = EditorUsername.Trim();
-    box.IncomingProtocol = EditorIncomingProtocol.Id;
-    box.IncomingSecurity = EditorIncomingSecurity.Id;
-    box.ImapHost = EditorIncomingHost.Trim();
-    box.ImapPort = EditorIncomingPort <= 0
-      ? MailSecurity.DefaultIncomingPort(box.IncomingProtocol, box.IncomingSecurity)
-      : (int)EditorIncomingPort;
-    box.SmtpSecurity = EditorSmtpSecurity.Id;
-    box.SmtpHost = string.IsNullOrWhiteSpace(EditorSmtpHost) ? EditorIncomingHost.Trim() : EditorSmtpHost.Trim();
-    box.SmtpPort = EditorSmtpPort <= 0
-      ? MailSecurity.DefaultSmtpPort(box.SmtpSecurity)
-      : (int)EditorSmtpPort;
-    box.Provider = MailProvider.Normalize(EditorProvider.Id);
-    if (_pendingOauth is not null)
-      box.AuthKind = MailAuthKind.Normalize(_pendingOauth.Provider);
-    else if (MailProvider.UsesOAuth(box.Provider) && _auth.HasTokens(box.Id))
-      box.AuthKind = MailAuthKind.Normalize(
-        box.Provider == MailProvider.Outlook ? MailAuthKind.Microsoft : MailAuthKind.Google);
-    else
+    if (ShowPstFields) {
+      var path = EditorStorePath.Trim();
+      box.Provider = MailProvider.Pst;
+      box.IncomingProtocol = MailProtocol.Pst;
+      box.StorePath = path;
+      box.ImapHost = "";
       box.AuthKind = MailAuthKind.Password;
-    MailProvider.Apply(box);
+      box.CertifiedKind = MailCertifiedKind.Ordinary;
+      if (string.IsNullOrWhiteSpace(box.Address))
+        box.Address = Path.GetFileNameWithoutExtension(path);
+      if (string.IsNullOrWhiteSpace(box.DisplayName))
+        box.DisplayName = Path.GetFileName(path);
+    }
+    else {
+      box.IncomingProtocol = EditorIncomingProtocol.Id;
+      box.IncomingSecurity = EditorIncomingSecurity.Id;
+      box.ImapHost = EditorIncomingHost.Trim();
+      box.StorePath = "";
+      box.ImapPort = EditorIncomingPort <= 0
+        ? MailSecurity.DefaultIncomingPort(box.IncomingProtocol, box.IncomingSecurity)
+        : (int)EditorIncomingPort;
+      box.SmtpSecurity = EditorSmtpSecurity.Id;
+      box.SmtpHost = string.IsNullOrWhiteSpace(EditorSmtpHost) ? EditorIncomingHost.Trim() : EditorSmtpHost.Trim();
+      box.SmtpPort = EditorSmtpPort <= 0
+        ? MailSecurity.DefaultSmtpPort(box.SmtpSecurity)
+        : (int)EditorSmtpPort;
+      box.Provider = MailProvider.Normalize(EditorProvider.Id);
+      box.CertifiedKind = EditorCertifiedKind.Id;
+      if (_pendingOauth is not null)
+        box.AuthKind = MailAuthKind.Normalize(_pendingOauth.Provider);
+      else if (MailProvider.UsesOAuth(box.Provider) && _auth.HasTokens(box.Id))
+        box.AuthKind = MailAuthKind.Normalize(
+          box.Provider == MailProvider.Outlook ? MailAuthKind.Microsoft : MailAuthKind.Google);
+      else
+        box.AuthKind = MailAuthKind.Password;
+      MailProvider.Apply(box);
+    }
     if (configuration.FindMailbox(box.Id) is null)
       configuration.Mailboxes.Add(box);
     configuration.SelectedMailboxId = box.Id;
@@ -495,17 +744,40 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private async Task RemoveMailboxAsync() {
     if (SelectedMailbox is null)
       return;
-    var id = SelectedMailbox.Id;
+    await RemoveMailboxCoreAsync(SelectedMailbox.Id);
+    Status = "Mailbox removed.";
+  }
+
+  [RelayCommand(CanExecute = nameof(CanDetachPst))]
+  private async Task DetachPstAsync() {
+    var box = SelectedFolderNode?.Mailbox;
+    if (box is null || !box.IsPstStore)
+      return;
+    var label = box.Label;
+    await RemoveMailboxCoreAsync(box.Id);
+    Status = string.Format(Copy.DetachPstDone, label);
+  }
+
+  private bool CanDetachPst() =>
+    ShowDetachPst;
+
+  private async Task RemoveMailboxCoreAsync(string id) {
     var configuration = _files.Current;
     configuration.Mailboxes.RemoveAll(m => m.Id == id);
     if (configuration.SelectedMailboxId == id)
       configuration.SelectedMailboxId = configuration.Mailboxes.FirstOrDefault()?.Id;
+    foreach (var rule in configuration.Rules ?? []) {
+      if (rule.MailboxId.Equals(id, StringComparison.OrdinalIgnoreCase))
+        rule.MailboxId = "";
+      if (rule.FolderMailboxId.Equals(id, StringComparison.OrdinalIgnoreCase))
+        rule.FolderMailboxId = "";
+    }
+
     _files.Save(configuration);
     _secrets.Delete(FileSecretStore.MailboxKey(id));
     _auth.DeleteTokens(id);
     await DisconnectMailboxAsync(id);
     ReloadMailboxes();
-    Status = "Mailbox removed.";
     AccountSaved?.Invoke();
   }
 
@@ -525,7 +797,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     if (SessionFor(box) is not { IsConnected: true }) {
       var password = PasswordFor(box);
       var oauth = MailAuthKind.IsOAuth(box.AuthKind) || _auth.HasTokens(box.Id);
-      if (string.IsNullOrWhiteSpace(password) && !oauth) {
+      if (!box.IsPstStore && string.IsNullOrWhiteSpace(password) && !oauth) {
         Status = "Enter the password once in Account Settings, then Get Messages.";
         if (!AccountSettingsOpen) {
           FillEditor(box);
@@ -638,6 +910,14 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     ImportPstRequested?.Invoke();
 
   [RelayCommand]
+  private void AttachPst() =>
+    AttachPstRequested?.Invoke();
+
+  [RelayCommand]
+  private void CreatePst() =>
+    CreatePstRequested?.Invoke();
+
+  [RelayCommand]
   private void ImportThunderbird() =>
     ImportThunderbirdRequested?.Invoke();
 
@@ -711,7 +991,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       paths,
       ActiveSession,
       UnwrapEnvelope,
-      CancellationToken.None);
+      CancellationToken.None,
+      ActiveRules(),
+      FoldersForRules(SelectedMailbox.Id));
     Status = "Imported " + count + " .eml into " + folder + ".";
     if (SelectedFolder is not null)
       await LoadMessagesAsync(SelectedFolder.FullName, CancellationToken.None);
@@ -730,10 +1012,63 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       path,
       ActiveSession,
       UnwrapEnvelope,
-      CancellationToken.None);
+      CancellationToken.None,
+      ActiveRules(),
+      FoldersForRules(SelectedMailbox.Id));
     Status = "Imported " + count + " messages from PST.";
     if (SelectedFolder is not null)
       await LoadMessagesAsync(SelectedFolder.FullName, CancellationToken.None);
+  }
+
+  public async Task AttachPstPathAsync(string path) {
+    if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) {
+      Status = Copy.PstPathRequired;
+      return;
+    }
+
+    var configuration = _files.Current;
+    configuration.EnsureDefaults();
+    var existing = configuration.Mailboxes.FirstOrDefault(m =>
+      m.IsPstStore && m.DataFile.Equals(path, StringComparison.OrdinalIgnoreCase));
+    var box = existing ?? new MailboxAccount {
+      DisplayName = Path.GetFileName(path),
+      Address = Path.GetFileNameWithoutExtension(path),
+      StorePath = path,
+      IncomingProtocol = MailProtocol.Pst,
+      Provider = MailProvider.Pst
+    };
+    if (existing is null)
+      configuration.Mailboxes.Add(box);
+    else
+      box.StorePath = path;
+    configuration.SelectedMailboxId = box.Id;
+    _files.Save(configuration);
+    ReloadMailboxes();
+    SelectedMailbox = Mailboxes.FirstOrDefault(m => m.Id == box.Id);
+    Status = "Attached " + box.Label + " as a mailbox.";
+    await ConnectAsync();
+  }
+
+  public async Task CreatePstPathAsync(string path) {
+    if (string.IsNullOrWhiteSpace(path))
+      return;
+    try {
+      var folder = Path.GetDirectoryName(path);
+      if (!string.IsNullOrEmpty(folder))
+        Directory.CreateDirectory(folder);
+      if (File.Exists(path))
+        File.Delete(path);
+      var name = Path.GetFileNameWithoutExtension(path);
+      OutlookPst.CreateEmpty(path, string.IsNullOrWhiteSpace(name) ? "Postclient" : name);
+    }
+    catch (Exception ex) {
+      Status = ex.Message;
+      return;
+    }
+
+    await AttachPstPathAsync(path);
+    if (SelectedMailbox is { IsPstStore: true } box)
+      Status = string.Format(Copy.CreatePstDone, box.Label);
   }
 
   public async Task ImportThunderbirdAsync() {
@@ -747,7 +1082,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       SelectedMailbox.Id,
       ActiveSession,
       UnwrapEnvelope,
-      CancellationToken.None);
+      CancellationToken.None,
+      ActiveRules(),
+      FoldersForRules(SelectedMailbox.Id));
     Status = count == 0
       ? "No Thunderbird mbox files found."
       : "Imported " + count + " messages from Thunderbird.";
@@ -822,6 +1159,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     NotifyMessageCommands();
   }
 
+  public void RestoreMessageGridSelection() =>
+    MessageListSelectionRestoreRequested?.Invoke();
+
   [RelayCommand(CanExecute = nameof(CanOrganize))]
   private async Task MoveToFolderAsync(FolderRowViewModel? folder) {
     if (folder is null)
@@ -829,8 +1169,139 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     await MoveRowsAsync(TargetRows(), folder.FullName);
   }
 
-  public Task MoveDroppedAsync(string destFolder, IReadOnlyList<uint> ids, string? fromFolder = null) =>
-    MoveIdsAsync(ids, destFolder, fromFolder);
+  public bool CanDropMessagesOn(FolderNodeViewModel? node, string sourceMailboxId, string fromFolder) {
+    if (node?.Mailbox is null)
+      return false;
+    return MailDrop.CanDropMessages(
+      node.Mailbox.IncomingProtocol,
+      node.Mailbox.Id,
+      node.Folder?.FullName,
+      sourceMailboxId,
+      fromFolder);
+  }
+
+  public bool CanDropFolderOn(FolderNodeViewModel? node, string sourceMailboxId, string sourceFolder) {
+    if (node?.Mailbox is null || string.IsNullOrWhiteSpace(sourceFolder))
+      return false;
+    var row = FoldersFor(MailboxById(sourceMailboxId))
+      .FirstOrDefault(f => f.FullName.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase));
+    var destParent = node.IsAccount || node.Folder is null ? null : node.Folder.FullName;
+    return MailDrop.CanDropFolder(
+      node.Mailbox.IncomingProtocol,
+      node.Mailbox.Id,
+      destParent,
+      sourceMailboxId,
+      sourceFolder,
+      MailFolderRole.IsCustom(row?.Name ?? MailFolderPath.Leaf(sourceFolder), sourceFolder));
+  }
+
+  public Task DropMessagesAsync(
+    FolderNodeViewModel dest,
+    string sourceMailboxId,
+    string fromFolder,
+    IReadOnlyList<uint> ids) {
+    if (dest.Mailbox is null)
+      return Task.CompletedTask;
+    return MoveIdsAsync(
+      ids,
+      dest.Folder?.FullName ?? "",
+      fromFolder,
+      destMailboxId: dest.Mailbox.Id,
+      sourceMailboxId: sourceMailboxId);
+  }
+
+  public async Task DropFolderAsync(
+    FolderNodeViewModel dest,
+    string sourceMailboxId,
+    string sourceFolder) {
+    if (dest.Mailbox is null || !CanDropFolderOn(dest, sourceMailboxId, sourceFolder))
+      return;
+    var sourceBox = MailboxById(sourceMailboxId);
+    var destBox = dest.Mailbox;
+    if (sourceBox is null)
+      return;
+    var destParent = dest.IsAccount || dest.Folder is null ? null : dest.Folder.FullName;
+    var openFolder = SelectedMailbox?.Id == sourceBox.Id ? SelectedFolder?.FullName : null;
+    await RunAsync(Copy.Moving, async token => {
+      var sourceSession = await EnsureMailboxReadyAsync(sourceBox, token);
+      var destSession = destBox.Id.Equals(sourceBox.Id, StringComparison.OrdinalIgnoreCase)
+        ? sourceSession
+        : await EnsureMailboxReadyAsync(destBox, token);
+      if (sourceSession is not { IsConnected: true, SupportsFolders: true }
+          || destSession is not { IsConnected: true, SupportsFolders: true }) {
+        Status = Copy.CannotMoveSystemFolder;
+        return;
+      }
+
+      var leaf = MailFolderPath.UniqueLeaf(
+        MailFolderPath.Leaf(sourceFolder),
+        SiblingNames(destBox, destParent, sourceFolder));
+      if (destBox.Id.Equals(sourceBox.Id, StringComparison.OrdinalIgnoreCase)) {
+        var renamed = await sourceSession.RenameFolderAsync(sourceFolder, destParent, leaf, token);
+        if (!renamed.IsSuccess) {
+          Status = string.Join(" ", renamed.Messages);
+          return;
+        }
+
+        await LoadFoldersAsync(sourceBox, sourceSession, token);
+        var destPath = FindMovedFolder(sourceBox, destParent, leaf) ?? MailFolderPath.Combine(destParent, leaf);
+        RememberMovedFolder(sourceBox.Id, sourceFolder, destPath, null);
+        await SelectAfterFolderMoveAsync(sourceBox, sourceFolder, destPath, openFolder, token);
+        Status = Copy.FolderMoved;
+        return;
+      }
+
+      var created = await destSession.CreateFolderAsync(leaf, destParent, token);
+      if (!created.IsSuccess) {
+        Status = string.Join(" ", created.Messages);
+        return;
+      }
+
+      await LoadFoldersAsync(destBox, destSession, token);
+      var destRoot = FindMovedFolder(destBox, destParent, leaf) ?? MailFolderPath.Combine(destParent, leaf);
+      var slice = FolderSlice(sourceBox, sourceFolder);
+      var failed = 0;
+      var copied = 0;
+      foreach (var folder in slice) {
+        var destPath = MailFolderPath.Rewrite(folder.FullName, sourceFolder, destRoot) ?? destRoot;
+        if (!folder.FullName.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase)) {
+          var nested = await destSession.CreateFolderAsync(
+            MailFolderPath.Leaf(destPath),
+            MailFolderPath.Parent(destPath),
+            token);
+          if (!nested.IsSuccess) {
+            failed++;
+            continue;
+          }
+        }
+
+        foreach (var id in await FolderUidsAsync(sourceBox, sourceSession, folder.FullName, token)) {
+          if (await CopyUidToMailboxAsync(sourceBox, sourceSession, destBox, folder.FullName, destPath, id, token))
+            copied++;
+          else
+            failed++;
+        }
+      }
+
+      if (failed > 0) {
+        await LoadFoldersAsync(destBox, destSession, token);
+        Status = string.Format(Copy.MovedMessages, copied);
+        return;
+      }
+
+      foreach (var folder in slice.OrderByDescending(f => f.FullName.Length)) {
+        var deleted = await sourceSession.DeleteFolderAsync(folder.FullName, token);
+        if (deleted.IsSuccess)
+          ForgetLocalFolder(sourceBox.Id, folder.FullName);
+      }
+
+      RememberMovedFolder(sourceBox.Id, sourceFolder, destRoot, destBox.Id);
+      await LoadFoldersAsync(sourceBox, sourceSession, token);
+      await LoadFoldersAsync(destBox, destSession, token);
+      await SelectAfterFolderMoveAsync(sourceBox, sourceFolder, destRoot, openFolder, token, destBox);
+      Status = Copy.FolderMoved;
+    });
+  }
 
   [RelayCommand(CanExecute = nameof(CanOrganize))]
   private async Task MarkReadAsync() =>
@@ -879,7 +1350,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       return;
     if (SelectedMailbox is null || SelectedFolder is null)
       return;
-    DeleteEmlFiles(_archive.RemoveUids(SelectedMailbox.Id, SelectedFolder.FullName, TargetIds(rows)));
+    DropArchived(SelectedMailbox.Id, SelectedFolder.FullName, TargetIds(rows));
     RemoveRows(rows);
     Status = "Deleted.";
   }
@@ -1035,8 +1506,18 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     });
   }
 
-  private void ForgetLocalFolder(string mailboxId, string folder) {
-    DeleteEmlFiles(_archive.RemoveFolder(mailboxId, folder));
+  private void ForgetLocalFolder(string mailboxId, string folder) =>
+    DropArchived(mailboxId, folder);
+
+  private void DropArchived(
+    string mailboxId,
+    string folder,
+    IReadOnlyCollection<uint>? uids = null) {
+    DeleteEmlFiles(
+      uids is null
+        ? _archive.RemoveFolder(mailboxId, folder)
+        : _archive.RemoveUids(mailboxId, folder, uids));
+    _semantic.NotifySettingsChanged();
   }
 
   private static void DeleteEmlFiles(IEnumerable<string> paths) {
@@ -1118,15 +1599,36 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var box = _files.Current.FindMailbox(mailboxId) ?? SelectedMailbox;
     if (box is null)
       return;
-    _receipts.Remember(new SentDispatch {
-      MailboxId = box.Id,
-      MessageId = messageId,
-      Subject = request.Subject ?? "",
-      To = request.To.Select(r => r.Address).ToList(),
-      SentAt = DateTimeOffset.UtcNow,
-      Status = ReceiptStatus.Submitted
-    });
-    Status = "Sent from " + box.Label + ". Waiting for PEC/REM ricevute (acceptance, then delivery).";
+    if (TracksCertifiedReceipts(box)) {
+      _receipts.Remember(new SentDispatch {
+        MailboxId = box.Id,
+        MessageId = messageId,
+        Subject = request.Subject ?? "",
+        To = request.To.Select(r => r.Address).ToList(),
+        SentAt = DateTimeOffset.UtcNow,
+        Status = ReceiptStatus.Submitted
+      });
+      Status = string.Format(Copy.SentFromCertified, box.Label);
+      return;
+    }
+
+    Status = string.Format(Copy.SentFrom, box.Label);
+  }
+
+  private static bool TracksCertifiedReceipts(MailboxAccount? box) =>
+    box is not null && box.TracksCertifiedReceipts;
+
+  private bool TracksCertifiedReceipts(string mailboxId) {
+    var box = _files.Current.FindMailbox(mailboxId)
+      ?? Mailboxes.FirstOrDefault(m => m.Id.Equals(mailboxId, StringComparison.OrdinalIgnoreCase));
+    return TracksCertifiedReceipts(box);
+  }
+
+  private void DropOrdinaryReceiptWaits() {
+    foreach (var box in Mailboxes) {
+      if (!TracksCertifiedReceipts(box))
+        _receipts.ForgetMailbox(box.Id);
+    }
   }
 
   private bool CanConnect() =>
@@ -1138,11 +1640,17 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private bool CanReply() =>
     !IsBusy && SelectedMessage is not null && ActiveSession is { IsConnected: true };
 
-  private bool CanOrganize() =>
+  private bool HasMessageSelection() =>
+    SelectedMessages.Count > 0 || SelectedMessage is not null;
+
+  private bool CanSessionFolders() =>
     !IsBusy && ActiveSession is { IsConnected: true, SupportsFolders: true };
 
+  private bool CanOrganize() =>
+    CanSessionFolders() && HasMessageSelection();
+
   private bool CanManageFolders() =>
-    CanOrganize() && SelectedMailbox is not null;
+    CanSessionFolders() && SelectedMailbox is not null;
 
   private bool CanCreateFolder() =>
     CanManageFolders();
@@ -1177,6 +1685,12 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     if (_applyingProvider)
       return;
     ApplyProviderPreset();
+    UpdateAuthUi();
+  }
+
+  partial void OnEditorCertifiedKindChanged(ChoiceRow value) {
+    if (_applyingProvider)
+      return;
     UpdateAuthUi();
   }
 
@@ -1219,7 +1733,16 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
 
   [RelayCommand]
   private void SetReadingKind(string? kind) {
-    ReadingBodyKind = MailBodyKind.Normalize(kind);
+    var next = MailBodyKind.Normalize(kind);
+    if (MailBodyKind.IsFattura(next) && !UseFatturaPa)
+      next = MailBodyKind.Html;
+    ReadingBodyKind = next;
+  }
+
+  [RelayCommand]
+  private void ViewFatturaPa() {
+    if (UseFatturaPa)
+      SetReadingKind(MailBodyKind.Fattura);
   }
 
   [RelayCommand]
@@ -1246,6 +1769,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     _files.Save(configuration);
     OnPropertyChanged(nameof(IsWideLayout));
     OnPropertyChanged(nameof(IsStackedLayout));
+    OnPropertyChanged(nameof(LayoutToggleLabel));
   }
 
   partial void OnHasReadingChanged(bool value) =>
@@ -1261,7 +1785,25 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     OnPropertyChanged(nameof(IsSourceKind));
     OnPropertyChanged(nameof(IsFatturaKind));
     OnPropertyChanged(nameof(HtmlEngineReady));
+    OnPropertyChanged(nameof(ShowFatturaPaTools));
   }
+
+  public void NotifyFeatures() {
+    FeatureGate.Use(_files.Current.Features);
+    OnPropertyChanged(nameof(Providers));
+    OnPropertyChanged(nameof(UseFascicolo));
+    OnPropertyChanged(nameof(UseFatturaPa));
+    OnPropertyChanged(nameof(UseEnvelopeTools));
+    OnPropertyChanged(nameof(UseDeliveryColumn));
+    OnPropertyChanged(nameof(UseTypeColumn));
+    OnPropertyChanged(nameof(ShowFatturaPaTools));
+    NotifyBodyKind();
+    if (MailBodyKind.IsFattura(ReadingBodyKind) && !UseFatturaPa)
+      SetReadingKind(MailBodyKind.Html);
+  }
+
+  partial void OnHasReadingFatturaChanged(bool value) =>
+    OnPropertyChanged(nameof(ShowFatturaPaTools));
 
   public void DisableHtmlEngine(string? reason = null) {
     if (!HtmlEngineReady)
@@ -1271,8 +1813,12 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     Status = string.IsNullOrWhiteSpace(reason) ? WebViewSetup.MissingEngineHint() : reason;
   }
 
-  partial void OnMessageFilterChanged(string value) =>
-    RebuildVisible();
+  partial void OnMessageFilterChanged(string value) {
+    if (string.IsNullOrWhiteSpace(value))
+      RebuildVisible();
+    else
+      ScheduleSearch(immediate: false);
+  }
 
   private bool CanSignIn() =>
     !IsBusy;
@@ -1299,6 +1845,22 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       SelectedFolder = folder;
     else if (value.IsAccount && value.Mailbox is { } account)
       SelectedFolder = InboxOf(account);
+    OnPropertyChanged(nameof(ShowFolderContext));
+    OnPropertyChanged(nameof(ShowDetachPst));
+    DetachPstCommand.NotifyCanExecuteChanged();
+  }
+
+  public bool ShowFolderContext =>
+    SelectedFolderNode is { IsAccount: false, Folder: not null };
+
+  public bool ShowDetachPst =>
+    !IsBusy
+    && SelectedFolderNode is { IsAccount: true, Mailbox: { } box }
+    && box.IsPstStore;
+
+  partial void OnIsBusyChanged(bool value) {
+    OnPropertyChanged(nameof(ShowDetachPst));
+    DetachPstCommand.NotifyCanExecuteChanged();
   }
 
   partial void OnSelectedFolderChanged(FolderRowViewModel? value) {
@@ -1306,14 +1868,27 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     NotifyFolderCommands();
     if (value is null || _syncingTree || _suppressFolderLoad)
       return;
-    _ = RunAsync(Copy.OpeningFolder, token => LoadMessagesAsync(value.FullName, token));
+    KickFolderLoad(value.FullName);
   }
 
   partial void OnSelectedMessageChanged(MessageRowViewModel? value) {
     NotifyMessageCommands();
-    if (value is null)
+    if (_syncingList || value is null)
       return;
-    _ = RunAsync(Copy.OpeningMessage, token => LoadBodyAsync(value.Header, token));
+    _ = OpenMessageAsync(value);
+  }
+
+  private async Task OpenMessageAsync(MessageRowViewModel row) {
+    _readingLoad?.Cancel();
+    _readingLoad?.Dispose();
+    var cts = new CancellationTokenSource();
+    _readingLoad = cts;
+    try {
+      Status = Copy.OpeningMessage;
+      await LoadBodyAsync(row.Header, cts.Token);
+    }
+    catch (OperationCanceledException) {
+    }
   }
 
   private void FillEditor(MailboxAccount box) {
@@ -1329,11 +1904,14 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     EditorIncomingProtocol = ChoiceRow.Incoming(box.IncomingProtocol);
     EditorIncomingSecurity = ChoiceRow.Security(box.IncomingSecurity, box.ImapSsl);
     EditorIncomingHost = box.ImapHost;
+    EditorStorePath = box.DataFile;
     EditorIncomingPort = box.ImapPort;
     EditorSmtpSecurity = ChoiceRow.Security(box.SmtpSecurity, box.SmtpSsl);
     EditorSmtpHost = box.SmtpHost;
     EditorSmtpPort = box.SmtpPort;
-    EditorProvider = ChoiceRow.Provider(box.Provider);
+    EditorProvider = ChoiceRow.Provider(box.IsPstStore ? MailProvider.Pst : box.Provider);
+    EditorCertifiedKind = ChoiceRow.Certified(
+      MailCertifiedKind.ForProvider(box.Provider, box.CertifiedKind));
     _applyingProvider = false;
     UpdateAuthUi();
   }
@@ -1431,9 +2009,17 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   }
 
   private void ApplyProviderPreset() {
+    if (MailProvider.IsPst(EditorProvider.Id)) {
+      EditorCertifiedKind = ChoiceRow.Certified(MailCertifiedKind.Ordinary);
+      NotifyStoreUi();
+      UpdateAuthUi();
+      return;
+    }
+
     var box = new MailboxAccount {
       Provider = EditorProvider.Id,
-      IncomingProtocol = EditorIncomingProtocol.Id
+      IncomingProtocol = EditorIncomingProtocol.Id,
+      CertifiedKind = EditorCertifiedKind.Id
     };
     MailProvider.Apply(box);
     EditorIncomingHost = box.ImapHost;
@@ -1442,6 +2028,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     EditorSmtpHost = box.SmtpHost;
     EditorSmtpPort = box.SmtpPort;
     EditorSmtpSecurity = ChoiceRow.Security(box.SmtpSecurity);
+    EditorCertifiedKind = ChoiceRow.Certified(box.CertifiedKind);
+    NotifyStoreUi();
   }
 
   private void UpdateAuthUi() {
@@ -1452,14 +2040,33 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var oauth = _pendingOauth is not null
       || (SelectedMailbox is not null
           && (MailAuthKind.IsOAuth(SelectedMailbox.AuthKind) || _auth.HasTokens(SelectedMailbox.Id)));
-    ShowPasswordFields = provider != MailProvider.Outlook || !oauth;
+    ShowPasswordFields = ShowServerFields && (provider != MailProvider.Outlook || !oauth);
     OauthHint = provider == MailProvider.Gmail
       ? GmailHint()
       : provider == MailProvider.Outlook
         ? OutlookHint()
-        : MailProvider.IsPec(provider)
+        : MailCertifiedKind.TracksReceipts(EditorCertifiedKind.Id) || MailProvider.IsPec(provider)
           ? Copy.PecHint
-          : "";
+          : MailProvider.IsPst(provider)
+            ? Copy.PstHint
+            : "";
+    NotifyStoreUi();
+  }
+
+  private void NotifyStoreUi() {
+    OnPropertyChanged(nameof(ShowPstFields));
+    OnPropertyChanged(nameof(ShowServerFields));
+    OnPropertyChanged(nameof(ShowCertifiedKind));
+  }
+
+  [RelayCommand]
+  private async Task BrowseStorePathAsync() {
+    var pick = PickStorePathRequested;
+    if (pick is null)
+      return;
+    var path = await pick();
+    if (!string.IsNullOrWhiteSpace(path))
+      EditorStorePath = path;
   }
 
   private string GmailHint() {
@@ -1493,6 +2100,25 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     configuration.MicrosoftClientId = OAuthClientId.Normalize(EditorMicrosoftClientId);
   }
 
+  private void PersistPstStorePath(MailboxAccount box, string path) {
+    if (string.IsNullOrWhiteSpace(path) || box.StorePath.Equals(path, StringComparison.OrdinalIgnoreCase))
+      return;
+    box.StorePath = path;
+    var configuration = _files.Current;
+    var stored = configuration.FindMailbox(box.Id);
+    if (stored is not null)
+      stored.StorePath = path;
+    configuration.EnsureDefaults();
+    _files.Save(configuration);
+    var notice = (SessionFor(box) as PstMailSession)?.LastNotice;
+    Dispatcher.UIThread.Post(() => {
+      if (SelectedMailbox?.Id == box.Id)
+        EditorStorePath = path;
+      if (!string.IsNullOrWhiteSpace(notice))
+        Status = notice;
+    });
+  }
+
   private void PersistGoogleClientSecret() {
     var secret = OAuthClientSecret.Normalize(EditorGoogleClientSecret);
     if (string.IsNullOrWhiteSpace(secret) && EditorGoogleClientId.TrimStart().StartsWith('{'))
@@ -1511,6 +2137,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     Mailboxes.Clear();
     foreach (var box in _files.Current.Mailboxes)
       Mailboxes.Add(box);
+    DropOrdinaryReceiptWaits();
     var selected = _files.Current.FindMailbox(_files.Current.SelectedMailboxId);
     SelectedMailbox = selected is null
       ? Mailboxes.FirstOrDefault()
@@ -1589,47 +2216,61 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   }
 
   private async Task LoadFoldersAsync(MailboxAccount box, IMailSession session, CancellationToken token) {
-    var result = await session.ListFoldersAsync(token);
-    if (!result.IsSuccess) {
-      Status = string.Join(" ", result.Messages);
-      return;
-    }
-
-    var rows = (result.Value ?? [])
-      .Select(folder => new FolderRowViewModel {
-        FullName = folder.FullName,
-        Name = folder.Name,
-        Unread = folder.Unread,
-        Total = folder.Total
-      })
-      .ToList();
-    _foldersByMailbox[box.Id] = rows;
-    RebuildFolderTree();
-    if (SelectedMailbox?.Id != box.Id)
-      return;
-    SyncFoldersCollection(box);
-    var wanted = SelectedFolderNode?.Mailbox?.Id == box.Id ? SelectedFolderNode.Folder?.FullName : null;
-    var previous = SelectedFolder?.FullName;
-    _suppressFolderLoad = true;
+    PauseIndexing();
     try {
-      SelectedFolder = rows.FirstOrDefault(f => f.FullName.Equals(wanted, StringComparison.OrdinalIgnoreCase))
-        ?? InboxOf(box)
-        ?? rows.FirstOrDefault();
+      var result = await session.ListFoldersAsync(token).ConfigureAwait(false);
+      if (!result.IsSuccess) {
+        await UiAsync(() => Status = string.Join(" ", result.Messages)).ConfigureAwait(false);
+        return;
+      }
+
+      var rows = (result.Value ?? [])
+        .Select(folder => new FolderRowViewModel {
+          FullName = folder.FullName,
+          Name = folder.Name,
+          Unread = folder.Unread,
+          Total = folder.Total
+        })
+        .ToList();
+      var loadFolder = "";
+      await UiAsync(() => {
+        _foldersByMailbox[box.Id] = rows;
+        RebuildFolderTree();
+        if (SelectedMailbox?.Id != box.Id)
+          return;
+        SyncFoldersCollection(box);
+        var wanted = SelectedFolderNode?.Mailbox?.Id == box.Id ? SelectedFolderNode.Folder?.FullName : null;
+        var previous = SelectedFolder?.FullName;
+        _suppressFolderLoad = true;
+        try {
+          SelectedFolder = rows.FirstOrDefault(f => f.FullName.Equals(wanted, StringComparison.OrdinalIgnoreCase))
+            ?? InboxOf(box)
+            ?? rows.FirstOrDefault();
+        }
+        finally {
+          _suppressFolderLoad = false;
+        }
+
+        if (SelectedFolder is not null
+            && (previous is null
+                || !SelectedFolder.FullName.Equals(previous, StringComparison.OrdinalIgnoreCase)))
+          loadFolder = SelectedFolder.FullName;
+      }).ConfigureAwait(false);
+
+      if (!string.IsNullOrWhiteSpace(loadFolder))
+        KickFolderLoad(loadFolder);
+
+      var quota = await session.GetQuotaAsync(token).ConfigureAwait(false);
+      if (quota.IsSuccess && quota.Value is { } info) {
+        var line = info.Line();
+        await UiAsync(() => {
+          if (SelectedMailbox?.Id == box.Id)
+            QuotaLine = line;
+        }).ConfigureAwait(false);
+      }
     }
     finally {
-      _suppressFolderLoad = false;
-    }
-
-    if (SelectedFolder is not null
-        && (previous is null
-            || !SelectedFolder.FullName.Equals(previous, StringComparison.OrdinalIgnoreCase)))
-      await LoadMessagesAsync(SelectedFolder.FullName, token);
-
-    var quota = await session.GetQuotaAsync(token);
-    if (quota.IsSuccess && quota.Value is { } info) {
-      var line = info.Line();
-      if (SelectedMailbox?.Id == box.Id)
-        QuotaLine = line;
+      ResumeIndexing();
     }
   }
 
@@ -1645,6 +2286,274 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     return _foldersByMailbox.TryGetValue(box.Id, out var rows) ? rows : [];
   }
 
+  private IReadOnlyList<MailRule> ActiveRules() =>
+    _files.Current.Rules ?? [];
+
+  public IReadOnlyList<(string Name, string FullName)> FoldersForRules(string mailboxId) {
+    if (string.IsNullOrWhiteSpace(mailboxId))
+      return [];
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var rows = new List<(string Name, string FullName)>();
+    void Add(string name, string full) {
+      if (string.IsNullOrWhiteSpace(full) || !seen.Add(full.Trim()))
+        return;
+      rows.Add((name.Trim(), full.Trim()));
+    }
+
+    var box = Mailboxes.FirstOrDefault(m => m.Id.Equals(mailboxId, StringComparison.OrdinalIgnoreCase));
+    foreach (var folder in FoldersFor(box))
+      Add(folder.Name, folder.FullName);
+    foreach (var path in _archive.ListFolders(mailboxId)) {
+      var slash = path.Replace('\\', '/').TrimEnd('/');
+      var i = slash.LastIndexOf('/');
+      Add(i < 0 ? slash : slash[(i + 1)..], path);
+    }
+
+    return rows;
+  }
+
+  public async Task EnsureFoldersForRulesAsync(string mailboxId) {
+    var box = Mailboxes.FirstOrDefault(m => m.Id.Equals(mailboxId, StringComparison.OrdinalIgnoreCase));
+    if (box is null)
+      return;
+    await ConnectMailboxCoreAsync(box, PasswordFor(box), CancellationToken.None);
+    if (FoldersFor(box).Count > 0)
+      return;
+    if (SessionFor(box) is { IsConnected: true } live)
+      await LoadFoldersAsync(box, live, CancellationToken.None);
+  }
+
+  public async Task<string> RunAllRulesAsync() {
+    var rules = MailRuleEngine.Ready(ActiveRules()).ToList();
+    if (rules.Count == 0)
+      return Copy.RulesNone;
+    var matched = 0;
+    foreach (var box in Mailboxes.ToList()) {
+      if (!rules.Any(r => MailRuleEngine.TargetsMailbox(r, box.Id)))
+        continue;
+      await EnsureFoldersForRulesAsync(box.Id);
+      foreach (var rule in rules.Where(r => MailRuleEngine.TargetsMailbox(r, box.Id)))
+        await EnsureFoldersForRulesAsync(MailRuleEngine.FolderMailbox(rule));
+      var session = SessionFor(box);
+      var folders = FoldersForRules(box.Id);
+      var names = folders.Select(f => f.FullName).ToList();
+      foreach (var extra in _archive.ListFolders(box.Id)) {
+        if (!names.Any(n => n.Equals(extra, StringComparison.OrdinalIgnoreCase)))
+          names.Add(extra);
+      }
+
+      foreach (var folder in names) {
+        var headers = _archive.ListFolder(box.Id, folder).Select(MailArchiveMap.ToHeader).ToList();
+        if (headers.Count == 0)
+          continue;
+        matched += await ApplyRulesToFolderAsync(box, session, folder, headers, folders, CancellationToken.None);
+      }
+    }
+
+    if (SelectedMailbox is not null && SelectedFolder is not null)
+      ShowArchive(SelectedMailbox.Id, SelectedFolder.FullName);
+    var line = string.Format(Copy.RulesRan, matched);
+    Status = line;
+    return line;
+  }
+
+  private async Task ApplyIncomingRulesAsync(
+    string folder,
+    IReadOnlyList<MailMessageHeader> headers,
+    CancellationToken token) {
+    var box = SelectedMailbox;
+    if (box is null)
+      return;
+    foreach (var rule in MailRuleEngine.Ready(ActiveRules()).Where(r => MailRuleEngine.TargetsMailbox(r, box.Id)))
+      await EnsureFoldersForRulesAsync(MailRuleEngine.FolderMailbox(rule));
+    await ApplyRulesToFolderAsync(box, ActiveSession, folder, headers, FoldersForRules(box.Id), token);
+  }
+
+  private async Task<int> ApplyRulesToFolderAsync(
+    MailboxAccount box,
+    IMailSession? session,
+    string folder,
+    IReadOnlyList<MailMessageHeader> headers,
+    IReadOnlyList<(string Name, string FullName)> folders,
+    CancellationToken token) {
+    var rules = MailRuleEngine.Ready(ActiveRules()).ToList();
+    if (rules.Count == 0 || headers.Count == 0)
+      return 0;
+    var moves = new Dictionary<string, List<uint>>(StringComparer.OrdinalIgnoreCase);
+    var copies = new Dictionary<(string MailboxId, string Folder), List<uint>>();
+    var read = new List<uint>();
+    var flagged = new List<uint>();
+    var touched = new HashSet<uint>();
+    foreach (var header in headers) {
+      foreach (var rule in rules) {
+        var destFolders = DestFoldersFor(rule, box.Id, folders);
+        if (!MailRuleEngine.CanApply(rule, box.Id, destFolders))
+          continue;
+        if (!MailRuleEngine.Matches(rule, header.From, "", header.Subject, "", header.HasAttachments))
+          continue;
+        touched.Add(header.Id);
+        if (rule.Action == MailRuleAction.Delete) {
+          var trash = MailRuleEngine.ResolveFolder("Trash", folders);
+          if (!string.IsNullOrWhiteSpace(trash))
+            AddUid(moves, trash, header.Id);
+        }
+        else if (rule.Action == MailRuleAction.Move) {
+          var dest = MailRuleEngine.ExactFolder(rule.Folder, destFolders);
+          var destBox = MailRuleEngine.FolderMailbox(rule);
+          if (!string.IsNullOrWhiteSpace(dest)) {
+            if (destBox.Equals(box.Id, StringComparison.OrdinalIgnoreCase)) {
+              if (!dest.Equals(folder, StringComparison.OrdinalIgnoreCase))
+                AddUid(moves, dest, header.Id);
+            }
+            else
+              AddCopy(copies, destBox, dest, header.Id);
+          }
+        }
+
+        if (rule.Action == MailRuleAction.MarkRead)
+          read.Add(header.Id);
+        if (rule.Action == MailRuleAction.Flag)
+          flagged.Add(header.Id);
+        if (rule.Action == MailRuleAction.Label && !string.IsNullOrWhiteSpace(rule.Label))
+          _archive.AddLabel(box.Id, folder, header.Id, rule.Label);
+        if (rule.Stop)
+          break;
+      }
+    }
+
+    var movedIds = moves.SelectMany(p => p.Value).ToHashSet();
+    foreach (var pair in copies)
+      foreach (var id in pair.Value)
+        movedIds.Add(id);
+    read.RemoveAll(movedIds.Contains);
+    flagged.RemoveAll(movedIds.Contains);
+    if (session is { IsConnected: true, SupportsFolders: true }) {
+      foreach (var pair in moves) {
+        var moved = await session.MoveMessagesAsync(folder, pair.Value, pair.Key, token);
+        if (moved.IsSuccess)
+          DropArchived(box.Id, folder, pair.Value);
+      }
+
+      if (read.Count > 0) {
+        await session.SetMessageFlagsAsync(folder, read, new MailFlagUpdate { Seen = true }, token);
+        _archive.UpdateFlags(
+          box.Id,
+          folder,
+          headers.Where(h => read.Contains(h.Id))
+            .Select(h => (h.Id, true, h.IsFlagged || flagged.Contains(h.Id))));
+      }
+
+      if (flagged.Count > 0) {
+        await session.SetMessageFlagsAsync(folder, flagged, new MailFlagUpdate { Flagged = true }, token);
+        _archive.UpdateFlags(
+          box.Id,
+          folder,
+          headers.Where(h => flagged.Contains(h.Id))
+            .Select(h => (h.Id, h.IsSeen || read.Contains(h.Id), true)));
+      }
+    }
+
+    if (copies.Count > 0)
+      await CopyRuleMovesAsync(box, session, folder, folders, copies, token);
+
+    return touched.Count;
+  }
+
+  private IReadOnlyList<(string Name, string FullName)> DestFoldersFor(
+    MailRule rule,
+    string sourceId,
+    IReadOnlyList<(string Name, string FullName)> sourceFolders) {
+    var destId = MailRuleEngine.FolderMailbox(rule);
+    if (string.IsNullOrWhiteSpace(destId) || destId.Equals(sourceId, StringComparison.OrdinalIgnoreCase))
+      return sourceFolders;
+    return FoldersForRules(destId);
+  }
+
+  private static void AddCopy(
+    Dictionary<(string MailboxId, string Folder), List<uint>> map,
+    string mailboxId,
+    string folder,
+    uint id) {
+    var key = (mailboxId, folder);
+    if (!map.TryGetValue(key, out var ids)) {
+      ids = [];
+      map[key] = ids;
+    }
+
+    if (!ids.Contains(id))
+      ids.Add(id);
+  }
+
+  private async Task CopyRuleMovesAsync(
+    MailboxAccount source,
+    IMailSession? sourceSession,
+    string sourceFolder,
+    IReadOnlyList<(string Name, string FullName)> sourceFolders,
+    Dictionary<(string MailboxId, string Folder), List<uint>> copies,
+    CancellationToken token) {
+    var copied = new List<uint>();
+    foreach (var pair in copies) {
+      var destBox = Mailboxes.FirstOrDefault(m => m.Id.Equals(pair.Key.MailboxId, StringComparison.OrdinalIgnoreCase));
+      if (destBox is null)
+        continue;
+      await EnsureFoldersForRulesAsync(destBox.Id);
+      foreach (var id in pair.Value) {
+        if (await CopyUidToMailboxAsync(source, sourceSession, destBox, sourceFolder, pair.Key.Folder, id, token))
+          copied.Add(id);
+      }
+    }
+
+    if (copied.Count == 0)
+      return;
+    var unique = copied.Distinct().ToList();
+    if (sourceSession is { IsConnected: true, SupportsFolders: true }) {
+      var trash = MailRuleEngine.ResolveFolder("Trash", sourceFolders);
+      if (!string.IsNullOrWhiteSpace(trash) && !trash.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase))
+        await sourceSession.MoveMessagesAsync(sourceFolder, unique, trash, token);
+      else
+        await sourceSession.SetMessageFlagsAsync(sourceFolder, unique, new MailFlagUpdate { Deleted = true }, token);
+    }
+
+    DropArchived(source.Id, sourceFolder, unique);
+  }
+
+  private async Task<bool> CopyUidToMailboxAsync(
+    MailboxAccount source,
+    IMailSession? sourceSession,
+    MailboxAccount dest,
+    string sourceFolder,
+    string destFolder,
+    uint id,
+    CancellationToken token) {
+    var destSession = SessionFor(dest);
+    if (destSession is not { IsConnected: true })
+      return false;
+    byte[]? eml = null;
+    var path = _archive.EmlPath(source.Id, sourceFolder, id) ?? ArchiveFiles.EmlPath(source.Id, sourceFolder, id);
+    if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+      eml = await File.ReadAllBytesAsync(path, token);
+    else if (sourceSession is { IsConnected: true }) {
+      var body = await sourceSession.GetMessageAsync(sourceFolder, id, token);
+      if (body.IsSuccess && body.Value?.RawEml is { Length: > 0 } raw)
+        eml = raw;
+    }
+
+    if (eml is null || eml.Length == 0)
+      return false;
+    var appended = await destSession.AppendAsync(destFolder, eml, token);
+    return appended.IsSuccess;
+  }
+
+  private static void AddUid(Dictionary<string, List<uint>> map, string folder, uint id) {
+    if (!map.TryGetValue(folder, out var ids)) {
+      ids = [];
+      map[folder] = ids;
+    }
+
+    if (!ids.Contains(id))
+      ids.Add(id);
+  }
+
   private FolderRowViewModel? InboxOf(MailboxAccount box) =>
     FoldersFor(box).FirstOrDefault(f => MailFolderRole.Kind(f.Name, f.FullName) == "inbox")
     ?? FoldersFor(box).FirstOrDefault();
@@ -1655,7 +2564,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private IMailSession? SessionFor(MailboxAccount? box) {
     if (box is null)
       return null;
-    return _connections.TryGetValue(box.Id, out var session) ? session : null;
+    lock (_connections)
+      return _connections.TryGetValue(box.Id, out var session) ? session : null;
   }
 
   private string PasswordFor(MailboxAccount box) {
@@ -1666,35 +2576,53 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   }
 
   private async Task<bool> ConnectMailboxCoreAsync(MailboxAccount box, string password, CancellationToken token) {
-    lock (_connections) {
-      if (!_connecting.Add(box.Id))
-        return true;
+    while (true) {
+      token.ThrowIfCancellationRequested();
+      lock (_connections) {
+        if (_connecting.Add(box.Id))
+          break;
+      }
+
+      await Task.Delay(50, token).ConfigureAwait(false);
     }
 
+    PauseIndexing();
     try {
       if (SessionFor(box) is { IsConnected: true } live) {
-        if (!_foldersByMailbox.ContainsKey(box.Id))
-          await LoadFoldersAsync(box, live, token);
+        var missingFolders = false;
+        await UiAsync(() => missingFolders = !_foldersByMailbox.ContainsKey(box.Id)).ConfigureAwait(false);
+        if (missingFolders)
+          await LoadFoldersAsync(box, live, token).ConfigureAwait(false);
         return true;
       }
 
       var session = _sessions.Create(box);
-      var connected = await session.ConnectAsync(box, password, token);
+      var connected = await session.ConnectAsync(box, password, token).ConfigureAwait(false);
       if (!connected.IsSuccess) {
-        await session.DisposeAsync();
-        if (SelectedMailbox?.Id == box.Id)
-          Status = string.Join(" ", connected.Messages);
+        await session.DisposeAsync().ConfigureAwait(false);
+        await UiAsync(() => {
+          if (SelectedMailbox?.Id == box.Id)
+            Status = string.Join(" ", connected.Messages);
+        }).ConfigureAwait(false);
         return false;
       }
 
-      if (_connections.Remove(box.Id, out var previous))
-        await previous.DisposeAsync();
-      _connections[box.Id] = session;
-      await LoadFoldersAsync(box, session, token);
-      EnsureIndexing(box.Id);
+      IMailSession? previous;
+      lock (_connections) {
+        _connections.TryGetValue(box.Id, out previous);
+        _connections[box.Id] = session;
+      }
+
+      if (previous is not null)
+        await previous.DisposeAsync().ConfigureAwait(false);
+      if (session is PstMailSession pst)
+        pst.StorePathChanged += path => PersistPstStorePath(box, path);
+      await LoadFoldersAsync(box, session, token).ConfigureAwait(false);
+      await UiAsync(() => EnsureIndexing(box.Id)).ConfigureAwait(false);
       return true;
     }
     finally {
+      ResumeIndexing();
       lock (_connections)
         _connecting.Remove(box.Id);
     }
@@ -1710,10 +2638,10 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       }
       var oauth = MailAuthKind.IsOAuth(box.AuthKind) || _auth.HasTokens(box.Id);
       var password = PasswordFor(box);
-      if (string.IsNullOrWhiteSpace(password) && !oauth)
+      if (!box.IsPstStore && string.IsNullOrWhiteSpace(password) && !oauth)
         continue;
       try {
-        await ConnectMailboxCoreAsync(box, password, CancellationToken.None);
+        await ConnectMailboxCoreAsync(box, password, CancellationToken.None).ConfigureAwait(false);
       }
       catch {
       }
@@ -1724,50 +2652,67 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     if (sync.Flags.Count > 0)
       _archive.UpdateFlags(mailboxId, folder, sync.Flags.Select(f => (f.Id, f.IsSeen, f.IsFlagged)));
     _archive.UpsertHeaders(mailboxId, sync.Headers.Select(MailArchiveMap.FromHeader));
-    if (sync.Present is null)
-      return;
-    var keep = sync.Present.ToHashSet();
-    var gone = _archive.Uids(mailboxId, folder).Where(uid => !keep.Contains(uid)).ToList();
-    if (gone.Count > 0)
-      DeleteEmlFiles(_archive.RemoveUids(mailboxId, folder, gone));
+    if (sync.Present is not null) {
+      var keep = sync.Present.ToHashSet();
+      var gone = _archive.Uids(mailboxId, folder).Where(uid => !keep.Contains(uid)).ToList();
+      if (gone.Count > 0)
+        DropArchived(mailboxId, folder, gone);
+    }
+
+    _semantic.NotifySettingsChanged();
   }
 
   private async Task LoadMessagesAsync(string folder, CancellationToken token, bool resumeBodies = false) {
     var box = SelectedMailbox;
     if (box is null)
       return;
-    ShowArchive(box.Id, folder);
-    var session = ActiveSession;
+    await ShowArchiveAsync(box.Id, folder, token).ConfigureAwait(false);
+    var session = SessionFor(box);
     if (session is not { IsConnected: true }) {
-      Status = ArchiveFiles.Hint();
+      await UiAsync(() => Status = ArchiveFiles.Hint()).ConfigureAwait(false);
       return;
     }
 
-    var known = _archive.Uids(box.Id, folder);
-    var result = await session.ListMessagesAsync(folder, known, token);
-    if (!result.IsSuccess) {
-      Status = string.Join(" ", result.Messages) + " Showing local archive. " + ArchiveFiles.Hint();
-      return;
-    }
+    PauseIndexing();
+    try {
+      var known = await Task.Run(() => _archive.Uids(box.Id, folder), token).ConfigureAwait(false);
+      var result = await session.ListMessagesAsync(folder, known, token).ConfigureAwait(false);
+      if (!result.IsSuccess) {
+        await UiAsync(() =>
+          Status = string.Join(" ", result.Messages) + " Showing local archive. " + ArchiveFiles.Hint())
+          .ConfigureAwait(false);
+        return;
+      }
 
-    var sync = result.Value ?? new MailFolderSync();
-    ApplyFolderSync(box.Id, folder, sync);
-    if (known.Count > 0)
-      NoticeNewMail(sync.Headers.Where(h => !known.Contains(h.Id)).ToList());
-    ShowArchive(box.Id, folder);
-    if (MailFolderRole.Kind(null, folder) == "sent") {
-      await IngestReceiptFoldersAsync(token);
-      OverlaySentMarks();
-    }
+      token.ThrowIfCancellationRequested();
+      var sync = result.Value ?? new MailFolderSync();
+      ApplyFolderSync(box.Id, folder, sync);
+      var fresh = sync.Headers.Where(h => !known.Contains(h.Id)).ToList();
+      if (known.Count > 0) {
+        await UiAsync(() => {
+          if (SelectedMailbox?.Id == box.Id)
+            NoticeNewMail(fresh);
+        }).ConfigureAwait(false);
+      }
+      await ApplyIncomingRulesAsync(folder, fresh, token).ConfigureAwait(false);
+      await ShowArchiveAsync(box.Id, folder, token).ConfigureAwait(false);
+      if (TracksCertifiedReceipts(box) && MailFolderRole.Kind(null, folder) == "sent") {
+        await IngestReceiptFoldersAsync(token).ConfigureAwait(false);
+        await UiAsync(OverlaySentMarks).ConfigureAwait(false);
+      }
 
-    Status = ArchiveFiles.Hint();
-    if (resumeBodies)
-      EnsureBodyBackfill(box.Id);
+      await UiAsync(() => Status = ArchiveFiles.Hint()).ConfigureAwait(false);
+      if (resumeBodies)
+        await UiAsync(() => EnsureBodyBackfill(box.Id)).ConfigureAwait(false);
+    }
+    finally {
+      ResumeIndexing();
+    }
   }
 
   private async Task IngestReceiptFoldersAsync(CancellationToken token) {
     var session = ActiveSession;
-    if (session is null || SelectedMailbox is null)
+    if (session is null || SelectedMailbox is null || !TracksCertifiedReceipts(SelectedMailbox))
       return;
     foreach (var folder in FoldersFor(SelectedMailbox)) {
       var kind = MailFolderRole.Kind(folder.Name, folder.FullName);
@@ -1787,7 +2732,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   }
 
   private void OverlaySentMarks() {
-    if (SelectedMailbox is null)
+    if (SelectedMailbox is null || !TracksCertifiedReceipts(SelectedMailbox))
       return;
     foreach (var row in Messages) {
       row.Header.DeliveryStatus = _receipts.StatusFor(
@@ -1801,69 +2746,164 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private void ReconcileHeader(MailMessageHeader header, string folder) {
     if (SelectedMailbox is null)
       return;
-    var related = header.InReplyTo;
-    if (header.EnvelopeKind is EnvelopeKind.PecReceipt or EnvelopeKind.EidasRem)
+    if (TracksCertifiedReceipts(SelectedMailbox)
+        && header.EnvelopeKind is EnvelopeKind.PecReceipt or EnvelopeKind.EidasRem)
       _receipts.ApplyEvidence(
         SelectedMailbox.Id,
-        related,
+        header.InReplyTo,
         null,
         header.Subject,
         header.EnvelopeTipo);
-    if (MailFolderRole.Kind(null, folder) == "sent")
+    if (TracksCertifiedReceipts(SelectedMailbox) && MailFolderRole.Kind(null, folder) == "sent")
       header.DeliveryStatus = _receipts.StatusFor(SelectedMailbox.Id, header.MessageId, header.Subject);
+    else if (string.IsNullOrWhiteSpace(header.DeliveryStatus))
+      header.DeliveryStatus = ReceiptStatus.FromTipo(header.EnvelopeTipo);
   }
 
   private void RebuildVisible() {
-    VisibleMessages.Clear();
-    var query = MessageFilter.Trim();
     if (SelectedMailbox is null || SelectedFolder is null) {
+      VisibleMessages.Clear();
+      SelectedMessages.Clear();
+      SelectedMessage = null;
+      NotifyMessageCommands();
+      RestoreMessageGridSelection();
       RefreshFolderStats();
       return;
     }
 
-    List<MessageRowViewModel> rows;
-    if (query.Length == 0)
-      rows = [.. Messages];
-    else {
-      var hits = _archive.Search(SelectedMailbox.Id, SelectedFolder.FullName, query);
-      var map = Messages
-        .GroupBy(m => m.Header.Id)
-        .ToDictionary(g => g.Key, g => g.First());
-      rows = [];
-      foreach (var hit in hits) {
-        if (map.TryGetValue(hit.Uid, out var row))
-          rows.Add(row);
-      }
-    }
+    if (MessageFilter.Trim().Length == 0)
+      ApplyVisibleRows([.. Messages]);
+    else
+      ScheduleSearch(immediate: true);
+  }
 
-    if (!GroupConversations) {
-      rows.Sort(CompareRows);
-      foreach (var row in rows) {
-        row.SetChain(0, 1);
-        VisibleMessages.Add(row);
-      }
-    }
-    else {
-      var map = rows
-        .GroupBy(r => r.Header.Id)
-        .ToDictionary(g => g.Key, g => g.First());
-      var links = MailChain.Order(rows.Select(ChainItem).ToList(), true);
-      if (IsDateSort) {
-        if (!_listSortDescending)
-          links = MailListOrder.ReverseThreads(links);
-      }
-      else
-        links = MailListOrder.ReorderThreads(links, (a, b) => CompareRows(map[a], map[b]));
+  private void ScheduleSearch(bool immediate) {
+    _search?.Cancel();
+    _search?.Dispose();
+    var cts = new CancellationTokenSource();
+    _search = cts;
+    var gen = Interlocked.Increment(ref _searchGen);
+    var query = MessageFilter ?? "";
+    var mailboxId = SelectedMailbox?.Id;
+    var folder = SelectedFolder?.FullName;
+    _ = RunSearchAsync(query, mailboxId, folder, gen, immediate, cts.Token);
+  }
 
-      foreach (var link in links) {
-        if (!map.TryGetValue(link.Uid, out var row))
-          continue;
-        row.SetChain(link.Depth, link.Size);
-        VisibleMessages.Add(row);
-      }
-    }
+  private async Task RunSearchAsync(
+    string query,
+    string? mailboxId,
+    string? folder,
+    int gen,
+    bool immediate,
+    CancellationToken token) {
+    try {
+      var trimmed = query.Trim();
+      if (!immediate && trimmed.Length > 0)
+        await Task.Delay(280, token).ConfigureAwait(false);
+      if (token.IsCancellationRequested || gen != _searchGen)
+        return;
 
-    RefreshFolderStats();
+      if (string.IsNullOrWhiteSpace(mailboxId) || string.IsNullOrWhiteSpace(folder)) {
+        await Dispatcher.UIThread.InvokeAsync(() => {
+          if (gen != _searchGen)
+            return;
+          VisibleMessages.Clear();
+          RefreshFolderStats();
+        });
+        return;
+      }
+
+      if (trimmed.Length == 0) {
+        await Dispatcher.UIThread.InvokeAsync(() => {
+          if (gen != _searchGen)
+            return;
+          ApplyVisibleRows([.. Messages]);
+        });
+        return;
+      }
+
+      var hits = await Task.Run(() => {
+        float[]? vector = null;
+        if (_semantic.IsReady && trimmed.Length >= 2)
+          vector = _semantic.EmbedQuery(trimmed);
+        return _archive.Search(mailboxId, folder, trimmed, vector);
+      }, token).ConfigureAwait(false);
+
+      if (token.IsCancellationRequested || gen != _searchGen)
+        return;
+
+      await Dispatcher.UIThread.InvokeAsync(() => {
+        if (gen != _searchGen)
+          return;
+        if (SelectedMailbox?.Id != mailboxId
+            || SelectedFolder?.FullName != folder
+            || !string.Equals(MessageFilter.Trim(), trimmed, StringComparison.Ordinal))
+          return;
+        var map = Messages
+          .GroupBy(m => m.Header.Id)
+          .ToDictionary(g => g.Key, g => g.First());
+        var rows = new List<MessageRowViewModel>();
+        foreach (var hit in hits) {
+          if (map.TryGetValue(hit.Uid, out var row))
+            rows.Add(row);
+        }
+
+        ApplyVisibleRows(rows);
+      });
+    }
+    catch (OperationCanceledException) {
+    }
+  }
+
+  private void ApplyVisibleRows(List<MessageRowViewModel> rows) {
+    var keep = SelectedMessages.Where(rows.Contains).ToList();
+    var keepOne = SelectedMessage is not null && rows.Contains(SelectedMessage)
+      ? SelectedMessage
+      : keep.FirstOrDefault();
+    _syncingList = true;
+    VisibleMessages.Clear();
+    try {
+      if (SelectedMailbox is null || SelectedFolder is null)
+        return;
+
+      if (!GroupConversations) {
+        rows.Sort(CompareRows);
+        foreach (var row in rows) {
+          row.SetChain(0, 1);
+          VisibleMessages.Add(row);
+        }
+      }
+      else {
+        var map = rows
+          .GroupBy(r => r.Header.Id)
+          .ToDictionary(g => g.Key, g => g.First());
+        var links = MailChain.Order(rows.Select(ChainItem).ToList(), true);
+        if (IsDateSort) {
+          if (!_listSortDescending)
+            links = MailListOrder.ReverseThreads(links);
+        }
+        else
+          links = MailListOrder.ReorderThreads(links, (a, b) => CompareRows(map[a], map[b]));
+
+        foreach (var link in links) {
+          if (!map.TryGetValue(link.Uid, out var row))
+            continue;
+          row.SetChain(link.Depth, link.Size);
+          VisibleMessages.Add(row);
+        }
+      }
+
+      SetSelectedMessages(keep.Where(VisibleMessages.Contains));
+      SelectedMessage = keepOne is not null && VisibleMessages.Contains(keepOne)
+        ? keepOne
+        : keep.FirstOrDefault(VisibleMessages.Contains);
+    }
+    finally {
+      _syncingList = false;
+      RefreshFolderStats();
+      NotifyMessageCommands();
+      RestoreMessageGridSelection();
+    }
   }
 
   private static MailChainItem ChainItem(MessageRowViewModel row) =>
@@ -1902,47 +2942,63 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       return;
     var eml = _archive.EmlPath(box.Id, header.Folder, header.Id)
       ?? ArchiveFiles.EmlPath(box.Id, header.Folder, header.Id);
-    var body = await MimeBody.TryFromEmlAsync(header.Folder, header.Id, eml, token);
-    if (body is null && ActiveSession is { IsConnected: true } session) {
-      var result = await session.GetMessageAsync(header.Folder, header.Id, token);
-      if (!result.IsSuccess || result.Value is null) {
-        Status = string.Join(" ", result.Messages);
-        return;
-      }
+    var body = await MimeBody.TryFromEmlAsync(header.Folder, header.Id, eml, token).ConfigureAwait(false);
+    if (body is null && SessionFor(box) is { IsConnected: true } session) {
+      PauseIndexing();
+      try {
+        var result = await session.GetMessageAsync(header.Folder, header.Id, token).ConfigureAwait(false);
+        if (!result.IsSuccess || result.Value is null) {
+          await UiAsync(() => Status = string.Join(" ", result.Messages)).ConfigureAwait(false);
+          return;
+        }
 
-      body = result.Value;
+        body = result.Value;
+      }
+      finally {
+        ResumeIndexing();
+      }
     }
 
     if (body is null) {
-      Status = "Message is not in the local archive yet. Connect and Get Messages.";
+      await UiAsync(() =>
+        Status = "Message is not in the local archive yet. Connect and Get Messages.")
+        .ConfigureAwait(false);
       return;
     }
 
     StoreArchivedBody(box.Id, header, body);
-    _reading = body;
-    ApplyReading(body);
-    if (SelectedMailbox is not null
-        && (body.Envelope.Kind == EnvelopeKind.PecReceipt || body.Envelope.Kind == EnvelopeKind.EidasRem)) {
-      _receipts.ApplyEvidence(
-        SelectedMailbox.Id,
-        body.Envelope.Msgid,
-        body.Envelope.Identificativo,
-        body.Envelope.Oggetto,
-        body.Envelope.Tipo);
-      if (SelectedFolder is not null
-          && MailFolderRole.Kind(SelectedFolder.Name, SelectedFolder.FullName) == "sent")
-        OverlaySentMarks();
-      var explain = ReceiptStatus.Explain(body.Envelope.Tipo);
-      if (!string.IsNullOrWhiteSpace(explain))
-        Status = explain;
-    }
-    await MarkOpenedReadAsync(header, token);
-    if (_pendingWindow is { } pending
-        && pending.Header.Id == header.Id
-        && pending.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase)) {
-      _pendingWindow = null;
-      ShowMessageWindow(body);
-    }
+    await Dispatcher.UIThread.InvokeAsync(async () => {
+      if (SelectedMessage is null
+          || SelectedMessage.Header.Id != header.Id
+          || !SelectedMessage.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase))
+        return;
+
+      _reading = body;
+      ApplyReading(body);
+      if (TracksCertifiedReceipts(box)
+          && (body.Envelope.Kind == EnvelopeKind.PecReceipt || body.Envelope.Kind == EnvelopeKind.EidasRem)) {
+        _receipts.ApplyEvidence(
+          box.Id,
+          body.Envelope.Msgid,
+          body.Envelope.Identificativo,
+          body.Envelope.Oggetto,
+          body.Envelope.Tipo);
+        if (SelectedFolder is not null
+            && MailFolderRole.Kind(SelectedFolder.Name, SelectedFolder.FullName) == "sent")
+          OverlaySentMarks();
+        var explain = ReceiptStatus.Explain(body.Envelope.Tipo);
+        if (!string.IsNullOrWhiteSpace(explain))
+          Status = explain;
+      }
+
+      await MarkOpenedReadAsync(header, token).ConfigureAwait(true);
+      if (_pendingWindow is { } pending
+          && pending.Header.Id == header.Id
+          && pending.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase)) {
+        _pendingWindow = null;
+        ShowMessageWindow(body);
+      }
+    });
   }
 
   private bool IsLoadedBody(MailMessageHeader header) =>
@@ -2046,7 +3102,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     ReadingFattura = fattura?.Text ?? "";
     HasReadingFattura = fattura is not null;
     if (!keepKind)
-      ApplyBodyKind(fattura is not null
+      ApplyBodyKind(fattura is not null && UseFatturaPa
         ? MailBodyKind.Fattura
         : MailBodyKind.DefaultView(html, inner ? body.InnerText : body.Text, _bodyPreference));
   }
@@ -2092,6 +3148,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         path,
         MailArchiveMap.BodyText(body, UnwrapEnvelope),
         MailArchiveMap.AttachmentIndex(body, UnwrapEnvelope));
+      _semantic.NotifySettingsChanged();
     }
     catch {
     }
@@ -2100,16 +3157,34 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private static void ShowArchiveHint() {
   }
 
-  private void ShowArchive(string mailboxId, string folder) {
+  private async Task ShowArchiveAsync(string mailboxId, string folder, CancellationToken token) {
+    var rows = await Task.Run(() => _archive.ListFolder(mailboxId, folder), token).ConfigureAwait(false);
+    token.ThrowIfCancellationRequested();
+    await UiAsync(() => {
+      if (SelectedMailbox?.Id != mailboxId
+          || SelectedFolder is null
+          || !SelectedFolder.FullName.Equals(folder, StringComparison.OrdinalIgnoreCase))
+        return;
+      BindArchive(mailboxId, folder, rows);
+    }).ConfigureAwait(false);
+  }
+
+  private void ShowArchive(string mailboxId, string folder) =>
+    BindArchive(mailboxId, folder, _archive.ListFolder(mailboxId, folder));
+
+  private void BindArchive(string mailboxId, string folder, IReadOnlyList<MailArchiveHeader> rows) {
     Messages.Clear();
+    SelectedMessages.Clear();
     SelectedMessage = null;
     ClearReading();
-    foreach (var row in _archive.ListFolder(mailboxId, folder)) {
+    foreach (var row in rows) {
       var header = MailArchiveMap.ToHeader(row);
       ReconcileHeader(header, folder);
       Messages.Add(new MessageRowViewModel { Header = header });
     }
 
+    if (TracksCertifiedReceipts(mailboxId) && MailFolderRole.Kind(null, folder) == "sent")
+      OverlaySentMarks();
     ApplyOpenedFolderCounts();
     RebuildVisible();
   }
@@ -2132,7 +3207,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private void StopBackfill() {
     _indexMailboxes.Clear();
     _catalogDone.Clear();
-    _indexMailboxId = null;
+    _catalogFolders.Clear();
     _backfill?.Cancel();
     _backfill?.Dispose();
     _backfill = null;
@@ -2151,7 +3226,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private void EnsureBodyBackfill(string mailboxId) {
     if (string.IsNullOrWhiteSpace(mailboxId) || _backfill is not null)
       return;
-    if (_archive.MissingBodies(mailboxId).Count == 0)
+    if (_archive.MissingBodyCount([mailboxId]) == 0)
       return;
     EnsureIndexing(mailboxId);
   }
@@ -2159,85 +3234,112 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private void StopIndexingMailbox(string mailboxId) {
     _indexMailboxes.Remove(mailboxId);
     _catalogDone.Remove(mailboxId);
-    if (!mailboxId.Equals(_indexMailboxId, StringComparison.OrdinalIgnoreCase))
+    _catalogFolders.RemoveWhere(key =>
+      key.StartsWith(mailboxId + "\n", StringComparison.OrdinalIgnoreCase));
+    if (_indexMailboxes.Count > 0)
       return;
     _backfill?.Cancel();
     _backfill?.Dispose();
     _backfill = null;
-    _indexMailboxId = null;
     IndexLine = "";
-    StartIndexing();
   }
 
   private void StartIndexing() {
-    var mailboxId = _indexMailboxes.FirstOrDefault();
-    if (mailboxId is null)
+    if (_backfill is not null || _indexMailboxes.Count == 0)
       return;
     var cts = new CancellationTokenSource();
     _backfill = cts;
-    _indexMailboxId = mailboxId;
-    _ = IndexMailboxAsync(mailboxId, cts.Token);
+    _ = IndexAllAsync(cts);
   }
 
-  private async Task IndexMailboxAsync(string mailboxId, CancellationToken token) {
+  private async Task IndexAllAsync(CancellationTokenSource cts) {
+    var token = cts.Token;
+    await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
     try {
-      var snapshot = await Dispatcher.UIThread.InvokeAsync(() => {
-        var box = MailboxById(mailboxId);
-        return (
-          Session: SessionFor(box),
-          Folders: FoldersFor(box).Select(f => (f.FullName, f.Name)).ToList(),
-          OpenFolder: SelectedMailbox?.Id == mailboxId ? SelectedFolder?.FullName : null,
-          CatalogDone: _catalogDone.Contains(mailboxId));
-      });
-      if (snapshot.Session is not { IsConnected: true })
-        return;
+      while (!token.IsCancellationRequested) {
+        await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
+        var snapshot = await Dispatcher.UIThread.InvokeAsync(CaptureIndexSnapshot);
+        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        if (snapshot.Count == 0)
+          break;
 
-      if (snapshot.Session.SupportsFolders && !snapshot.CatalogDone) {
-        foreach (var folder in snapshot.Folders) {
-          token.ThrowIfCancellationRequested();
-          var display = MailFolderRole.DisplayName(folder.Name, folder.FullName);
-          await SetIndexLineAsync(MailIndexProgress.Line(0, 0, display), token);
-          var open = snapshot.OpenFolder is not null
-            && folder.FullName.Equals(snapshot.OpenFolder, StringComparison.OrdinalIgnoreCase);
-          if (open)
+        var ids = snapshot.Select(s => s.Id).ToList();
+        var sessions = snapshot.ToDictionary(
+          s => s.Id,
+          s => s.Session,
+          StringComparer.OrdinalIgnoreCase);
+        var cataloged = false;
+        foreach (var box in snapshot) {
+          if (box.CatalogDone
+              || box.Session is not { IsConnected: true }
+              || !box.Session.SupportsFolders)
             continue;
-          var known = _archive.Uids(mailboxId, folder.FullName);
-          var listed = await snapshot.Session.ListMessagesAsync(folder.FullName, known, token);
-          if (!listed.IsSuccess)
-            continue;
-          ApplyFolderSync(mailboxId, folder.FullName, listed.Value ?? new MailFolderSync());
-          await Dispatcher.UIThread.InvokeAsync(() => RefreshIndexedFolderCounts(mailboxId, folder.FullName));
+          var pendingFolders = false;
+          foreach (var folder in box.Folders) {
+            token.ThrowIfCancellationRequested();
+            var open = box.OpenFolder is not null
+              && folder.FullName.Equals(box.OpenFolder, StringComparison.OrdinalIgnoreCase);
+            if (open || box.CatalogedFolders.Contains(folder.FullName))
+              continue;
+            pendingFolders = true;
+            cataloged = true;
+            await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
+            await SetIndexLineAsync(MailIndexProgress.Left(_archive.MissingBodyCount(ids)), token)
+              .ConfigureAwait(false);
+            var known = _archive.Uids(box.Id, folder.FullName);
+            var listed = await box.Session
+              .ListMessagesAsync(folder.FullName, known, token, IndexCatalogChunk)
+              .ConfigureAwait(false);
+            if (!listed.IsSuccess)
+              continue;
+            var sync = listed.Value ?? new MailFolderSync();
+            ApplyFolderSync(box.Id, folder.FullName, sync);
+            var counts = _archive.FolderCounts(box.Id, folder.FullName);
+            await UiAsync(() => RefreshIndexedFolderCounts(box.Id, folder.FullName, counts))
+              .ConfigureAwait(false);
+            if (!sync.Incomplete) {
+              await UiAsync(() => _catalogFolders.Add(CatalogKey(box.Id, folder.FullName)))
+                .ConfigureAwait(false);
+            }
+
+            await Task.Delay(15, token).ConfigureAwait(false);
+          }
+
+          if (!pendingFolders)
+            await UiAsync(() => _catalogDone.Add(box.Id)).ConfigureAwait(false);
         }
 
-        await Dispatcher.UIThread.InvokeAsync(() => _catalogDone.Add(mailboxId));
-      }
+        await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
+        var pending = _archive.MissingBodies(ids, 16);
+        if (pending.Count == 0) {
+          if (!cataloged)
+            break;
+          continue;
+        }
 
-      while (!token.IsCancellationRequested) {
-        var missing = _archive.MissingBodies(mailboxId);
-        if (missing.Count == 0)
-          break;
-        var total = missing.Count;
-        var done = 0;
-        await SetIndexLineAsync(MailIndexProgress.Line(0, total), token);
-        foreach (var item in missing) {
+        await SetIndexLineAsync(MailIndexProgress.Left(_archive.MissingBodyCount(ids)), token)
+          .ConfigureAwait(false);
+        var fetched = 0;
+        foreach (var item in pending) {
           token.ThrowIfCancellationRequested();
+          await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
+          if (!sessions.TryGetValue(item.MailboxId, out var session) || session is not { IsConnected: true })
+            continue;
           try {
-            var result = await snapshot.Session.GetMessageAsync(item.Folder, item.Uid, token);
+            var result = await session.GetMessageAsync(item.Folder, item.Uid, token).ConfigureAwait(false);
             if (result.IsSuccess && result.Value is not null)
-              StoreArchivedBody(mailboxId, result.Value.Header, result.Value);
+              StoreArchivedBody(item.MailboxId, result.Value.Header, result.Value);
+            fetched++;
           }
           catch (OperationCanceledException) {
             throw;
           }
           catch {
           }
-
-          done++;
-          if (done == 1 || done == total || done % 10 == 0) {
-            var display = MailFolderRole.DisplayName(null, item.Folder);
-            await SetIndexLineAsync(MailIndexProgress.Line(done, total, display), token);
-          }
         }
+
+        if (fetched == 0 && !cataloged)
+          break;
       }
     }
     catch (OperationCanceledException) {
@@ -2245,46 +3347,81 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     }
     finally {
       await Dispatcher.UIThread.InvokeAsync(() => {
-        if (_indexMailboxId != mailboxId)
+        if (_backfill != cts)
           return;
-        _backfill?.Dispose();
+        _backfill.Dispose();
         _backfill = null;
-        _indexMailboxId = null;
         if (token.IsCancellationRequested)
-          _indexMailboxes.Remove(mailboxId);
-        else if (_archive.MissingBodies(mailboxId).Count == 0)
-          _indexMailboxes.Remove(mailboxId);
-        if (!token.IsCancellationRequested)
-          IndexLine = "";
-        StartIndexing();
+          return;
+        foreach (var id in _indexMailboxes.ToList()) {
+          if (_catalogDone.Contains(id) && _archive.MissingBodyCount([id]) == 0)
+            _indexMailboxes.Remove(id);
+        }
+
+        IndexLine = "";
+        if (_indexMailboxes.Any(id => SessionFor(MailboxById(id)) is { IsConnected: true }))
+          StartIndexing();
       });
     }
   }
 
+  private List<IndexMailboxSnap> CaptureIndexSnapshot() {
+    var rows = new List<IndexMailboxSnap>();
+    foreach (var id in _indexMailboxes.ToList()) {
+      var box = MailboxById(id);
+      var session = SessionFor(box);
+      var cataloged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+      foreach (var folder in FoldersFor(box)) {
+        if (_catalogFolders.Contains(CatalogKey(id, folder.FullName)))
+          cataloged.Add(folder.FullName);
+      }
+
+      rows.Add(new IndexMailboxSnap(
+        id,
+        session,
+        FoldersFor(box).Select(f => (f.FullName, f.Name)).ToList(),
+        SelectedMailbox?.Id == id ? SelectedFolder?.FullName : null,
+        _catalogDone.Contains(id),
+        cataloged));
+    }
+
+    return rows;
+  }
+
+  private readonly record struct IndexMailboxSnap(
+    string Id,
+    IMailSession? Session,
+    IReadOnlyList<(string FullName, string Name)> Folders,
+    string? OpenFolder,
+    bool CatalogDone,
+    IReadOnlySet<string> CatalogedFolders);
+
   private async Task SetIndexLineAsync(string line, CancellationToken token) =>
-    await Dispatcher.UIThread.InvokeAsync(() => {
+    await UiAsync(() => {
       if (!token.IsCancellationRequested)
         IndexLine = line;
-    });
+    }).ConfigureAwait(false);
 
   private MailboxAccount? MailboxById(string mailboxId) =>
     Mailboxes.FirstOrDefault(m => m.Id.Equals(mailboxId, StringComparison.OrdinalIgnoreCase))
     ?? _files.Current.FindMailbox(mailboxId);
 
-  private void RefreshIndexedFolderCounts(string mailboxId, string folder) {
-    var rows = _archive.ListFolder(mailboxId, folder);
+  private void RefreshIndexedFolderCounts(string mailboxId, string folder, (int Total, int Unread) counts) {
     var view = FoldersFor(MailboxById(mailboxId))
       .FirstOrDefault(f => f.FullName.Equals(folder, StringComparison.OrdinalIgnoreCase));
     if (view is null)
       return;
-    view.Total = rows.Count;
-    view.Unread = rows.Count(r => !r.IsSeen);
+    view.Total = counts.Total;
+    view.Unread = counts.Unread;
     NotifyFolderCounts();
   }
 
   private async Task DisconnectMailboxAsync(string mailboxId) {
     StopIndexingMailbox(mailboxId);
-    if (_connections.Remove(mailboxId, out var session))
+    IMailSession? session;
+    lock (_connections)
+      _connections.Remove(mailboxId, out session);
+    if (session is not null)
       await session.DisposeAsync();
     _foldersByMailbox.Remove(mailboxId);
     if (SelectedMailbox?.Id == mailboxId) {
@@ -2321,6 +3458,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     MarkFolderReadCommand.NotifyCanExecuteChanged();
     MarkFolderUnreadCommand.NotifyCanExecuteChanged();
     DeleteCustomFolderCommand.NotifyCanExecuteChanged();
+    DetachPstCommand.NotifyCanExecuteChanged();
+    OnPropertyChanged(nameof(ShowFolderContext));
+    OnPropertyChanged(nameof(ShowDetachPst));
   }
 
   partial void OnHasReadingFilesChanged(bool value) =>
@@ -2344,32 +3484,194 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     IReadOnlyList<uint> ids,
     string destFolder,
     string? fromFolder = null,
-    IReadOnlyList<MessageRowViewModel>? rows = null) {
-    var session = ActiveSession;
-    if (session is not { IsConnected: true, SupportsFolders: true })
+    IReadOnlyList<MessageRowViewModel>? rows = null,
+    string? destMailboxId = null,
+    string? sourceMailboxId = null) {
+    var sourceBox = MailboxById(sourceMailboxId ?? SelectedMailbox?.Id ?? "")
+      ?? SelectedMailbox;
+    var destBox = MailboxById(destMailboxId ?? sourceBox?.Id ?? "")
+      ?? sourceBox;
+    if (sourceBox is null || destBox is null || ids.Count == 0)
       return;
     var source = fromFolder ?? SelectedFolder?.FullName;
-    if (string.IsNullOrWhiteSpace(source) || ids.Count == 0)
+    if (string.IsNullOrWhiteSpace(source))
       return;
-    if (source.Equals(destFolder, StringComparison.OrdinalIgnoreCase)) {
-      Status = "Already in that folder.";
-      return;
-    }
-
     await RunAsync(Copy.Moving, async token => {
-      var result = await session.MoveMessagesAsync(source, ids, destFolder, token);
-      if (!result.IsSuccess) {
-        Status = string.Join(" ", result.Messages);
+      var sourceSession = await EnsureMailboxReadyAsync(sourceBox, token);
+      var destSession = destBox.Id.Equals(sourceBox.Id, StringComparison.OrdinalIgnoreCase)
+        ? sourceSession
+        : await EnsureMailboxReadyAsync(destBox, token);
+      var dest = destFolder;
+      if (string.IsNullOrWhiteSpace(dest))
+        dest = InboxOf(destBox)?.FullName ?? "";
+      if (string.IsNullOrWhiteSpace(dest)
+          || destSession is not { IsConnected: true, SupportsFolders: true }) {
+        Status = Copy.CannotMoveSystemFolder;
         return;
       }
 
-      ApplyFolderMoveCounts(source, destFolder, ids.Count, rows);
-      if (SelectedMailbox is not null)
-        DeleteEmlFiles(_archive.RemoveUids(SelectedMailbox.Id, source, ids.ToList()));
-      if (SelectedFolder is not null)
+      if (sourceBox.Id.Equals(destBox.Id, StringComparison.OrdinalIgnoreCase)
+          && source.Equals(dest, StringComparison.OrdinalIgnoreCase)) {
+        Status = Copy.AlreadyInFolder;
+        return;
+      }
+
+      if (sourceBox.Id.Equals(destBox.Id, StringComparison.OrdinalIgnoreCase)) {
+        if (sourceSession is not { IsConnected: true, SupportsFolders: true }) {
+          Status = Copy.CannotMoveSystemFolder;
+          return;
+        }
+
+        var result = await sourceSession.MoveMessagesAsync(source, ids, dest, token);
+        if (!result.IsSuccess) {
+          Status = string.Join(" ", result.Messages);
+          return;
+        }
+
+        ApplyFolderMoveCounts(sourceBox, destBox, source, dest, ids.Count, rows);
+        DropArchived(sourceBox.Id, source, ids.ToList());
+        RemoveDroppedRows(sourceBox.Id, source, ids);
+        if (SelectedMailbox?.Id == destBox.Id && SelectedFolder is not null)
+          await LoadMessagesAsync(SelectedFolder.FullName, token);
+        Status = string.Format(Copy.MovedMessages, ids.Count);
+        return;
+      }
+
+      if (sourceSession is null) {
+        Status = Copy.CannotMoveSystemFolder;
+        return;
+      }
+
+      var copied = new List<uint>();
+      foreach (var id in ids) {
+        if (await CopyUidToMailboxAsync(sourceBox, sourceSession, destBox, source, dest, id, token))
+          copied.Add(id);
+      }
+
+      if (copied.Count == 0) {
+        Status = string.Format(Copy.MovedMessages, 0);
+        return;
+      }
+
+      await RemoveCopiedUidsAsync(sourceBox, sourceSession, source, copied, token);
+      ApplyFolderMoveCounts(sourceBox, destBox, source, dest, copied.Count, rows);
+      RemoveDroppedRows(sourceBox.Id, source, copied);
+      await LoadFoldersAsync(destBox, destSession, token);
+      if (SelectedMailbox?.Id == destBox.Id && SelectedFolder is not null)
         await LoadMessagesAsync(SelectedFolder.FullName, token);
-      Status = $"Moved {ids.Count} message(s).";
+      else if (SelectedMailbox?.Id == sourceBox.Id && SelectedFolder is not null)
+        await LoadMessagesAsync(SelectedFolder.FullName, token);
+      Status = string.Format(Copy.MovedMessages, copied.Count);
     });
+  }
+
+  private async Task<IMailSession?> EnsureMailboxReadyAsync(MailboxAccount box, CancellationToken token) {
+    await ConnectMailboxCoreAsync(box, PasswordFor(box), token);
+    var session = SessionFor(box);
+    if (session is not { IsConnected: true })
+      return session;
+    if (FoldersFor(box).Count == 0)
+      await LoadFoldersAsync(box, session, token);
+    return session;
+  }
+
+  private async Task<List<uint>> FolderUidsAsync(
+    MailboxAccount box,
+    IMailSession session,
+    string folder,
+    CancellationToken token) {
+    var ids = new HashSet<uint>(_archive.Uids(box.Id, folder));
+    var listed = await session.ListMessagesAsync(folder, ids.Count == 0 ? null : ids, token);
+    if (listed.IsSuccess && listed.Value?.Present is { } present) {
+      foreach (var id in present)
+        ids.Add(id);
+    }
+
+    return ids.ToList();
+  }
+
+  private IReadOnlyList<FolderRowViewModel> FolderSlice(MailboxAccount box, string root) =>
+    FoldersFor(box)
+      .Where(folder => MailFolderPath.IsSelfOrUnder(folder.FullName, root))
+      .OrderBy(folder => folder.FullName.Length)
+      .ThenBy(folder => folder.FullName, StringComparer.OrdinalIgnoreCase)
+      .ToList();
+
+  private IEnumerable<string> SiblingNames(MailboxAccount box, string? destParent, string? exceptFolder) {
+    foreach (var folder in FoldersFor(box)) {
+      if (exceptFolder is not null
+          && folder.FullName.Equals(exceptFolder, StringComparison.OrdinalIgnoreCase))
+        continue;
+      if (MailFolderPath.SameParent(folder.FullName, destParent))
+        yield return folder.Name;
+    }
+  }
+
+  private string? FindMovedFolder(MailboxAccount box, string? destParent, string leaf) =>
+    FoldersFor(box).FirstOrDefault(folder =>
+      MailFolderPath.Leaf(folder.FullName).Equals(leaf, StringComparison.OrdinalIgnoreCase)
+      && MailFolderPath.SameParent(folder.FullName, destParent))?.FullName;
+
+  private void RememberMovedFolder(string sourceMailboxId, string from, string to, string? destMailboxId) {
+    _archive.RewriteFolderPrefix(sourceMailboxId, from, to);
+    if (MailRuleEngine.RetargetFolders(ActiveRules(), sourceMailboxId, from, to, destMailboxId) > 0)
+      _files.Save(_files.Current);
+  }
+
+  private async Task SelectAfterFolderMoveAsync(
+    MailboxAccount source,
+    string from,
+    string to,
+    string? openFolder,
+    CancellationToken token,
+    MailboxAccount? destBox = null) {
+    if (SelectedMailbox?.Id != source.Id)
+      return;
+    if (string.IsNullOrWhiteSpace(openFolder) || !MailFolderPath.IsSelfOrUnder(openFolder, from))
+      return;
+    FolderRowViewModel? next = null;
+    if (destBox is null || destBox.Id.Equals(source.Id, StringComparison.OrdinalIgnoreCase)) {
+      var path = MailFolderPath.Rewrite(openFolder, from, to);
+      next = FoldersFor(source).FirstOrDefault(f =>
+        path is not null && f.FullName.Equals(path, StringComparison.OrdinalIgnoreCase))
+        ?? FoldersFor(source).FirstOrDefault(f =>
+          f.FullName.Equals(to, StringComparison.OrdinalIgnoreCase));
+    }
+
+    SelectedFolder = next ?? InboxOf(source) ?? FoldersFor(source).FirstOrDefault();
+    if (SelectedFolder is not null)
+      await LoadMessagesAsync(SelectedFolder.FullName, token);
+  }
+
+  private async Task RemoveCopiedUidsAsync(
+    MailboxAccount source,
+    IMailSession? session,
+    string sourceFolder,
+    IReadOnlyList<uint> ids,
+    CancellationToken token) {
+    if (ids.Count == 0)
+      return;
+    if (session is { IsConnected: true, SupportsFolders: true }) {
+      var trash = FoldersFor(source)
+        .FirstOrDefault(f => MailFolderRole.Kind(f.Name, f.FullName) == "trash");
+      if (trash is not null
+          && !trash.FullName.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase))
+        await session.MoveMessagesAsync(sourceFolder, ids, trash.FullName, token);
+      else
+        await session.SetMessageFlagsAsync(sourceFolder, ids, new MailFlagUpdate { Deleted = true }, token);
+    }
+
+    DropArchived(source.Id, sourceFolder, ids.ToList());
+  }
+
+  private void RemoveDroppedRows(string mailboxId, string folder, IReadOnlyList<uint> ids) {
+    if (SelectedMailbox?.Id != mailboxId
+        || SelectedFolder is null
+        || !SelectedFolder.FullName.Equals(folder, StringComparison.OrdinalIgnoreCase))
+      return;
+    var rows = Messages.Where(row => ids.Contains(row.Header.Id)).ToList();
+    if (rows.Count > 0)
+      RemoveRows(rows);
   }
 
   private async Task<bool> ApplyFlagsAsync(
@@ -2427,6 +3729,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     if (SelectedMessage is not null && rows.Contains(SelectedMessage))
       SelectedMessage = VisibleMessages.FirstOrDefault();
     SelectedMessages.Clear();
+    NotifyMessageCommands();
+    RestoreMessageGridSelection();
     RefreshFolderStats();
   }
 
@@ -2456,13 +3760,15 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   }
 
   private void ApplyFolderMoveCounts(
+    MailboxAccount sourceBox,
+    MailboxAccount destBox,
     string source,
     string destFolder,
     int count,
     IReadOnlyList<MessageRowViewModel>? rows) {
     var unread = rows?.Count(r => !r.Header.IsSeen) ?? 0;
-    var from = FolderRow(source);
-    var dest = FolderRow(destFolder);
+    var from = FolderRow(sourceBox, source);
+    var dest = FolderRow(destBox, destFolder);
     if (from is not null) {
       from.Total = Math.Max(0, from.Total - count);
       from.Unread = Math.Max(0, from.Unread - unread);
@@ -2476,8 +3782,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     NotifyFolderCounts();
   }
 
-  private FolderRowViewModel? FolderRow(string fullName) =>
-    FoldersFor(SelectedMailbox).FirstOrDefault(f =>
+  private FolderRowViewModel? FolderRow(MailboxAccount? box, string fullName) =>
+    FoldersFor(box).FirstOrDefault(f =>
       f.FullName.Equals(fullName, StringComparison.OrdinalIgnoreCase));
 
   private void NotifyFolderCounts() {
@@ -2512,6 +3818,53 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
 
   private static string JoinRecipients(IEnumerable<MailRecipient> rows) =>
     string.Join(", ", rows.Select(r => r.Tooltip));
+
+  private void KickFolderLoad(string folder) {
+    if (!Dispatcher.UIThread.CheckAccess()) {
+      Dispatcher.UIThread.Post(() => KickFolderLoad(folder));
+      return;
+    }
+
+    _folderLoad?.Cancel();
+    _folderLoad?.Dispose();
+    var cts = new CancellationTokenSource();
+    _folderLoad = cts;
+    Status = Copy.OpeningFolder;
+    _ = OpenFolderAsync(folder, cts.Token);
+  }
+
+  private async Task OpenFolderAsync(string folder, CancellationToken token) {
+    try {
+      await LoadMessagesAsync(folder, token).ConfigureAwait(false);
+    }
+    catch (OperationCanceledException) {
+    }
+  }
+
+  private void PauseIndexing() =>
+    Interlocked.Increment(ref _indexPause);
+
+  private void ResumeIndexing() =>
+    Interlocked.Decrement(ref _indexPause);
+
+  private async Task WaitIfIndexingPausedAsync(CancellationToken token) {
+    while (Volatile.Read(ref _indexPause) > 0) {
+      token.ThrowIfCancellationRequested();
+      await Task.Delay(40, token).ConfigureAwait(false);
+    }
+  }
+
+  private static string CatalogKey(string mailboxId, string folder) =>
+    mailboxId + "\n" + folder;
+
+  private async Task UiAsync(Action work) {
+    if (Dispatcher.UIThread.CheckAccess())
+      work();
+    else
+      await Dispatcher.UIThread.InvokeAsync(work);
+
+    await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+  }
 
   private async Task RunAsync(string busy, Func<CancellationToken, Task> work) {
     _work?.Cancel();
@@ -2550,4 +3903,6 @@ public sealed class PromptRequest {
   public string Placeholder { get; init; } = "";
 
   public bool ConfirmOnly { get; init; }
+
+  public string? ConfirmLabel { get; init; }
 }

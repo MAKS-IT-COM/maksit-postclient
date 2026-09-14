@@ -1,0 +1,47 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        x:Class="MaksIT.PostClient.UI.Windows.AboutWindow"
+        x:DataType="vm:AboutViewModel"
+        Width="440"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Icon="/Assets/icon.ico">
+
+  <Border Classes="card" Margin="16">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{Binding Brand}" Classes="kicker" Margin="0" />
+      <TextBlock Text="{Binding ProductName}" Classes="section" FontSize="20" />
+      <TextBlock Text="{Binding Summary}" Classes="hint" TextWrapping="Wrap" />
+
+      <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+            Margin="0,8,0,0">
+        <TextBlock Text="{Binding Copy.AboutVersion}" Foreground="{StaticResource MutedBrush}" />
+        <TextBlock Grid.Column="1" Text="{Binding Version}" FontWeight="SemiBold" />
+
+        <TextBlock Grid.Row="1" Text="{Binding Copy.AboutCredits}" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0" />
+        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Credits}" Margin="0,8,0,0" />
+
+        <TextBlock Grid.Row="2" Text="{Binding Copy.AboutEmail}" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0" />
+        <Button Grid.Row="2" Grid.Column="1" Content="{Binding Email}"
+                Command="{Binding OpenEmailCommand}" Classes="ghost"
+                HorizontalAlignment="Left" Padding="8,4" Margin="0,6,0,0" />
+
+        <TextBlock Grid.Row="3" Text="{Binding Copy.AboutLicenseLabel}" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0" />
+        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding License}" Margin="0,8,0,0" />
+
+        <TextBlock Grid.Row="4" Text="{Binding Copy.AboutCopyright}" Foreground="{StaticResource MutedBrush}" Margin="0,8,0,0" />
+        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding Copyright}" Classes="hint" Margin="0,8,0,0" TextWrapping="Wrap" />
+      </Grid>
+
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,12,0,0">
+        <Button Content="{Binding Site}" Command="{Binding OpenSiteCommand}" Classes="ghost" Margin="0" />
+        <Button Content="{Binding Copy.Close}" Click="OnCloseClick" Classes="accent"
+                HorizontalAlignment="Right" Padding="12,7" Margin="0"
+                IsDefault="True" IsCancel="True" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

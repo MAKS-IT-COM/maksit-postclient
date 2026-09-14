@@ -108,6 +108,47 @@ public sealed class MailFileAttachment {
       return $"{Name} ({size})";
     }
   }
+
+  public string Glyph {
+    get {
+      var type = ContentType ?? "";
+      if (type.StartsWith("image/", StringComparison.OrdinalIgnoreCase) || HasExtension(".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff"))
+        return "🖼";
+      if (type.Contains("pdf", StringComparison.OrdinalIgnoreCase) || HasExtension(".pdf"))
+        return "📄";
+      if (type.Contains("xml", StringComparison.OrdinalIgnoreCase) || HasExtension(".xml"))
+        return "📋";
+      if (type.Contains("zip", StringComparison.OrdinalIgnoreCase) || HasExtension(".zip", ".7z", ".rar"))
+        return "📦";
+      if (type.Contains("rfc822", StringComparison.OrdinalIgnoreCase) || HasExtension(".eml", ".msg"))
+        return "✉";
+      if (type.Contains("pkcs7", StringComparison.OrdinalIgnoreCase) || HasExtension(".p7m", ".p7s"))
+        return "🔏";
+      if (IsPst)
+        return "📫";
+      if (IsFatturaPa)
+        return "📋";
+      return "📎";
+    }
+  }
+
+  public bool IsFatturaPa =>
+    FatturaPaDocument.TryParse(Bytes) is not null;
+
+  public bool IsPst =>
+    PstFile.IsName(Name)
+    || (ContentType ?? "").Contains("ms-outlook", StringComparison.OrdinalIgnoreCase)
+    || PstFile.IsStore(Bytes);
+
+  private bool HasExtension(params string[] extensions) {
+    var name = Name ?? "";
+    foreach (var extension in extensions) {
+      if (name.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+        return true;
+    }
+
+    return false;
+  }
 }
 
 
@@ -158,4 +199,6 @@ public sealed class MailFolderSync {
   public IReadOnlyList<MailFlagState> Flags { get; init; } = [];
 
   public IReadOnlyList<uint>? Present { get; init; }
+
+  public bool Incomplete { get; init; }
 }

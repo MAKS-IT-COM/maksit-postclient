@@ -1,0 +1,130 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        x:Class="MaksIT.PostClient.UI.Windows.FeatureSettingsWindow"
+        x:DataType="vm:FeatureMatrixViewModel"
+        Title="{Binding Copy.Features}"
+        Icon="/Assets/icon.ico"
+        Width="940"
+        Height="560"
+        MinWidth="760"
+        MinHeight="400"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="16" LastChildFill="True">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{Binding Copy.FeaturesHint}"
+               Classes="hint"
+               TextWrapping="Wrap"
+               Margin="0,0,0,12" />
+    <Button DockPanel.Dock="Bottom"
+            Content="{Binding Copy.Close}"
+            Classes="quiet"
+            HorizontalAlignment="Right"
+            Margin="0,12,0,0"
+            Click="OnCloseClick" />
+    <ScrollViewer HorizontalScrollBarVisibility="Auto">
+      <StackPanel MinWidth="860">
+        <Grid ColumnDefinitions="260,100,100,100,100,100,100" Margin="0,0,0,4">
+          <TextBlock Text="{Binding Copy.Feature}" Classes="kicker" VerticalAlignment="Bottom" Margin="0,0,8,4" />
+          <StackPanel Grid.Column="1" Spacing="2">
+            <CheckBox HorizontalAlignment="Center"
+                      IsChecked="{Binding ItalyColumn.Enabled}"
+                      ToolTip.Tip="{Binding ItalyColumn.Hint}" />
+            <TextBlock Text="{Binding ItalyColumn.Title}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Classes="hint" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="2">
+            <CheckBox HorizontalAlignment="Center"
+                      IsChecked="{Binding EuropeColumn.Enabled}"
+                      ToolTip.Tip="{Binding EuropeColumn.Hint}" />
+            <TextBlock Text="{Binding EuropeColumn.Title}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Classes="hint" />
+          </StackPanel>
+          <StackPanel Grid.Column="3" Spacing="2">
+            <CheckBox HorizontalAlignment="Center"
+                      IsChecked="{Binding FranceColumn.Enabled}"
+                      ToolTip.Tip="{Binding FranceColumn.Hint}" />
+            <TextBlock Text="{Binding FranceColumn.Title}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Classes="hint" />
+          </StackPanel>
+          <StackPanel Grid.Column="4" Spacing="2">
+            <CheckBox HorizontalAlignment="Center"
+                      IsChecked="{Binding GermanyColumn.Enabled}"
+                      ToolTip.Tip="{Binding GermanyColumn.Hint}" />
+            <TextBlock Text="{Binding GermanyColumn.Title}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Classes="hint" />
+          </StackPanel>
+          <StackPanel Grid.Column="5" Spacing="2">
+            <CheckBox HorizontalAlignment="Center"
+                      IsChecked="{Binding SpainColumn.Enabled}"
+                      ToolTip.Tip="{Binding SpainColumn.Hint}" />
+            <TextBlock Text="{Binding SpainColumn.Title}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Classes="hint" />
+          </StackPanel>
+          <StackPanel Grid.Column="6" Spacing="2">
+            <CheckBox HorizontalAlignment="Center"
+                      IsChecked="{Binding SwitzerlandColumn.Enabled}"
+                      ToolTip.Tip="{Binding SwitzerlandColumn.Hint}" />
+            <TextBlock Text="{Binding SwitzerlandColumn.Title}"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       Classes="hint" />
+          </StackPanel>
+        </Grid>
+        <Border Height="1" Background="#2a2e33" Margin="0,0,0,8" />
+        <ItemsControl ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:FeatureRowViewModel">
+              <Grid ColumnDefinitions="260,100,100,100,100,100,100" Margin="0,1">
+                <TextBlock Text="{Binding Title}"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           Margin="0,4,8,4" />
+                <CheckBox Grid.Column="1"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ShowItaly}"
+                          IsChecked="{Binding Enabled}" />
+                <CheckBox Grid.Column="2"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ShowEurope}"
+                          IsChecked="{Binding Enabled}" />
+                <CheckBox Grid.Column="3"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ShowFrance}"
+                          IsChecked="{Binding Enabled}" />
+                <CheckBox Grid.Column="4"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ShowGermany}"
+                          IsChecked="{Binding Enabled}" />
+                <CheckBox Grid.Column="5"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ShowSpain}"
+                          IsChecked="{Binding Enabled}" />
+                <CheckBox Grid.Column="6"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ShowSwitzerland}"
+                          IsChecked="{Binding Enabled}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

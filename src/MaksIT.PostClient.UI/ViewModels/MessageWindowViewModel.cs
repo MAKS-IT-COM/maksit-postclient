@@ -91,7 +91,16 @@ public partial class MessageWindowViewModel : ObservableObject {
     MailBodyKind.IsFattura(ReadingBodyKind);
 
   public bool ShowFatturaBody =>
-    MailBodyKind.IsFattura(ReadingBodyKind);
+    UseFatturaPa && MailBodyKind.IsFattura(ReadingBodyKind);
+
+  public bool UseFatturaPa =>
+    FeatureGate.On(AppFeature.FatturaPa);
+
+  public bool UseEnvelopeTools =>
+    FeatureGate.On(AppFeature.PecEnvelope) || FeatureGate.On(AppFeature.RemEvidence);
+
+  public bool ShowFatturaPaTools =>
+    HasReadingFattura && UseFatturaPa;
 
   public bool HasReadingFattura { get; private set; }
 
@@ -143,7 +152,16 @@ public partial class MessageWindowViewModel : ObservableObject {
 
   [RelayCommand]
   private void SetReadingKind(string? kind) {
-    ReadingBodyKind = MailBodyKind.Normalize(kind);
+    var next = MailBodyKind.Normalize(kind);
+    if (MailBodyKind.IsFattura(next) && !UseFatturaPa)
+      next = MailBodyKind.Html;
+    ReadingBodyKind = next;
+  }
+
+  [RelayCommand]
+  private void ViewFatturaPa() {
+    if (UseFatturaPa)
+      SetReadingKind(MailBodyKind.Fattura);
   }
 
   [RelayCommand]
@@ -244,9 +262,10 @@ public partial class MessageWindowViewModel : ObservableObject {
     HasReadingFattura = fattura is not null;
     OnPropertyChanged(nameof(ReadingFattura));
     OnPropertyChanged(nameof(HasReadingFattura));
+    OnPropertyChanged(nameof(ShowFatturaPaTools));
     if (!keepKind) {
       _syncingKind = true;
-      ReadingBodyKind = fattura is not null
+      ReadingBodyKind = fattura is not null && UseFatturaPa
         ? MailBodyKind.Fattura
         : MailBodyKind.DefaultView(html, inner ? _body.InnerText : _body.Text, _preference);
       _syncingKind = false;

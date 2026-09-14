@@ -74,6 +74,9 @@ public static class AppPaths {
   public static string ArchiveDatabase() =>
     Path.Combine(DataDirectory(), "mail.db");
 
+  public static string ModelsDirectory() =>
+    Path.Combine(DataDirectory(), "models");
+
   public static string WebViewDirectory() =>
     Path.Combine(DataDirectory(), "webview");
 
@@ -93,6 +96,7 @@ public static class AppPaths {
     Directory.CreateDirectory(ConfigDirectory());
     Directory.CreateDirectory(DataDirectory());
     Directory.CreateDirectory(ObjectsDirectory());
+    Directory.CreateDirectory(ModelsDirectory());
     Directory.CreateDirectory(WebViewDirectory());
     Directory.CreateDirectory(LogsDirectory());
     Directory.CreateDirectory(Path.GetDirectoryName(ArchiveDatabase())!);

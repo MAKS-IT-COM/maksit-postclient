@@ -35,13 +35,36 @@
         <TextBlock Text="{Binding Copy.AccountSettings}" Classes="section" />
         <TextBlock Text="{Binding Copy.AccountHint}"
                    Classes="hint"
-                   TextWrapping="Wrap" />
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding ShowServerFields}" />
         <ComboBox ItemsSource="{Binding Providers}"
                   SelectedItem="{Binding EditorProvider}"
                   HorizontalAlignment="Stretch" />
+        <TextBlock Text="{Binding Copy.CertifiedKind}"
+                   Classes="kicker"
+                   IsVisible="{Binding ShowCertifiedKind}" />
+        <ComboBox ItemsSource="{Binding CertifiedKinds}"
+                  SelectedItem="{Binding EditorCertifiedKind}"
+                  HorizontalAlignment="Stretch"
+                  IsVisible="{Binding ShowCertifiedKind}" />
+        <TextBlock Text="{Binding Copy.CertifiedKindHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding ShowCertifiedKind}" />
+        <TextBlock Text="{Binding Copy.PstHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding ShowPstFields}" />
+        <Grid ColumnDefinitions="*,8,Auto" IsVisible="{Binding ShowPstFields}">
+          <TextBox PlaceholderText="{Binding Copy.StorePath}" Text="{Binding EditorStorePath}" />
+          <Button Grid.Column="2"
+                  Content="{Binding Copy.BrowseFile}"
+                  Classes="mail-tool"
+                  Command="{Binding BrowseStorePathCommand}" />
+        </Grid>
         <TextBox PlaceholderText="{Binding Copy.DisplayName}" Text="{Binding EditorName}" />
         <TextBox PlaceholderText="{Binding Copy.Address}" Text="{Binding EditorAddress}" />
-        <TextBox PlaceholderText="{Binding Copy.Username}" Text="{Binding EditorUsername}" />
+        <TextBox PlaceholderText="{Binding Copy.Username}" Text="{Binding EditorUsername}" IsVisible="{Binding ShowServerFields}" />
         <TextBlock Text="{Binding OauthHint}" Classes="hint" TextWrapping="Wrap" IsVisible="{Binding ShowAuthHint}" />
         <TextBox PlaceholderText="{Binding Copy.GoogleClientId}"
                  Text="{Binding EditorGoogleClientId, UpdateSourceTrigger=PropertyChanged}"
@@ -67,16 +90,21 @@
                  IsVisible="{Binding ShowPasswordFields}" />
         <ComboBox ItemsSource="{Binding IncomingProtocols}"
                   SelectedItem="{Binding EditorIncomingProtocol}"
-                  HorizontalAlignment="Stretch" />
-        <TextBox PlaceholderText="{Binding Copy.IncomingHost}" Text="{Binding EditorIncomingHost}" />
-        <Grid ColumnDefinitions="*,8,*">
+                  HorizontalAlignment="Stretch"
+                  IsVisible="{Binding ShowServerFields}" />
+        <TextBox PlaceholderText="{Binding Copy.IncomingHost}"
+                 Text="{Binding EditorIncomingHost}"
+                 IsVisible="{Binding ShowServerFields}" />
+        <Grid ColumnDefinitions="*,8,*" IsVisible="{Binding ShowServerFields}">
           <NumericUpDown Value="{Binding EditorIncomingPort}" Minimum="1" Maximum="65535" />
           <ComboBox Grid.Column="2"
                     ItemsSource="{Binding SecurityModes}"
                     SelectedItem="{Binding EditorIncomingSecurity}" />
         </Grid>
-        <TextBox PlaceholderText="{Binding Copy.SmtpHost}" Text="{Binding EditorSmtpHost}" />
-        <Grid ColumnDefinitions="*,8,*">
+        <TextBox PlaceholderText="{Binding Copy.SmtpHost}"
+                 Text="{Binding EditorSmtpHost}"
+                 IsVisible="{Binding ShowServerFields}" />
+        <Grid ColumnDefinitions="*,8,*" IsVisible="{Binding ShowServerFields}">
           <NumericUpDown Value="{Binding EditorSmtpPort}" Minimum="1" Maximum="65535" />
           <ComboBox Grid.Column="2"
                     ItemsSource="{Binding SecurityModes}"

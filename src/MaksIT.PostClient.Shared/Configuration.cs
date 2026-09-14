@@ -24,6 +24,12 @@ public sealed class Configuration {
 
   public string MicrosoftClientId { get; set; } = "";
 
+  public FeatureSettings Features { get; set; } = new();
+
+  public SemanticSearchSettings Semantic { get; set; } = new();
+
+  public List<MailRule> Rules { get; set; } = [];
+
   public void EnsureDefaults() {
     Mailboxes ??= [];
     foreach (var mailbox in Mailboxes) {
@@ -32,13 +38,16 @@ public sealed class Configuration {
       mailbox.IncomingProtocol = MailProtocol.NormalizeIncoming(mailbox.IncomingProtocol);
       mailbox.IncomingSecurity = MailSecurity.Normalize(mailbox.IncomingSecurity, mailbox.ImapSsl);
       mailbox.SmtpSecurity = MailSecurity.Normalize(mailbox.SmtpSecurity, mailbox.SmtpSsl);
-      if (mailbox.ImapPort <= 0)
+      if (mailbox.IsPstStore)
+        mailbox.Provider = MailProvider.Pst;
+      if (!mailbox.IsPstStore && mailbox.ImapPort <= 0)
         mailbox.ImapPort = MailSecurity.DefaultIncomingPort(mailbox.IncomingProtocol, mailbox.IncomingSecurity);
       if (mailbox.SmtpPort <= 0)
         mailbox.SmtpPort = MailSecurity.DefaultSmtpPort(mailbox.SmtpSecurity);
       mailbox.ImapSsl = MailSecurity.IsImplicitTls(mailbox.IncomingSecurity);
       mailbox.SmtpSsl = MailSecurity.IsImplicitTls(mailbox.SmtpSecurity);
       mailbox.Provider = MailProvider.Normalize(mailbox.Provider);
+      mailbox.CertifiedKind = MailCertifiedKind.ForProvider(mailbox.Provider, mailbox.CertifiedKind);
       mailbox.AuthKind = MailAuthKind.Normalize(mailbox.AuthKind);
     }
 
@@ -49,6 +58,12 @@ public sealed class Configuration {
       : UiLanguage.Normalize(Language);
     Layout ??= new LayoutSettings();
     Layout.Normalize();
+    Features ??= new FeatureSettings();
+    Features.Normalize();
+    FeatureGate.Use(Features);
+    Semantic ??= new SemanticSearchSettings();
+    Semantic.Normalize();
+    Rules ??= [];
   }
 
   public MailboxAccount? FindMailbox(string? id) {

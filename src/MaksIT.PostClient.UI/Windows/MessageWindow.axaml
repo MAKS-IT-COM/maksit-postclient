@@ -16,6 +16,10 @@
         <Button Content="{Binding Copy.Reply}" Classes="mail-tool" Command="{Binding ReplyCommand}" />
         <Button Content="{Binding Copy.ReplyAll}" Classes="mail-tool" Command="{Binding ReplyAllCommand}" />
         <Button Content="{Binding Copy.Forward}" Classes="mail-tool" Command="{Binding ForwardCommand}" />
+        <Button Content="{Binding Copy.ViewFatturaPa}"
+                Classes="mail-tool"
+                Command="{Binding ViewFatturaPaCommand}"
+                IsVisible="{Binding ShowFatturaPaTools}" />
         <Button Content="{Binding Copy.SaveZip}" Classes="mail-tool" Command="{Binding SaveAttachmentsZipCommand}" />
         <Button Content="{Binding Copy.Close}" Classes="mail-tool" Click="OnCloseClick" />
       </StackPanel>
@@ -47,7 +51,8 @@
             <TextBlock Grid.Column="1" Text="{Binding ReadingDate}" />
           </Grid>
           <CheckBox Content="{Binding Copy.UnwrapEnvelope}"
-                    IsChecked="{Binding UnwrapEnvelope}" />
+                    IsChecked="{Binding UnwrapEnvelope}"
+                    IsVisible="{Binding UseEnvelopeTools}" />
           <StackPanel Orientation="Horizontal" Spacing="4">
             <Button Content="{Binding Copy.Html}"
                     Classes="body-kind"
@@ -69,7 +74,8 @@
                     Classes.selected="{Binding IsFatturaKind}"
                     Command="{Binding SetReadingKindCommand}"
                     CommandParameter="fattura"
-                    IsVisible="{Binding HasReadingFattura}" />
+                    IsVisible="{Binding UseFatturaPa}"
+                    IsEnabled="{Binding ShowFatturaPaTools}" />
           </StackPanel>
           <ItemsControl ItemsSource="{Binding ReadingFiles}" IsVisible="{Binding HasReadingFiles}">
             <ItemsControl.ItemsPanel>
@@ -81,9 +87,20 @@
               <DataTemplate>
                 <Border Classes="attach-chip">
                   <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding Glyph}" FontSize="14" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Line}" VerticalAlignment="Center" />
-                    <Button Content="{Binding Copy.Open, ElementName=Root}" Classes="chip-action" Click="OnOpenAttachment" />
-                    <Button Content="{Binding Copy.Save, ElementName=Root}" Classes="chip-action" Click="OnSaveAttachment" />
+                    <Button Content="↗"
+                            Classes="chip-action"
+                            ToolTip.Tip="{Binding DataContext.Copy.Open, ElementName=Root}"
+                            Click="OnOpenAttachment" />
+                    <Button Content="💾"
+                            Classes="chip-action"
+                            ToolTip.Tip="{Binding DataContext.Copy.Save, ElementName=Root}"
+                            Click="OnSaveAttachment" />
+                    <Button Content="{Binding DataContext.Copy.FatturaPa, ElementName=Root}"
+                            Classes="chip-action"
+                            IsVisible="{Binding IsFatturaPa}"
+                            Click="OnViewFatturaPa" />
                   </StackPanel>
                 </Border>
               </DataTemplate>

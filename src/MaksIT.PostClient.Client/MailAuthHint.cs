@@ -19,7 +19,7 @@ internal static class MailAuthHint {
       return " Enable IMAP in Gmail (Settings → See all settings → Forwarding and POP/IMAP). Sign in must allow Gmail mail access, not only email.";
     if (provider == MailProvider.Outlook)
       return " Sign in must allow IMAP and SMTP on the Azure app.";
-    if (MailProvider.IsPec(provider))
+    if (account.TracksCertifiedReceipts || MailProvider.IsPec(provider))
       return " Username is usually the full certified address; Legalmail may use the InfoCert User ID.";
     return "";
   }

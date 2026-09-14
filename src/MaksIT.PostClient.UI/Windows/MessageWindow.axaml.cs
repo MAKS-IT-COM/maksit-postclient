@@ -71,6 +71,11 @@ public partial class MessageWindow : Window {
     }
   }
 
+  private void OnViewFatturaPa(object? sender, RoutedEventArgs e) {
+    if (DataContext is MessageWindowViewModel vm)
+      vm.ViewFatturaPaCommand.Execute(null);
+  }
+
   private void OnOpenAttachment(object? sender, RoutedEventArgs e) {
     if (sender is not Button { DataContext: MailFileAttachment file })
       return;

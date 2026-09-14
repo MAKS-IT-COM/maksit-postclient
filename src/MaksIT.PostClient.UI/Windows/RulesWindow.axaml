@@ -1,0 +1,122 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        x:Class="MaksIT.PostClient.UI.Windows.RulesWindow"
+        x:Name="Root"
+        x:DataType="vm:RulesViewModel"
+        Title="{Binding Copy.Rules}"
+        Icon="/Assets/icon.ico"
+        Width="860"
+        Height="620"
+        MinWidth="720"
+        MinHeight="480"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="16" LastChildFill="True">
+    <TextBlock DockPanel.Dock="Top"
+               Text="{Binding Copy.RulesHint}"
+               Classes="hint"
+               TextWrapping="Wrap"
+               Margin="0,0,0,8" />
+    <TextBlock DockPanel.Dock="Top"
+               Text="{Binding Status}"
+               Classes="hint"
+               TextWrapping="Wrap"
+               Margin="0,0,0,12"
+               IsVisible="{Binding HasStatus}" />
+    <StackPanel DockPanel.Dock="Bottom"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,12,0,0">
+      <Button Content="{Binding Copy.RunAllRules}"
+              Classes="mail-tool"
+              Command="{Binding RunAllCommand}" />
+      <Button Content="{Binding Copy.ImportOutlookRules}" Classes="mail-tool" Click="OnImportClick" />
+      <Button Content="{Binding Copy.ExportRules}" Classes="mail-tool" Click="OnExportClick" />
+      <Button Content="{Binding Copy.Close}" Classes="quiet" Click="OnCloseClick" />
+    </StackPanel>
+    <Grid ColumnDefinitions="280,12,*">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+          <Button Content="{Binding Copy.AddRule}" Classes="mail-tool" Command="{Binding AddCommand}" />
+          <Button Content="{Binding Copy.DeleteRule}" Classes="quiet" Command="{Binding DeleteCommand}" />
+        </StackPanel>
+        <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding Selected}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:RuleEditViewModel">
+              <StackPanel Spacing="2" Margin="0,2">
+                <DockPanel>
+                  <CheckBox DockPanel.Dock="Right"
+                            IsChecked="{Binding Enabled}"
+                            VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+                <TextBlock Text="{Binding Do}"
+                           Classes="hint"
+                           Classes.unresolved="{Binding FolderUnresolved}"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+      <ScrollViewer Grid.Column="2" IsVisible="{Binding HasSelected}">
+        <StackPanel Spacing="8">
+          <TextBox PlaceholderText="{Binding Copy.DisplayName}" Text="{Binding Selected.Name}" />
+          <CheckBox Content="{Binding Copy.RuleStop}" IsChecked="{Binding Selected.Stop}" />
+          <ComboBox ItemsSource="{Binding Logics}" SelectedItem="{Binding Selected.Logic}" HorizontalAlignment="Stretch" />
+          <ItemsControl ItemsSource="{Binding Selected.Conditions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Grid ColumnDefinitions="*,8,*,8,*,8,Auto" Margin="0,0,0,6">
+                  <TextBox PlaceholderText="from" Text="{Binding Field}" />
+                  <TextBox Grid.Column="2" PlaceholderText="contains" Text="{Binding Op}" />
+                  <TextBox Grid.Column="4" Text="{Binding Value}" />
+                  <Button Grid.Column="6"
+                          Content="✕"
+                          Classes="quiet"
+                          Command="{Binding DataContext.RemoveConditionCommand, ElementName=Root}"
+                          CommandParameter="{Binding}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Content="+" Classes="mail-tool" Command="{Binding AddConditionCommand}" HorizontalAlignment="Left" />
+          <ComboBox ItemsSource="{Binding ActionIds}" SelectedItem="{Binding Selected.Action}" HorizontalAlignment="Stretch" />
+          <TextBlock Text="{Binding Copy.RuleAccount}" Classes="hint" />
+          <ComboBox ItemsSource="{Binding Accounts}"
+                    SelectedItem="{Binding SelectedAccount}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChoiceRow">
+                <TextBlock Text="{Binding Title}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{Binding Copy.RuleFolderAccount}"
+                     Classes="hint"
+                     IsVisible="{Binding Selected.NeedsFolder}" />
+          <ComboBox ItemsSource="{Binding Accounts}"
+                    SelectedItem="{Binding SelectedFolderAccount}"
+                    HorizontalAlignment="Stretch"
+                    IsVisible="{Binding Selected.NeedsFolder}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChoiceRow">
+                <TextBlock Text="{Binding Title}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBox PlaceholderText="{Binding Copy.RuleFolder}"
+                   Text="{Binding Selected.Folder}"
+                   IsVisible="{Binding Selected.NeedsFolder}"
+                   Classes.unresolved="{Binding Selected.FolderUnresolved}" />
+          <TextBlock Text="{Binding Copy.RuleFolderUnresolved}"
+                     Classes="hint unresolved"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding Selected.FolderUnresolved}" />
+          <TextBox PlaceholderText="{Binding Copy.Label}" Text="{Binding Selected.Label}" />
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>

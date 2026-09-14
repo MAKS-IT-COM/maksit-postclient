@@ -4,6 +4,20 @@ using MaksIT.PostClient.Shared;
 namespace MaksIT.PostClient.Tests;
 
 
+public class AppInfoTests {
+  [Fact]
+  public void Credits_and_email_are_maksit() {
+    Assert.Equal("MaksIT", AppInfo.Brand);
+    Assert.Equal("Postclient", AppInfo.ProductName);
+    Assert.Equal("Maksym Sadovnychyy", AppInfo.Credits);
+    Assert.Equal("maksym.sadovnychyy@gmail.com", AppInfo.Email);
+    Assert.Equal("https://maks-it.com", AppInfo.SiteUri);
+    Assert.Equal("Desktop mail client for PEC, REM, and IMAP. Mail stays on this PC.", AppInfo.Summary);
+    Assert.Contains(DateTime.UtcNow.Year.ToString(), AppInfo.Copyright, StringComparison.Ordinal);
+  }
+}
+
+
 public class AppPathsTests {
   [Fact]
   public void ProductFolderIsPlaceholderBrandNotMaksIt() {
@@ -11,6 +25,7 @@ public class AppPathsTests {
     Assert.Equal("postclient", AppPaths.ProductId);
     Assert.DoesNotContain("MaksIT", AppPaths.ConfigDirectory(), StringComparison.OrdinalIgnoreCase);
     Assert.EndsWith("webview", AppPaths.WebViewDirectory(), StringComparison.OrdinalIgnoreCase);
+    Assert.EndsWith("models", AppPaths.ModelsDirectory(), StringComparison.OrdinalIgnoreCase);
   }
 
   [Fact]
@@ -231,6 +246,15 @@ public class MailIndexProgressTests {
     Assert.Equal("Indexing Inbox · 12 / 400", MailIndexProgress.Line(12, 400, "Inbox"));
     Assert.Equal("Indexing Sent…", MailIndexProgress.Line(0, 0, "Sent"));
   }
+
+  [Fact]
+  public void Left_MatchesMeaningStyle() {
+    Assert.Equal("Indexing…", MailIndexProgress.Left(0));
+    Assert.Equal("Indexing 12 left", MailIndexProgress.Left(12));
+    Assert.Equal("Indexing meaning 12 left", MailIndexProgress.MeaningLeft(12));
+    Assert.Equal("Meaning index ready (CPU)", MailIndexProgress.MeaningReady("CPU", 0));
+    Assert.Equal("Meaning index ready (GPU, 40)", MailIndexProgress.MeaningReady("GPU", 40));
+  }
 }
 
 
@@ -243,11 +267,50 @@ public class MailboxAccountTests {
 }
 
 
+public class MailCertifiedKindTests {
+  [Fact]
+  public void ForProvider_PresetsForceKind_ImapKeepsChoice() {
+    Assert.Equal(MailCertifiedKind.Pec, MailCertifiedKind.ForProvider(MailProvider.Aruba));
+    Assert.Equal(MailCertifiedKind.Rem, MailCertifiedKind.ForProvider(MailProvider.Intesi));
+    Assert.Equal(MailCertifiedKind.Ordinary, MailCertifiedKind.ForProvider(MailProvider.Gmail, MailCertifiedKind.Pec));
+    Assert.Equal(MailCertifiedKind.Pec, MailCertifiedKind.ForProvider(MailProvider.Imap, MailCertifiedKind.Pec));
+    Assert.Equal(MailCertifiedKind.Ordinary, MailCertifiedKind.ForProvider(MailProvider.Imap, ""));
+    Assert.True(MailCertifiedKind.TracksReceipts(MailCertifiedKind.Pec));
+    Assert.False(MailCertifiedKind.TracksReceipts(MailCertifiedKind.Ordinary));
+  }
+
+  [Fact]
+  public void Apply_WritesCertifiedKind() {
+    var aruba = new MailboxAccount { Provider = MailProvider.Aruba };
+    MailProvider.Apply(aruba);
+    Assert.Equal(MailCertifiedKind.Pec, aruba.CertifiedKind);
+    Assert.True(aruba.TracksCertifiedReceipts);
+
+    var custom = new MailboxAccount {
+      Provider = MailProvider.Imap,
+      CertifiedKind = MailCertifiedKind.Pec,
+      ImapHost = "mail.studio.it"
+    };
+    MailProvider.Apply(custom);
+    Assert.Equal(MailCertifiedKind.Pec, custom.CertifiedKind);
+    Assert.Equal("mail.studio.it", custom.ImapHost);
+
+    var gmail = new MailboxAccount { Provider = MailProvider.Gmail, CertifiedKind = MailCertifiedKind.Pec };
+    MailProvider.Apply(gmail);
+    Assert.Equal(MailCertifiedKind.Ordinary, gmail.CertifiedKind);
+    Assert.False(gmail.TracksCertifiedReceipts);
+  }
+}
+
+
 public class MailFolderRoleTests {
   [Fact]
   public void InboxAndItalianAliases_SortFirst() {
     Assert.Equal("inbox", MailFolderRole.Kind("INBOX", "INBOX"));
     Assert.Equal("inbox", MailFolderRole.Kind("Posta in arrivo", "INBOX"));
+    Assert.Equal("inbox", MailFolderRole.Kind("Boîte de réception", "INBOX"));
+    Assert.Equal("inbox", MailFolderRole.Kind("Posteingang", "INBOX"));
+    Assert.Equal("inbox", MailFolderRole.Kind("Bandeja de entrada", "INBOX"));
     Assert.Equal(0, MailFolderRole.SortKey("Inbox", "INBOX"));
   }
 
@@ -304,10 +367,17 @@ public class UiLanguageTests {
   public void Normalize_MapsPrefixesAndUnknownToEnglish() {
     Assert.Equal(UiLanguage.It, UiLanguage.Normalize("it-IT"));
     Assert.Equal(UiLanguage.En, UiLanguage.Normalize("en-US"));
+    Assert.Equal(UiLanguage.Fr, UiLanguage.Normalize("fr-FR"));
+    Assert.Equal(UiLanguage.De, UiLanguage.Normalize("de"));
+    Assert.Equal(UiLanguage.Es, UiLanguage.Normalize("es-ES"));
     Assert.Equal(UiLanguage.En, UiLanguage.Normalize(""));
-    Assert.Equal(UiLanguage.En, UiLanguage.Normalize("de"));
+    Assert.Equal(UiLanguage.En, UiLanguage.Normalize("pl"));
     Assert.Equal("Italiano", UiLanguage.Title("it"));
     Assert.Equal("English", UiLanguage.Title("en"));
+    Assert.Equal("Français", UiLanguage.Title("fr"));
+    Assert.Equal("Deutsch", UiLanguage.Title("de"));
+    Assert.Equal("Español", UiLanguage.Title("es"));
+    Assert.Equal(5, UiLanguage.All.Count);
   }
 }
 
@@ -324,9 +394,41 @@ public class UiCopyTests {
   }
 
   [Fact]
+  public void For_FrenchGermanSpanish_UsesLocalizedFolderNames() {
+    Assert.Equal("Boîte de réception", UiCopy.For("fr").Inbox);
+    Assert.Equal("Récupérer les messages", UiCopy.For("fr").GetMessages);
+    Assert.Equal("Posteingang", UiCopy.For("de").Inbox);
+    Assert.Equal("Nachrichten abrufen", UiCopy.For("de").GetMessages);
+    Assert.Equal("Bandeja de entrada", UiCopy.For("es").Inbox);
+    Assert.Equal("Obtener mensajes", UiCopy.For("es").GetMessages);
+  }
+
+  [Fact]
   public void For_Unknown_FallsBackToEnglish() {
     Assert.Equal("Inbox", UiCopy.For("en").Inbox);
-    Assert.Equal("Inbox", UiCopy.For("de").Inbox);
+    Assert.Equal("Inbox", UiCopy.For("pl").Inbox);
+    Assert.False(string.IsNullOrWhiteSpace(UiCopy.For("en").About));
+    Assert.Contains("Informazioni", UiCopy.For("it").About, StringComparison.Ordinal);
+    Assert.Equal("Credits", UiCopy.For("en").AboutCredits);
+    Assert.Equal("Crediti", UiCopy.For("it").AboutCredits);
+    Assert.Equal("Crédits", UiCopy.For("fr").AboutCredits);
+    Assert.Equal("Mitwirkende", UiCopy.For("de").AboutCredits);
+    Assert.Equal("Créditos", UiCopy.For("es").AboutCredits);
+  }
+}
+
+
+public class FeatureCatalogTests {
+  [Fact]
+  public void Titles_CoverAllUiLanguages() {
+    foreach (var feature in FeatureCatalog.All) {
+      foreach (var language in UiLanguage.All)
+        Assert.False(string.IsNullOrWhiteSpace(feature.TitleFor(language)));
+    }
+
+    Assert.Equal("Italie", FeatureCatalog.RegionTitle(AppRegion.Italy, UiLanguage.Fr));
+    Assert.Equal("Deutschland", FeatureCatalog.RegionTitle(AppRegion.Germany, UiLanguage.De));
+    Assert.Equal("España", FeatureCatalog.RegionTitle(AppRegion.Spain, UiLanguage.Es));
   }
 }
 
@@ -388,6 +490,25 @@ public class ConfigurationTests {
     Assert.Equal(465, configuration.Mailboxes[0].SmtpPort);
     Assert.Equal(MailProtocol.Imap, configuration.Mailboxes[0].IncomingProtocol);
     Assert.Equal(MailSecurity.Ssl, configuration.Mailboxes[0].IncomingSecurity);
+    Assert.Equal(MailCertifiedKind.Ordinary, configuration.Mailboxes[0].CertifiedKind);
+  }
+
+  [Fact]
+  public void EnsureDefaults_MigratesPecPresetKind() {
+    var configuration = new Configuration {
+      Mailboxes = [
+        new MailboxAccount { Provider = MailProvider.Aruba, CertifiedKind = "" },
+        new MailboxAccount { Provider = MailProvider.Intesi, CertifiedKind = "" },
+        new MailboxAccount {
+          Provider = MailProvider.Imap,
+          CertifiedKind = MailCertifiedKind.Pec
+        }
+      ]
+    };
+    configuration.EnsureDefaults();
+    Assert.Equal(MailCertifiedKind.Pec, configuration.Mailboxes[0].CertifiedKind);
+    Assert.Equal(MailCertifiedKind.Rem, configuration.Mailboxes[1].CertifiedKind);
+    Assert.Equal(MailCertifiedKind.Pec, configuration.Mailboxes[2].CertifiedKind);
   }
 
   [Fact]
@@ -418,7 +539,7 @@ public class ConfigurationTests {
 
     var detected = new Configuration { Language = "" };
     detected.EnsureDefaults();
-    Assert.True(detected.Language == UiLanguage.En || detected.Language == UiLanguage.It);
+    Assert.Contains(detected.Language, UiLanguage.All);
   }
 }
 
@@ -435,13 +556,15 @@ public class ConfigurationFileServiceTests {
       configuration.Mailboxes.Add(new MailboxAccount {
         DisplayName = "Studio",
         Address = "a@b.it",
-        ImapHost = "imap.example.it"
+        ImapHost = "imap.example.it",
+        CertifiedKind = MailCertifiedKind.Pec
       });
       files.Save(configuration);
       var reloaded = new ConfigurationFileService(path).Current;
       Assert.Single(reloaded.Mailboxes);
       Assert.Equal("a@b.it", reloaded.Mailboxes[0].Address);
       Assert.Equal("imap.example.it", reloaded.Mailboxes[0].ImapHost);
+      Assert.Equal(MailCertifiedKind.Pec, reloaded.Mailboxes[0].CertifiedKind);
     }
     finally {
       Directory.Delete(dir, true);
@@ -494,6 +617,69 @@ public class ConfigurationFileServiceTests {
     }
     finally {
       Directory.Delete(dir, true);
+    }
+  }
+
+  [Fact]
+  public void SaveReload_KeepsFeatures() {
+    var dir = Path.Combine(Path.GetTempPath(), "postclient-cfg-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    var path = Path.Combine(dir, "settings.json");
+    try {
+      var files = new ConfigurationFileService(path);
+      var configuration = files.Current;
+      configuration.Features.Set(AppFeature.FrEvidence, true);
+      configuration.Features.Set(AppFeature.FatturaPa, false);
+      files.Save(configuration);
+
+      var reloaded = new ConfigurationFileService(path).Current;
+      Assert.True(reloaded.Features.IsEnabled(AppFeature.FrEvidence));
+      Assert.False(reloaded.Features.IsEnabled(AppFeature.FatturaPa));
+      Assert.True(reloaded.Features.IsEnabled(AppFeature.PecEnvelope));
+    }
+    finally {
+      Directory.Delete(dir, true);
+    }
+  }
+}
+
+
+public class FeatureSettingsTests {
+  [Fact]
+  public void EmptySettings_UsesCatalogDefaults() {
+    var features = new FeatureSettings();
+    Assert.True(features.IsEnabled(AppFeature.PecEnvelope));
+    Assert.True(features.IsEnabled(AppFeature.FatturaPa));
+    Assert.True(features.IsEnabled(AppFeature.RemEvidence));
+    Assert.False(features.IsEnabled(AppFeature.FrEvidence));
+    Assert.False(features.IsEnabled(AppFeature.DeEvidence));
+    Assert.False(features.IsEnabled(AppFeature.EsEvidence));
+    Assert.False(features.IsEnabled(AppFeature.ChEvidence));
+  }
+
+  [Fact]
+  public void RegionOff_DisablesAllInRegion() {
+    var features = new FeatureSettings();
+    features.SetRegion(AppRegion.Italy, false);
+    Assert.False(features.IsEnabled(AppFeature.PecEnvelope));
+    Assert.False(features.IsEnabled(AppFeature.PecPresets));
+    Assert.False(features.IsEnabled(AppFeature.FatturaPa));
+    Assert.False(features.IsEnabled(AppFeature.Fascicolo));
+    Assert.False(features.RegionEnabled(AppRegion.Italy));
+    Assert.True(features.IsEnabled(AppFeature.RemEvidence));
+  }
+
+  [Fact]
+  public void EnsureDefaults_WiresFeatureGateFromCatalog() {
+    var previous = FeatureGate.Current;
+    try {
+      var configuration = new Configuration();
+      configuration.EnsureDefaults();
+      Assert.True(configuration.Features.IsEnabled(AppFeature.PecEnvelope));
+      Assert.False(configuration.Features.IsEnabled(AppFeature.FrEvidence));
+    }
+    finally {
+      FeatureGate.Use(previous);
     }
   }
 }

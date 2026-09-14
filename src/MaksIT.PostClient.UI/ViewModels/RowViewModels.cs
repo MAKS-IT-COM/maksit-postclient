@@ -33,6 +33,7 @@ public sealed class ChoiceRow {
 
   public static IReadOnlyList<ChoiceRow> Providers { get; } = [
     new() { Id = MailProvider.Imap, Title = "IMAP / POP3" },
+    new() { Id = MailProvider.Pst, Title = "Outlook data file (PST/OST)" },
     new() { Id = MailProvider.Gmail, Title = "Gmail" },
     new() { Id = MailProvider.Outlook, Title = "Outlook / Microsoft 365" },
     new() { Id = MailProvider.Aruba, Title = "IT PEC — Aruba" },
@@ -55,6 +56,34 @@ public sealed class ChoiceRow {
   public static ChoiceRow Provider(string? id) =>
     Providers.FirstOrDefault(p => p.Id == MailProvider.Normalize(id))
     ?? Providers[0];
+
+  public static IReadOnlyList<ChoiceRow> CertifiedKinds =>
+    [
+      new() { Id = MailCertifiedKind.Ordinary, Title = UiLocale.Copy.CertifiedOrdinary },
+      new() { Id = MailCertifiedKind.Pec, Title = UiLocale.Copy.CertifiedPec },
+      new() { Id = MailCertifiedKind.Rem, Title = UiLocale.Copy.CertifiedRem }
+    ];
+
+  public static ChoiceRow Certified(string? id) =>
+    CertifiedKinds.FirstOrDefault(p => p.Id == MailCertifiedKind.Normalize(id))
+    ?? CertifiedKinds[0];
+
+  public static IReadOnlyList<ChoiceRow> ProvidersFor(FeatureSettings features, string? keepId = null) {
+    features ??= new FeatureSettings();
+    var rows = Providers.Where(p => {
+      if (p.Id is MailProvider.Imap or MailProvider.Pst or MailProvider.Gmail or MailProvider.Outlook)
+        return true;
+      if (MailProvider.IsRemPreset(p.Id))
+        return features.IsEnabled(AppFeature.RemPresets);
+      if (MailProvider.IsItalianPec(p.Id))
+        return features.IsEnabled(AppFeature.PecPresets);
+      return true;
+    }).ToList();
+    var keep = Provider(keepId);
+    if (rows.All(p => p.Id != keep.Id))
+      rows.Add(keep);
+    return rows;
+  }
 }
 
 

@@ -110,8 +110,11 @@ public sealed class ImapMailSession : IMailSession {
   public Task<Result<MailFolderSync>> ListMessagesAsync(
     string folder,
     IReadOnlySet<uint>? knownIds = null,
-    CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => ListMessagesCoreAsync(folder, knownIds, cancellationToken), cancellationToken);
+    CancellationToken cancellationToken = default,
+    int itemBudget = 0) {
+    _ = itemBudget;
+    return _io.RunAsync(() => ListMessagesCoreAsync(folder, knownIds, cancellationToken), cancellationToken);
+  }
 
   private async Task<Result<MailFolderSync>> ListMessagesCoreAsync(
     string folder,
@@ -404,6 +407,54 @@ public sealed class ImapMailSession : IMailSession {
         ? client.GetFolder(client.PersonalNamespaces[0])
         : await client.GetFolderAsync(parentFolder, cancellationToken).ConfigureAwait(false);
       await parent.CreateAsync(leaf, true, cancellationToken).ConfigureAwait(false);
+      return Result.Ok();
+    }
+    catch (Exception ex) {
+      return Result.UnprocessableEntity(ex.Message);
+    }
+  }
+
+  public Task<Result> RenameFolderAsync(
+    string folder,
+    string? parentFolder,
+    string name,
+    CancellationToken cancellationToken = default) =>
+    _io.RunAsync(() => RenameFolderCoreAsync(folder, parentFolder, name, cancellationToken), cancellationToken);
+
+  private async Task<Result> RenameFolderCoreAsync(
+    string folder,
+    string? parentFolder,
+    string name,
+    CancellationToken cancellationToken) {
+    var client = RequireImap();
+    if (client is null)
+      return Result.UnprocessableEntity("Not connected.");
+    if (string.IsNullOrWhiteSpace(folder))
+      return Result.BadRequest("Folder is required.");
+    if (MailFolderRole.IsSystemKind(MailFolderRole.Kind(null, folder)))
+      return Result.BadRequest("System folders cannot be moved.");
+    var leaf = string.IsNullOrWhiteSpace(name) ? MailFolderPath.Leaf(folder) : name.Trim();
+    if (leaf.Length == 0)
+      return Result.BadRequest("Folder name is required.");
+    if (leaf.IndexOfAny(['/', '\\']) >= 0)
+      return Result.BadRequest("Folder name cannot contain slashes.");
+
+    try {
+      var imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      if (imapFolder.IsNamespace || imapFolder.Attributes.HasFlag(FolderAttributes.Inbox))
+        return Result.BadRequest("System folders cannot be moved.");
+      if (MailFolderPath.IsSelfOrUnder(parentFolder, folder))
+        return Result.BadRequest("A folder cannot be moved into itself.");
+      if (imapFolder.IsOpen)
+        await imapFolder.CloseAsync(false, cancellationToken).ConfigureAwait(false);
+      await OpenReadOnlyAsync(client.Inbox, cancellationToken).ConfigureAwait(false);
+      imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      if (imapFolder.IsOpen)
+        await imapFolder.CloseAsync(false, cancellationToken).ConfigureAwait(false);
+      var parent = string.IsNullOrWhiteSpace(parentFolder)
+        ? client.GetFolder(client.PersonalNamespaces[0])
+        : await client.GetFolderAsync(parentFolder, cancellationToken).ConfigureAwait(false);
+      await imapFolder.RenameAsync(parent, leaf, cancellationToken).ConfigureAwait(false);
       return Result.Ok();
     }
     catch (Exception ex) {

@@ -40,7 +40,8 @@ public static class MailArchiveMap {
       EnvelopeTipo = row.EnvelopeTipo,
       MessageId = row.MessageId,
       InReplyTo = row.InReplyTo,
-      Labels = row.Labels
+      Labels = row.Labels,
+      DeliveryStatus = ReceiptStatus.FromTipo(row.EnvelopeTipo)
     };
 
   public static string BodyText(MailMessageBody body, bool unwrap) {
