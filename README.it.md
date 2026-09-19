@@ -73,11 +73,11 @@ Si possono usare più caselle insieme. I profili compilano host e porte:
 | IT PEC — Libero | `mail.postacert.it.net` |
 | EU — Intesi Group | `imap.ig-trustmail.com` / `smtp.ig-trustmail.com` |
 | IMAP / POP3 | Qualunque host indicato dall’operatore. Imposta il **tipo di casella** su PEC italiana o REM UE se quella casella è certificata (anche con dominio personalizzato) |
-| File dati (`.pst` / `.ost`) | Store locale aperto come casella. Il `.pst` Unicode è scrivibile; `.ost` / `.pst` ANSI viene copiato in un `.pst` Unicode alla prima scrittura. Senza password. |
+| Archivio locale | Cartella su disco (`postclient.store.json` + `mail.db` + `.eml`). Senza password e senza SMTP. Crea, collega, sposta o sgancia dal menu File. |
 
 Le caselle IMAP certificate usano la password del gestore, o una password per le app se c’è il 2FA. **AR24** (Francia), **De-Mail** (Germania), **IncaMail** (Svizzera) e **Lleida** (Spagna) di solito **non** sono IMAP. Se l’operatore ha dato host IMAP/POP3, scegli **IMAP / POP3**. Altrimenti questa applicazione non apre quella casella; può comunque mostrare l’evidenza ETSI REM su messaggi importati come `.eml`.
 
-OAuth: client ID Google (termina con `.apps.googleusercontent.com`) e, per client **Web**, il **client secret** — entrambi in Impostazioni account (il secret sta in `secrets.bin`, non come password della casella). I client pubblici Desktop non richiedono secret. Variabili `POSTCLIENT_GOOGLE_CLIENT_ID` / `POSTCLIENT_GOOGLE_CLIENT_SECRET`. Abilitare le **API Gmail**, lo scope `https://mail.google.com/`, il loopback `http://127.0.0.1` e **IMAP** in Gmail. Microsoft: ID applicazione Azure (GUID); client pubblico; redirect `http://localhost`; permessi IMAP/SMTP.
+Gmail e Microsoft 365 accedono tramite **Identity Hub** (`https://identity.maks-it.com`). Impostazioni account apre `/desktop-login?provider=Google` o `Microsoft`. Il JWT Hub e il refresh token restano in `secrets.bin`; IMAP usa un mailbox-token a breve scadenza (XOAUTH2). All’avvio il client rinnova la sessione Hub da quel refresh token, così Gmail e Outlook restano collegati dopo la chiusura. Se una build precedente ha salvato solo il JWT, accedi di nuovo da Impostazioni account. Override: `POSTCLIENT_IDENTITY_HUB`. La password resta valida per PEC e IMAP generico.
 
 Password e token OAuth stanno accanto alle impostazioni (`DPAPI` su Windows, mode `600` su Linux/macOS), mai in `settings.json`.
 
@@ -120,7 +120,7 @@ Le notifiche del sistema segnalano nuove PEC, ricevute e REM (toast Windows, not
 
 ## Lettura, cartelle, composizione
 
-- L’albero segue il server (Posta in arrivo, Ricevute, Bozze, Inviata, Archivio, Indesiderata, Cestino, più cartelle personalizzate). Le cartelle di sistema non si eliminano. Si può creare una cartella, svuotarla (nel Cestino, o in modo definitivo nel Cestino), segnare tutto letto/non letto, eliminare una cartella personalizzata, trascinare i messaggi su una cartella.
+- L’albero segue il server (Posta in arrivo, Ricevute, Bozze, Inviata, Archivio, Indesiderata, Cestino, più cartelle personalizzate). I percorsi IMAP nidificati sono cartelle nidificate, comprese le etichette Gmail `[Gmail]/…` sotto `[Gmail]`. Bozze, Inviata e Cestino che il server chiama `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` stanno accanto a Posta in arrivo, non sotto. Gmail usa `/` come separatore: un’etichetta come `P.IVA` resta una sola cartella. Le cartelle di sistema non si eliminano. Si può creare una cartella, svuotarla (nel Cestino, o in modo definitivo nel Cestino), segnare tutto letto/non letto, eliminare una cartella personalizzata, trascinare i messaggi su una cartella. Quali account e cartelle nidificate sono aperti o chiusi resta in `settings.json`.
 - Colonne elenco: non letto, stella, allegati, consegna, tipo (PEC / RIC / REM / SIG), da, oggetto, data (locale `yyyy-MM-dd HH:mm`), etichetta di pratica.
 - Vista: HTML (motore web del sistema), testo, sorgente, o **FatturaPA**. Disposizione: elenco sopra la lettura, oppure tre colonne (cartelle, elenco, lettura).
 - **Raggruppa conversazioni** indenta le risposte nell’elenco (Message-ID / In-Reply-To / References, profondità massima 8). Le ricevute PEC dello stesso originale stanno insieme. Non c’è un riquadro conversazioni separato.
@@ -163,9 +163,10 @@ La **QUOTA** IMAP del gestore (se il server la espone) è in barra di stato. È 
 |--|--|
 | Importa EML | Originali nella cartella corrente |
 | Importa mbox | Store mbox locali da un profilo di posta da scrivania |
-| Importa `.pst` / `.ost` | Copia la posta dal file dati nell’account IMAP/POP3 **selezionato**. Gli store annidati nel file vengono importati anch’essi. Chiudi ogni programma che tiene il file aperto. |
-| Collega file dati | Apre un `.pst` / `.ost` come casella. Il `.pst` Unicode è scrivibile. L’`.ost` non si scrive in loco: la prima modifica lo copia in un `.pst` Unicode accanto all’originale. Menu File o tipo account *file dati*. |
-| Nuovo file dati | Menu File: crea un `.pst` Unicode vuoto (Posta in arrivo, Bozze, Inviata, Cestino) e lo collega come casella. |
+| Importa `.pst` / `.ost` | Copia la posta Outlook **in un archivio cartella** (percorso proposto sotto `stores/` nei dati app). Un secondo import nello stesso archivio salta i duplicati per Message-ID. |
+| Nuovo archivio | Menu File: cartella vuota con `postclient.store.json` e `mail.db`. |
+| Collega archivio | Menu File: cartella che ha già `postclient.store.json`. |
+| Conservazione | **Impostazioni → Conservazione…**: giorni per cartella (`0` = per sempre). I messaggi più vecchi si eliminano in modo permanente. |
 | Regole | **Impostazioni → Regole**: **Importa regole…** legge l’export JSON di questa app o un file `.rwz` legacy. **Esporta regole…** scrive JSON. Ogni regola è legata a una **casella**; la cartella di destinazione può stare su un’altra casella (anche un file dati collegato). Partono su Scarica messaggi, in import e da **Esegui tutte le regole**. |
 | Stampa | HTML leggibile del messaggio (eventualmente sbustato) |
 | Salva PDF | Lo stesso contenuto in PDF |

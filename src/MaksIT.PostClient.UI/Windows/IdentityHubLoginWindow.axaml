@@ -1,0 +1,20 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MaksIT.PostClient.UI.Windows.IdentityHubLoginWindow"
+        Title="Identity Hub"
+        Icon="/Assets/icon.ico"
+        Width="920"
+        Height="720"
+        MinWidth="640"
+        MinHeight="480"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel>
+    <TextBlock x:Name="StatusText"
+               DockPanel.Dock="Top"
+               Classes="hint"
+               Margin="12,8"
+               TextWrapping="Wrap"
+               Text="Waiting for Identity Hub… keep this window open until it closes itself." />
+    <NativeWebView x:Name="HubWeb" />
+  </DockPanel>
+</Window>

@@ -6,6 +6,12 @@ public sealed class OAuthTokenSet {
 
   public string Email { get; set; } = "";
 
+  public string HubToken { get; set; } = "";
+
+  public string HubRefreshToken { get; set; } = "";
+
+  public DateTimeOffset HubExpires { get; set; }
+
   public string AccessToken { get; set; } = "";
 
   public string RefreshToken { get; set; } = "";

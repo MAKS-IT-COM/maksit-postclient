@@ -9,7 +9,8 @@
         Width="1280"
         Height="860"
         MinWidth="960"
-        MinHeight="640">
+        MinHeight="640"
+        KeyDown="OnWindowKeyDown">
   <DockPanel LastChildFill="True">
     <Border DockPanel.Dock="Bottom" Padding="8,5" Background="#15171a">
       <Grid ColumnDefinitions="*,Auto">
@@ -17,7 +18,6 @@
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
           <TextBlock Text="{Binding SemanticLine}" Classes="hint" />
           <TextBlock Text="{Binding IndexLine}" Classes="hint" />
-          <TextBlock Text="{Binding QuotaLine}" Classes="hint" />
           <TextBlock Text="{Binding FolderStats}" Classes="hint" />
         </StackPanel>
       </Grid>
@@ -38,14 +38,12 @@
         <MenuItem Header="{Binding Copy.ImportEml}" Command="{Binding ImportEmlCommand}" />
         <MenuItem Header="{Binding Copy.ImportThunderbird}" Command="{Binding ImportThunderbirdCommand}" />
         <MenuItem Header="{Binding Copy.ImportPst}" Command="{Binding ImportPstCommand}" />
-        <MenuItem Header="{Binding Copy.AttachPst}" Command="{Binding AttachPstCommand}" />
-        <MenuItem Header="{Binding Copy.CreatePst}" Command="{Binding CreatePstCommand}" />
+        <MenuItem Header="{Binding Copy.CreateStore}" Command="{Binding CreatePstCommand}" />
+        <MenuItem Header="{Binding Copy.AttachStore}" Command="{Binding AttachPstCommand}" />
+        <MenuItem Header="{Binding Copy.MoveStore}" Command="{Binding MoveStoreCommand}" />
         <Separator />
         <MenuItem Header="{Binding Copy.OpenArchiveFolder}" Command="{Binding OpenArchiveFolderCommand}" />
         <MenuItem Header="{Binding Copy.ExportArchive}" Command="{Binding ExportArchiveCommand}" />
-        <Separator />
-        <MenuItem Header="{Binding Copy.CheckUpdates}" Command="{Binding CheckForUpdatesCommand}" />
-        <MenuItem Header="{Binding Copy.About}" Command="{Binding ShowAboutCommand}" />
         <Separator />
         <MenuItem Header="{Binding Copy.Exit}" Click="OnExitClick" />
       </MenuItem>
@@ -127,7 +125,12 @@
         <Separator />
         <MenuItem Header="{Binding Copy.Rules}" Command="{Binding OpenRulesCommand}" />
         <MenuItem Header="{Binding Copy.SemanticSearch}" Command="{Binding OpenSemanticSearchCommand}" />
+        <MenuItem Header="{Binding Copy.Retention}" Command="{Binding OpenRetentionCommand}" />
         <MenuItem Header="{Binding Copy.Features}" Command="{Binding OpenFeaturesCommand}" />
+      </MenuItem>
+      <MenuItem Header="{Binding Copy.Help}">
+        <MenuItem Header="{Binding Copy.CheckUpdates}" Command="{Binding CheckForUpdatesCommand}" />
+        <MenuItem Header="{Binding Copy.About}" Command="{Binding ShowAboutCommand}" />
       </MenuItem>
     </Menu>
 
@@ -156,7 +159,7 @@
         <TextBlock DockPanel.Dock="Top" Text="{Binding Copy.Folders}" Classes="kicker" Margin="12,10,12,6" />
         <TreeView x:Name="FolderTree"
                   ItemsSource="{Binding FolderTree}"
-                  SelectedItem="{Binding SelectedFolderNode, Mode=TwoWay}"
+                  SelectionMode="Multiple"
                   SelectionChanged="OnFolderTreeSelectionChanged"
                   ContextRequested="OnFolderTreeContextRequested"
                   DragDrop.AllowDrop="True"
@@ -181,8 +184,11 @@
               <MenuItem Header="{Binding Copy.DeleteFolder}"
                         Command="{Binding DeleteCustomFolderCommand}"
                         IsVisible="{Binding ShowFolderContext}" />
-              <MenuItem Header="{Binding Copy.DetachPst}"
+              <MenuItem Header="{Binding Copy.DetachStore}"
                         Command="{Binding DetachPstCommand}"
+                        IsVisible="{Binding ShowDetachPst}" />
+              <MenuItem Header="{Binding Copy.MoveStore}"
+                        Command="{Binding MoveStoreCommand}"
                         IsVisible="{Binding ShowDetachPst}" />
             </MenuFlyout>
           </TreeView.ContextFlyout>
@@ -192,11 +198,17 @@
                 <TextBlock Text="{Binding Glyph}"
                            FontSize="12"
                            VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1"
-                           Text="{Binding Title}"
-                           FontWeight="{Binding Weight}"
-                           TextTrimming="CharacterEllipsis"
-                           VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Title}"
+                             FontWeight="{Binding Weight}"
+                             TextTrimming="CharacterEllipsis"
+                             ToolTip.Tip="{Binding QuotaTip}" />
+                  <ProgressBar Height="3"
+                               Minimum="0"
+                               Maximum="100"
+                               Value="{Binding QuotaPercent}"
+                               IsVisible="{Binding ShowQuota}" />
+                </StackPanel>
                 <TextBlock Grid.Column="2"
                            Text="{Binding UnreadLabel}"
                            Classes="unread-count"
@@ -238,7 +250,7 @@
           </Border>
           <DataGrid x:Name="MessagesGrid"
                     ItemsSource="{Binding VisibleMessages}"
-                    SelectedItem="{Binding SelectedMessage}"
+                    SelectedItem="{Binding SelectedMessage, Mode=OneWayToSource}"
                     SelectionMode="Extended"
                     AutoGenerateColumns="False"
                     IsReadOnly="True"

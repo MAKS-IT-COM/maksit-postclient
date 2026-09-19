@@ -14,6 +14,12 @@ public static class ArchiveFiles {
     return Path.Combine(dir, uid + ".eml");
   }
 
+  public static string StoreEmlPath(string mailRoot, string folder, uint uid) {
+    var dir = MailArchiveLayout.FolderDirectory(mailRoot, folder);
+    Directory.CreateDirectory(dir);
+    return Path.Combine(dir, uid + ".eml");
+  }
+
   public static string Hint() =>
     UiLocale.Copy.ArchivePathHint(AppPaths.DataDirectory());
 

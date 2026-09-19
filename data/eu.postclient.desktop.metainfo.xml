@@ -30,6 +30,16 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.0" date="2026-09-19">
+      <description>
+        <p>Folder stores replace attached Outlook data files. Gmail and Microsoft sign-in go through Identity Hub. Per-folder retention, multi-select, and IMAP/OAuth reliability fixes.</p>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-09-14">
+      <description>
+        <p>On-device meaning search, Outlook data files as mailboxes, rules, extra UI languages, and country packs.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-09-13">
       <description>
         <p>First packaging slice: self-contained Windows setup and Linux Flatpak. Product name is a placeholder until the public sign is registered.</p>

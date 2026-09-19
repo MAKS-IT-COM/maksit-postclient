@@ -11,9 +11,11 @@
 
   <ItemGroup>
     <PackageReference Include="MailKit" Version="4.17.0" />
-    <PackageReference Include="MaksIT.Core" Version="1.6.8" />
+    <PackageReference Include="MaksIT.Core" Version="1.6.9" />
+    <PackageReference Include="MaksIT.IdentityHub.Client" Version="2.0.1" />
     <PackageReference Include="MaksIT.Results" Version="2.0.4" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.11" />
     <PackageReference Include="OfficeIMO.Email" Version="3.4.3" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />

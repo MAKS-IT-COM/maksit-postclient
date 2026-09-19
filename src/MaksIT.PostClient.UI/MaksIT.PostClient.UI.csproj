@@ -18,7 +18,7 @@
     <PackageReference Include="Avalonia.Themes.Simple" Version="12.1.2" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="MaksIT.Core" Version="1.6.8" />
+    <PackageReference Include="MaksIT.Core" Version="1.6.9" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />

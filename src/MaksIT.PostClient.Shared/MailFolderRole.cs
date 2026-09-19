@@ -11,6 +11,7 @@ public static class MailFolderRole {
       "archives" => 4,
       "junk" => 5,
       "trash" => 6,
+      "namespace" => 8,
       _ => 100
     };
 
@@ -36,12 +37,15 @@ public static class MailFolderRole {
       "trash" => copy.Trash,
       "archives" => copy.Archive,
       "receipts" => copy.Receipts,
-      _ => string.IsNullOrWhiteSpace(name) ? Leaf(fullName) : name
+      "namespace" => NamespaceTitle(name, fullName),
+      _ => CustomDisplayName(name, fullName)
     };
   }
 
   public static string Kind(string? name, string? fullName) {
-    var leaf = Leaf(fullName);
+    if (IsNamespace(name, fullName))
+      return "namespace";
+    var leaf = MailFolderPath.Leaf(fullName);
     if (Matches(
       name,
       fullName,
@@ -106,33 +110,48 @@ public static class MailFolderRole {
   }
 
   public static bool IsSystemKind(string? kind) =>
-    kind is "inbox" or "receipts" or "drafts" or "sent" or "archives" or "junk" or "trash";
+    kind is "inbox" or "receipts" or "drafts" or "sent" or "archives" or "junk" or "trash" or "namespace";
 
   public static bool IsCustom(string? name, string? fullName) {
     if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(fullName))
       return false;
-    if (IsHidden(name, fullName))
+    if (IsHidden(name, fullName) || IsNamespace(name, fullName))
       return false;
     return !IsSystemKind(Kind(name, fullName));
   }
 
-  public static bool IsHidden(string? name, string? fullName) {
-    if (IsNamespace(name, fullName))
-      return true;
-    return Kind(name, fullName) is "all" or "flagged" or "important";
+  public static bool CanHoldFolders(string? name, string? fullName) =>
+    IsNamespace(name, fullName) || IsCustom(name, fullName);
+
+  public static string? DisplayParent(
+    string? name,
+    string? fullName,
+    IEnumerable<string> known,
+    MailFolderLayout layout,
+    char hinted = '\0') {
+    ArgumentNullException.ThrowIfNull(layout);
+    var parent = MailFolderPath.TreeParent(fullName, known, layout.Separator(fullName, hinted));
+    if (string.IsNullOrWhiteSpace(parent))
+      return null;
+    if (!layout.LiftSystemFoldersOffInbox || Kind(null, parent) != "inbox")
+      return parent;
+    var kind = Kind(name, fullName);
+    if (kind.Length > 0 && kind != "inbox" && IsSystemKind(kind))
+      return null;
+    return parent;
   }
 
-  public static bool IsNamespace(string? name, string? fullName) =>
-    Eq(name, "[Gmail]")
-    || Eq(name, "[Google Mail]")
-    || Eq(fullName, "[Gmail]")
-    || Eq(fullName, "[Google Mail]");
+  public static bool IsHidden(string? name, string? fullName) =>
+    Kind(name, fullName) is "all" or "flagged" or "important";
 
-  public static bool IsGmailPath(string? fullName) {
-    var value = (fullName ?? "").Trim();
-    return value.StartsWith("[Gmail]", StringComparison.OrdinalIgnoreCase)
-      || value.StartsWith("[Google Mail]", StringComparison.OrdinalIgnoreCase);
+  public static bool IsNamespace(string? name, string? fullName) {
+    var leaf = MailFolderPath.Normalize(name);
+    var path = MailFolderPath.Normalize(fullName);
+    return IsReservedMailbox(leaf) || IsReservedMailbox(path);
   }
+
+  public static bool IsGmailPath(string? fullName) =>
+    MailFolderPath.IsGmailMailbox(fullName);
 
   public static bool PreferOver(string? candidateFullName, string? currentFullName) {
     var gmailCandidate = IsGmailPath(candidateFullName);
@@ -140,12 +159,24 @@ public static class MailFolderRole {
     return gmailCandidate && !gmailCurrent;
   }
 
-  private static string Leaf(string? fullName) {
-    var value = fullName ?? "";
-    var slash = value.LastIndexOf('/');
-    var dot = value.LastIndexOf('.');
-    var i = Math.Max(slash, dot);
-    return i < 0 ? value : value[(i + 1)..];
+  private static string NamespaceTitle(string? name, string? fullName) {
+    var path = MailFolderPath.Normalize(fullName);
+    if (IsReservedMailbox(path))
+      return path;
+    var leaf = MailFolderPath.Normalize(name);
+    return IsReservedMailbox(leaf) ? leaf : "[Gmail]";
+  }
+
+  private static bool IsReservedMailbox(string? value) =>
+    Eq(value, "[Gmail]")
+    || Eq(value, "[Google Mail]")
+    || Eq(value, "[GoogleMail]");
+
+  private static string CustomDisplayName(string? name, string? fullName) {
+    var leaf = MailFolderPath.Leaf(fullName);
+    if (!string.IsNullOrWhiteSpace(leaf))
+      return leaf;
+    return (name ?? "").Trim();
   }
 
   private static bool Matches(string? name, string? fullName, string leaf, params string[] aliases) {

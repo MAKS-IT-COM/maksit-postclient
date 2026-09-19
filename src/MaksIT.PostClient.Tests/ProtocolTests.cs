@@ -70,6 +70,13 @@ public class MailSessionFactoryTests {
       new MailboxAccount { IncomingProtocol = MailProtocol.Pst, Provider = MailProvider.Pst });
     Assert.IsType<PstMailSession>(session);
   }
+
+  [Fact]
+  public void Create_LocalStore() {
+    var session = new MailSessionFactory(new FakeMailAuth()).Create(
+      new MailboxAccount { IncomingProtocol = MailProtocol.Store, Provider = MailProvider.Store });
+    Assert.IsType<LocalStoreSession>(session);
+  }
 }
 
 
@@ -108,6 +115,23 @@ file sealed class FakeMailAuth : IMailAuthService {
     _ = mailboxId;
     return false;
   }
+
+  public string DesktopLoginUrl(string authKind) =>
+    IdentityHubAddress.DesktopLoginUrl(authKind);
+
+  public Result<OAuthTokenSet> CompleteHubSignIn(string json, string authKind) {
+    _ = json;
+    _ = authKind;
+    return Result<OAuthTokenSet>.BadRequest(null, "not used");
+  }
+
+  public Task<Result<OAuthTokenSet>> CompleteHubSignInAsync(
+    string json,
+    string authKind,
+    CancellationToken cancellationToken = default) {
+    _ = cancellationToken;
+    return Task.FromResult(CompleteHubSignIn(json, authKind));
+  }
 }
 
 
@@ -125,11 +149,12 @@ public class MailFolderCatalogTests {
       new MailFolderInfo { FullName = "[Gmail]/Drafts", Name = "Drafts" },
       new MailFolderInfo { FullName = "[Gmail]/Trash", Name = "Trash" },
       new MailFolderInfo { FullName = "[Gmail]/Spam", Name = "Spam" },
+      new MailFolderInfo { FullName = "[Gmail]/Allianz", Name = "[Gmail]/Allianz" },
       new MailFolderInfo { FullName = "Clients", Name = "Clients" }
     };
-    var rows = MailFolderCatalog.Normalize(folders);
+    var rows = MailFolderCatalog.Normalize(folders, MailFolderLayout.Gmail);
     var names = rows.Select(f => f.Name).ToList();
-    Assert.DoesNotContain("[Gmail]", names);
+    Assert.Contains("[Gmail]", names);
     Assert.DoesNotContain("All Mail", names);
     Assert.DoesNotContain("Starred", names);
     Assert.DoesNotContain("Important", names);
@@ -141,6 +166,40 @@ public class MailFolderCatalogTests {
     Assert.Contains("Trash", names);
     Assert.Contains("Junk", names);
     Assert.Contains("Clients", names);
+    Assert.Equal("Allianz", rows.Single(f => f.FullName == "[Gmail]/Allianz").Name);
+  }
+
+  [Fact]
+  public void Normalize_KeepsGmailLabelDots() {
+    var folders = new[] {
+      new MailFolderInfo { FullName = "INBOX", Name = "INBOX", Kind = "inbox", Delimiter = '/' },
+      new MailFolderInfo { FullName = "[Gmail]/Sent Mail", Name = "Sent Mail", Delimiter = '/' },
+      new MailFolderInfo { FullName = "P.IVA", Name = "P.IVA", Delimiter = '/' },
+      new MailFolderInfo { FullName = "P.IVA/2024", Name = "2024", Delimiter = '/' }
+    };
+    var rows = MailFolderCatalog.Normalize(folders, MailFolderLayout.Gmail);
+    Assert.DoesNotContain(rows, f => f.FullName == "P");
+    Assert.Equal("P.IVA", rows.Single(f => f.FullName == "P.IVA").Name);
+    Assert.Equal("P.IVA", MailFolderPath.TreeParent(
+      "P.IVA/2024",
+      rows.Select(f => f.FullName)));
+    Assert.Null(MailFolderPath.TreeParent("P.IVA", rows.Select(f => f.FullName)));
+  }
+
+  [Fact]
+  public void Normalize_InsertsMissingImapParents() {
+    var folders = new[] {
+      new MailFolderInfo { FullName = "INBOX", Name = "INBOX", Kind = "inbox" },
+      new MailFolderInfo { FullName = "[Gmail]/PayPal", Name = "PayPal" },
+      new MailFolderInfo { FullName = "[Gmail]/Sent Mail", Name = "Sent Mail" },
+      new MailFolderInfo { FullName = "Auto-doc", Name = "Auto-doc" }
+    };
+    var rows = MailFolderCatalog.Normalize(folders, MailFolderLayout.Gmail);
+    Assert.Contains(rows, f => f.FullName == "[Gmail]" && f.Name == "[Gmail]");
+    Assert.Equal("[Gmail]", MailFolderPath.TreeParent(
+      "[Gmail]/PayPal",
+      rows.Select(f => f.FullName)));
+    Assert.Null(MailFolderPath.TreeParent("Auto-doc", rows.Select(f => f.FullName)));
   }
 
   [Fact]
@@ -152,6 +211,36 @@ public class MailFolderCatalogTests {
     Assert.Equal("Inbox", row.Name);
     Assert.Equal(4, row.Unread);
     Assert.Equal(20, row.Total);
+  }
+
+  [Fact]
+  public void Normalize_PecKeepsInboxDotFoldersAndNamedStarred() {
+    var folders = new[] {
+      new MailFolderInfo { FullName = "INBOX", Name = "INBOX", Kind = "inbox", Delimiter = '.' },
+      new MailFolderInfo { FullName = "INBOX.Drafts", Name = "Drafts", Delimiter = '.' },
+      new MailFolderInfo { FullName = "INBOX.Sent", Name = "Sent", Delimiter = '.' },
+      new MailFolderInfo { FullName = "INBOX.Trash", Name = "Trash", Delimiter = '.' },
+      new MailFolderInfo { FullName = "INBOX.Starred", Name = "Starred", Delimiter = '.' },
+      new MailFolderInfo { FullName = "INBOX.Clients", Name = "Clients", Delimiter = '.' }
+    };
+    var rows = MailFolderCatalog.Normalize(folders, MailFolderLayout.Pec);
+    Assert.DoesNotContain(rows, f => MailFolderPath.IsGmailMailbox(f.FullName));
+    Assert.Contains(rows, f => f.FullName == "INBOX.Drafts");
+    Assert.Contains(rows, f => f.FullName == "INBOX.Starred");
+    Assert.Contains(rows, f => f.FullName == "INBOX.Clients");
+    var names = rows.Select(f => f.FullName).ToList();
+    Assert.Null(MailFolderRole.DisplayParent("Drafts", "INBOX.Drafts", names, MailFolderLayout.Pec, '.'));
+    Assert.Equal("INBOX", MailFolderRole.DisplayParent("Clients", "INBOX.Clients", names, MailFolderLayout.Pec, '.'));
+  }
+
+  [Fact]
+  public void Normalize_ImapDoesNotHideAllMailByGmailRules() {
+    var folders = new[] {
+      new MailFolderInfo { FullName = "INBOX", Name = "INBOX", Kind = "inbox" },
+      new MailFolderInfo { FullName = "All Mail", Name = "All Mail" }
+    };
+    var rows = MailFolderCatalog.Normalize(folders, MailFolderLayout.Imap);
+    Assert.Contains(rows, f => f.FullName == "All Mail");
   }
 }
 
@@ -380,6 +469,32 @@ public class PstSubjectTests {
   [Fact]
   public void Display_LeavesPlainSubject() =>
     Assert.Equal("Ciao", PstSubject.Display("Ciao"));
+}
+
+
+public class ImapFetchPolicyTests {
+  [Fact]
+  public void ExtraHeaders_SkippedForGmailAndOutlook() {
+    Assert.Null(ImapFetchPolicy.ExtraHeaders(MailProvider.Gmail));
+    Assert.Null(ImapFetchPolicy.ExtraHeaders("hotmail"));
+    Assert.NotNull(ImapFetchPolicy.ExtraHeaders(MailProvider.Aruba));
+    Assert.NotNull(ImapFetchPolicy.ExtraHeaders(MailProvider.Imap));
+  }
+
+  [Fact]
+  public void PreferComplete_KeepsEnvelopeOverFlagsOnly() {
+    Assert.False(ImapFetchPolicy.PreferComplete(false, true, false, true));
+    Assert.True(ImapFetchPolicy.PreferComplete(true, false, true, false));
+    Assert.True(ImapFetchPolicy.PreferComplete(true, true, true, true));
+  }
+
+  [Fact]
+  public void IsInboxPath_MatchesHotmailInboxNames() {
+    Assert.True(ImapFetchPolicy.IsInboxPath("INBOX"));
+    Assert.True(ImapFetchPolicy.IsInboxPath("Inbox"));
+    Assert.False(ImapFetchPolicy.IsInboxPath("Sent"));
+    Assert.False(ImapFetchPolicy.IsInboxPath("Deleted Items"));
+  }
 }
 
 

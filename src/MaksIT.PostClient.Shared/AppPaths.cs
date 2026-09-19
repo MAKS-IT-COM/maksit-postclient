@@ -71,8 +71,49 @@ public static class AppPaths {
   public static string ObjectsDirectory() =>
     Path.Combine(DataDirectory(), "objects");
 
+  public static string StoresDirectory() =>
+    Path.Combine(DataDirectory(), "stores");
+
+  public static string AccountsDirectory() =>
+    Path.Combine(DataDirectory(), "accounts");
+
   public static string ArchiveDatabase() =>
     Path.Combine(DataDirectory(), "mail.db");
+
+  public static string AccountDatabase(string mailboxId) =>
+    Path.Combine(AccountsDirectory(), mailboxId, "mail.db");
+
+  public static string WorkerPipeName() =>
+    ProductId + "-worker-" + Environment.ProcessId;
+
+  public static string ProposedStoreDirectory(string? sourcePath) {
+    var stem = string.IsNullOrWhiteSpace(sourcePath)
+      ? "Mail"
+      : Path.GetFileNameWithoutExtension(sourcePath.Trim());
+    if (string.IsNullOrWhiteSpace(stem))
+      stem = "Mail";
+    foreach (var c in Path.GetInvalidFileNameChars())
+      stem = stem.Replace(c, '_');
+    return UniqueStoreDirectory(stem);
+  }
+
+  public static string UniqueStoreDirectory(string stem) {
+    Directory.CreateDirectory(StoresDirectory());
+    var root = Path.Combine(StoresDirectory(), stem);
+    if (!Directory.Exists(root) && !File.Exists(root))
+      return root;
+    if (Directory.Exists(root) && LocalStoreSidecar.TryRead(root) is not null)
+      return root;
+    for (var i = 2; i < 10_000; i++) {
+      var next = Path.Combine(StoresDirectory(), stem + "-" + i);
+      if (!Directory.Exists(next) && !File.Exists(next))
+        return next;
+      if (Directory.Exists(next) && LocalStoreSidecar.TryRead(next) is not null)
+        return next;
+    }
+
+    return Path.Combine(StoresDirectory(), stem + "-" + Guid.NewGuid().ToString("N")[..8]);
+  }
 
   public static string ModelsDirectory() =>
     Path.Combine(DataDirectory(), "models");
@@ -96,6 +137,8 @@ public static class AppPaths {
     Directory.CreateDirectory(ConfigDirectory());
     Directory.CreateDirectory(DataDirectory());
     Directory.CreateDirectory(ObjectsDirectory());
+    Directory.CreateDirectory(StoresDirectory());
+    Directory.CreateDirectory(AccountsDirectory());
     Directory.CreateDirectory(ModelsDirectory());
     Directory.CreateDirectory(WebViewDirectory());
     Directory.CreateDirectory(LogsDirectory());

@@ -13,29 +13,33 @@ internal static class WebViewSetup {
     Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", AppPaths.WebViewDirectory());
   }
 
-  public static void Apply(WebViewEnvironmentRequestedEventArgs args) {
+  public static void Apply(WebViewEnvironmentRequestedEventArgs args, bool identityHub = false) {
     ArgumentNullException.ThrowIfNull(args);
-    var data = AppPaths.WebViewDirectory();
+    var data = identityHub
+      ? Path.Combine(AppPaths.WebViewDirectory(), "hub")
+      : AppPaths.WebViewDirectory();
     var cache = Path.Combine(data, "cache");
     Directory.CreateDirectory(data);
     Directory.CreateDirectory(cache);
     switch (args) {
       case WindowsWebView2EnvironmentRequestedEventArgs webView2:
         webView2.UserDataFolder = data;
-        webView2.ProfileName = AppPaths.ProductName;
+        webView2.ProfileName = identityHub ? "IdentityHub" : AppPaths.ProductName;
         break;
       case GtkWebViewEnvironmentRequestedEventArgs gtk:
         gtk.BaseDataDirectory = data;
         gtk.BaseCacheDirectory = cache;
         gtk.ExperimentalOffscreen = true;
-        gtk.ApplicationNameForUserAgent = AppPaths.ProductName;
+        if (!identityHub)
+          gtk.ApplicationNameForUserAgent = AppPaths.ProductName;
         break;
       case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe:
         wpe.DataDirectory = data;
         wpe.CacheDirectory = cache;
         break;
       case AppleWKWebViewEnvironmentRequestedEventArgs apple:
-        apple.ApplicationNameForUserAgent = AppPaths.ProductName;
+        if (!identityHub)
+          apple.ApplicationNameForUserAgent = AppPaths.ProductName;
         break;
     }
   }

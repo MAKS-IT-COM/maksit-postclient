@@ -30,6 +30,8 @@ public sealed class Configuration {
 
   public List<MailRule> Rules { get; set; } = [];
 
+  public List<FolderRetention> Retention { get; set; } = [];
+
   public void EnsureDefaults() {
     Mailboxes ??= [];
     foreach (var mailbox in Mailboxes) {
@@ -38,9 +40,11 @@ public sealed class Configuration {
       mailbox.IncomingProtocol = MailProtocol.NormalizeIncoming(mailbox.IncomingProtocol);
       mailbox.IncomingSecurity = MailSecurity.Normalize(mailbox.IncomingSecurity, mailbox.ImapSsl);
       mailbox.SmtpSecurity = MailSecurity.Normalize(mailbox.SmtpSecurity, mailbox.SmtpSsl);
+      if (mailbox.IsLocalStore && !mailbox.IsPstStore)
+        mailbox.Provider = MailProvider.Store;
       if (mailbox.IsPstStore)
         mailbox.Provider = MailProvider.Pst;
-      if (!mailbox.IsPstStore && mailbox.ImapPort <= 0)
+      if (!mailbox.IsLocalStore && mailbox.ImapPort <= 0)
         mailbox.ImapPort = MailSecurity.DefaultIncomingPort(mailbox.IncomingProtocol, mailbox.IncomingSecurity);
       if (mailbox.SmtpPort <= 0)
         mailbox.SmtpPort = MailSecurity.DefaultSmtpPort(mailbox.SmtpSecurity);
@@ -64,6 +68,13 @@ public sealed class Configuration {
     Semantic ??= new SemanticSearchSettings();
     Semantic.Normalize();
     Rules ??= [];
+    Retention ??= [];
+    foreach (var row in Retention) {
+      row.MailboxId ??= "";
+      row.Folder ??= "";
+      if (row.Days < 0)
+        row.Days = 0;
+    }
   }
 
   public MailboxAccount? FindMailbox(string? id) {

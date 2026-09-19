@@ -66,16 +66,6 @@
         <TextBox PlaceholderText="{Binding Copy.Address}" Text="{Binding EditorAddress}" />
         <TextBox PlaceholderText="{Binding Copy.Username}" Text="{Binding EditorUsername}" IsVisible="{Binding ShowServerFields}" />
         <TextBlock Text="{Binding OauthHint}" Classes="hint" TextWrapping="Wrap" IsVisible="{Binding ShowAuthHint}" />
-        <TextBox PlaceholderText="{Binding Copy.GoogleClientId}"
-                 Text="{Binding EditorGoogleClientId, UpdateSourceTrigger=PropertyChanged}"
-                 IsVisible="{Binding ShowGoogleSignIn}" />
-        <TextBox PlaceholderText="{Binding Copy.GoogleClientSecret}"
-                 PasswordChar="•"
-                 Text="{Binding EditorGoogleClientSecret, UpdateSourceTrigger=PropertyChanged}"
-                 IsVisible="{Binding ShowGoogleSignIn}" />
-        <TextBox PlaceholderText="{Binding Copy.MicrosoftClientId}"
-                 Text="{Binding EditorMicrosoftClientId, UpdateSourceTrigger=PropertyChanged}"
-                 IsVisible="{Binding ShowMicrosoftSignIn}" />
         <Button Content="{Binding Copy.SignInGoogle}"
                 Classes="mail-tool"
                 Command="{Binding SignInGoogleCommand}"
@@ -88,6 +78,24 @@
                  PasswordChar="•"
                  Text="{Binding EditorPassword}"
                  IsVisible="{Binding ShowPasswordFields}" />
+        <TextBlock Text="{Binding Copy.LocalStore}"
+                   Classes="kicker"
+                   IsVisible="{Binding ShowArchiveStore}" />
+        <Grid ColumnDefinitions="*,8,Auto" IsVisible="{Binding ShowArchiveStore}">
+          <ComboBox ItemsSource="{Binding ArchiveStoreChoices}"
+                    SelectedItem="{Binding EditorArchiveStore}"
+                    HorizontalAlignment="Stretch">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:ChoiceRow">
+                <TextBlock Text="{Binding Title}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button Grid.Column="2"
+                  Content="{Binding Copy.CreateStore}"
+                  Classes="mail-tool"
+                  Command="{Binding CreatePstCommand}" />
+        </Grid>
         <ComboBox ItemsSource="{Binding IncomingProtocols}"
                   SelectedItem="{Binding EditorIncomingProtocol}"
                   HorizontalAlignment="Stretch"

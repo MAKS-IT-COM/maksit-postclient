@@ -102,7 +102,8 @@ public sealed class PstMailSession : IMailSession {
           });
         }
 
-        return Task.FromResult(Result<IReadOnlyList<MailFolderInfo>>.Ok(MailFolderCatalog.Normalize(folders)));
+        return Task.FromResult(Result<IReadOnlyList<MailFolderInfo>>.Ok(
+          MailFolderCatalog.Normalize(folders, MailFolderLayout.Store)));
       }
       catch (Exception ex) {
         return Task.FromResult(Result<IReadOnlyList<MailFolderInfo>>.UnprocessableEntity(null, ex.Message));

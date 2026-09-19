@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Avalonia.Interactivity;
 using MaksIT.PostClient.Shared;
 using MaksIT.PostClient.UI.ViewModels;
 
@@ -48,6 +49,7 @@ internal sealed class LayoutPersistence {
     Track(_messages);
     Apply();
     TrackPane("MailGrid");
+    TrackFolderTree();
     _viewModel.PropertyChanged += OnViewModelPropertyChanged;
     _window.Resized += (_, _) => ScheduleSave();
     _window.PositionChanged += (_, _) => ScheduleSave();
@@ -92,6 +94,8 @@ internal sealed class LayoutPersistence {
         layout.ColumnOrder = order;
     }
 
+    layout.CollapsedFolders = CaptureCollapsed(layout);
+
     var snapshot = JsonSnapshot(layout);
     if (snapshot == _lastSaved)
       return;
@@ -121,6 +125,17 @@ internal sealed class LayoutPersistence {
     if (grid is not null)
       grid.LayoutUpdated += (_, _) => ScheduleSave();
   }
+
+  private void TrackFolderTree() {
+    var tree = _window.FindControl<TreeView>("FolderTree");
+    if (tree is null)
+      return;
+    tree.AddHandler(TreeViewItem.ExpandedEvent, OnFolderExpandChanged, RoutingStrategies.Bubble);
+    tree.AddHandler(TreeViewItem.CollapsedEvent, OnFolderExpandChanged, RoutingStrategies.Bubble);
+  }
+
+  private void OnFolderExpandChanged(object? sender, RoutedEventArgs e) =>
+    ScheduleSave();
 
   private void Track(DataGrid? grid) {
     if (grid is null)
@@ -343,6 +358,48 @@ internal sealed class LayoutPersistence {
     }
 
     return order;
+  }
+
+  private List<string> CaptureCollapsed(LayoutSettings layout) {
+    var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var loaded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var collapsed = new List<string>();
+    Walk(_viewModel.FolderTree);
+
+    var mailboxes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var box in _configuration.Current.Mailboxes)
+      mailboxes.Add(box.Id);
+
+    foreach (var key in layout.CollapsedFolders) {
+      if (string.IsNullOrWhiteSpace(key) || present.Contains(key))
+        continue;
+      var mailboxId = MailboxIdOf(key);
+      if (!mailboxes.Contains(mailboxId) || loaded.Contains(mailboxId))
+        continue;
+      collapsed.Add(key);
+    }
+
+    return collapsed;
+
+    void Walk(IEnumerable<FolderNodeViewModel> nodes) {
+      foreach (var node in nodes) {
+        var key = LayoutSettings.FolderTreeKey(node.Mailbox?.Id, node.Folder?.FullName);
+        if (key.Length > 0) {
+          present.Add(key);
+          if (!node.IsExpanded)
+            collapsed.Add(key);
+        }
+
+        if (node.IsAccount && node.Children.Count > 0 && node.Mailbox is { } box)
+          loaded.Add(box.Id);
+        Walk(node.Children);
+      }
+    }
+  }
+
+  private static string MailboxIdOf(string key) {
+    var at = key.IndexOf('\t');
+    return at < 0 ? key : key[..at];
   }
 
   private static string? ColumnKey(DataGridColumn column) =>

@@ -7,9 +7,9 @@ namespace MaksIT.PostClient.Client;
 
 
 public sealed class LocalMailImport {
-  private readonly MailArchiveStore _archive;
+  private readonly MailArchiveCatalog _archive;
 
-  public LocalMailImport(MailArchiveStore archive) {
+  public LocalMailImport(MailArchiveCatalog archive) {
     _archive = archive;
   }
 
@@ -89,6 +89,8 @@ public sealed class LocalMailImport {
       return false;
     await using var stream = new MemoryStream(eml, writable: false);
     var mime = await MimeMessage.LoadAsync(stream, cancellationToken).ConfigureAwait(false);
+    if (!string.IsNullOrWhiteSpace(mime.MessageId) && _archive.HasMessageId(mailboxId, mime.MessageId))
+      return false;
     var seen = true;
     var flagged = false;
     string? label = null;
@@ -106,8 +108,11 @@ public sealed class LocalMailImport {
 
     var body = await MimeBody.FromMimeAsync(folder, uid, mime, cancellationToken, seen: seen, flagged: flagged)
       .ConfigureAwait(false);
-    var path = ArchiveFiles.EmlPath(mailboxId, folder, uid);
-    await File.WriteAllBytesAsync(path, eml, cancellationToken).ConfigureAwait(false);
+    var path = session is IFileMailStore files
+      ? files.MessagePath(folder, uid)
+      : ArchiveFiles.EmlPath(mailboxId, folder, uid);
+    if (!File.Exists(path))
+      await File.WriteAllBytesAsync(path, eml, cancellationToken).ConfigureAwait(false);
     _archive.UpsertBody(
       mailboxId,
       MailArchiveMap.FromHeader(body.Header),

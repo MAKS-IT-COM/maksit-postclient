@@ -36,7 +36,12 @@ public sealed class FileSecretStore : ISecretStore {
       var map = Load();
       if (!map.TryGetValue(key, out var packed))
         return Result<string?>.Ok(null);
-      return Result<string?>.Ok(Unprotect(packed));
+      try {
+        return Result<string?>.Ok(Unprotect(packed));
+      }
+      catch (Exception ex) {
+        return Result<string?>.UnprocessableEntity(null, ex.Message);
+      }
     }
   }
 

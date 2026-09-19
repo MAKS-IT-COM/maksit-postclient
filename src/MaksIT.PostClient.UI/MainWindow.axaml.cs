@@ -33,6 +33,7 @@ public partial class MainWindow : Window {
   private PointerPressedEventArgs? _dragPress;
   private bool _dragging;
   private bool _syncingGridSelection;
+  private bool _syncingFolderSelection;
 
   public MainWindow() {
     InitializeComponent();
@@ -61,6 +62,8 @@ public partial class MainWindow : Window {
       OnFolderTreePointerMoved,
       RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
       true);
+    MessagesGrid.AddHandler(InputElement.KeyDownEvent, OnMessagesKeyDown, RoutingStrategies.Tunnel);
+    FolderTree.AddHandler(InputElement.KeyDownEvent, OnFolderTreeKeyDown, RoutingStrategies.Tunnel);
   }
 
   public MainWindow(MainViewModel viewModel, ConfigurationFileService files) : this() {
@@ -73,6 +76,7 @@ public partial class MainWindow : Window {
     viewModel.FeaturesRequested += OnFeaturesRequested;
     viewModel.SemanticSearchRequested += OnSemanticSearchRequested;
     viewModel.MessageListSelectionRestoreRequested += RestoreMessageGridSelection;
+    viewModel.FolderTreeSelectionRestoreRequested += RestoreFolderTreeSelection;
     viewModel.RulesRequested += OnRulesRequested;
     viewModel.AboutRequested += OnAboutRequested;
     viewModel.AccountSaved += OnAccountSaved;
@@ -83,6 +87,9 @@ public partial class MainWindow : Window {
     viewModel.AttachPstRequested += OnAttachPst;
     viewModel.CreatePstRequested += OnCreatePst;
     viewModel.PickStorePathRequested += OnPickStorePath;
+    viewModel.MoveStorePathRequested += OnMoveStorePath;
+    viewModel.RetentionRequested += OnRetentionRequested;
+    viewModel.IdentityHubSignInRequested += OnIdentityHubSignIn;
     viewModel.ImportThunderbirdRequested += OnImportThunderbird;
     viewModel.PrintHtmlRequested += OnPrintHtml;
     viewModel.SavePdfRequested += OnSavePdf;
@@ -95,7 +102,10 @@ public partial class MainWindow : Window {
     ApplyColumnHeaders();
     Opened += (_, _) => {
       _layout.Attach();
+      if (DataContext is MainViewModel ready)
+        ready.StartBackgroundWork();
       LoadReadingHtml();
+      RestoreFolderTreeSelection();
     };
   }
 
@@ -315,8 +325,28 @@ public partial class MainWindow : Window {
   }
 
   private void OnFolderTreeSelectionChanged(object? sender, SelectionChangedEventArgs e) {
-    if (DataContext is MainViewModel vm && sender is TreeView { SelectedItem: FolderNodeViewModel node })
-      vm.SelectedFolderNode = node;
+    if (_syncingFolderSelection || DataContext is not MainViewModel vm)
+      return;
+    vm.SetSelectedFolders(
+      FolderTree.SelectedItems.OfType<FolderNodeViewModel>(),
+      FolderTree.SelectedItem as FolderNodeViewModel);
+  }
+
+  private void RestoreFolderTreeSelection() {
+    if (DataContext is not MainViewModel vm)
+      return;
+    _syncingFolderSelection = true;
+    try {
+      FolderTree.SelectedItems.Clear();
+      foreach (var node in vm.SelectedFolderNodes)
+        FolderTree.SelectedItems.Add(node);
+      if (vm.SelectedFolderNode is not null
+          && !FolderTree.SelectedItems.Contains(vm.SelectedFolderNode))
+        FolderTree.SelectedItems.Add(vm.SelectedFolderNode);
+    }
+    finally {
+      _syncingFolderSelection = false;
+    }
   }
 
   private void OnFolderTreeContextRequested(object? sender, ContextRequestedEventArgs e) {
@@ -325,7 +355,9 @@ public partial class MainWindow : Window {
     var current = e.Source as Visual;
     while (current is not null) {
       if (current is Control { DataContext: FolderNodeViewModel node }) {
-        vm.SelectedFolderNode = node;
+        if (!vm.SelectedFolderNodes.Contains(node))
+          vm.SetSelectedFolders([node], node);
+        RestoreFolderTreeSelection();
         return;
       }
 
@@ -345,10 +377,12 @@ public partial class MainWindow : Window {
     _syncingGridSelection = true;
     try {
       MessagesGrid.SelectedItems.Clear();
-      foreach (var row in vm.SelectedMessages)
-        MessagesGrid.SelectedItems.Add(row);
       if (vm.SelectedMessage is not null)
-        MessagesGrid.SelectedItem = vm.SelectedMessage;
+        MessagesGrid.SelectedItems.Add(vm.SelectedMessage);
+      foreach (var row in vm.SelectedMessages) {
+        if (!MessagesGrid.SelectedItems.Contains(row))
+          MessagesGrid.SelectedItems.Add(row);
+      }
     }
     finally {
       _syncingGridSelection = false;
@@ -385,16 +419,16 @@ public partial class MainWindow : Window {
     _dragRow = null;
     _dragFolder = null;
     _dragPress = null;
-    if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-      return;
     if (e.Source is Button)
       return;
     if (DataContext is not MainViewModel vm || vm.SelectedFolder is null)
       return;
+    if (HasSelectionModifier(e.KeyModifiers))
+      return;
+    if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+      return;
     var row = RowAt(e.Source);
     if (row is null)
-      return;
-    if (!vm.SelectedMessages.Contains(row) && !ReferenceEquals(vm.SelectedMessage, row))
       return;
     _dragOrigin = e.GetPosition(this);
     _dragRow = row;
@@ -420,9 +454,13 @@ public partial class MainWindow : Window {
     }
 
     _dragging = true;
-    var ids = vm.SelectedMessages.Select(r => r.Header.Id).ToList();
-    if (ids.Count == 0)
-      ids.Add(_dragRow.Header.Id);
+    var ids = vm.DragMessageIds(_dragRow);
+    if (ids.Count == 0) {
+      _dragging = false;
+      _dragRow = null;
+      _dragPress = null;
+      return;
+    }
     var transfer = new DataTransfer();
     transfer.Add(DataTransferItem.Create(
       MessageDragFormat,
@@ -444,6 +482,8 @@ public partial class MainWindow : Window {
     if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
       return;
     if (e.Source is Button)
+      return;
+    if (HasSelectionModifier(e.KeyModifiers))
       return;
     var node = FolderNodeAt(e.Source);
     if (node?.Mailbox is null || node.Folder is null || node.IsAccount)
@@ -474,10 +514,20 @@ public partial class MainWindow : Window {
     }
 
     _dragging = true;
+    var folders = DataContext is MainViewModel vm
+      ? vm.DragFolderNames(_dragFolder)
+      : [_dragFolder.Folder.FullName];
+    if (folders.Count == 0) {
+      _dragging = false;
+      _dragFolder = null;
+      _dragPress = null;
+      return;
+    }
+
     var transfer = new DataTransfer();
     transfer.Add(DataTransferItem.Create(
       FolderDragFormat,
-      MailDragPayload.PackFolder(_dragFolder.Mailbox.Id, _dragFolder.Folder.FullName)));
+      MailDragPayload.PackFolders(_dragFolder.Mailbox.Id, folders)));
     try {
       await DragDrop.DoDragDropAsync(_dragPress, transfer, DragDropEffects.Move | DragDropEffects.Copy);
     }
@@ -521,11 +571,12 @@ public partial class MainWindow : Window {
 
     if (data.Contains(FolderDragFormat)) {
       var packed = data.TryGetValue(FolderDragFormat);
-      if (!MailDragPayload.TryUnpackFolder(packed, out var mailboxId, out var from))
+      if (!MailDragPayload.TryUnpackFolders(packed, out var mailboxId, out var folders))
         return;
-      if (!vm.CanDropFolderOn(dest, mailboxId, from))
+      var sources = folders.Select(folder => (mailboxId, folder)).ToList();
+      if (sources.All(source => !vm.CanDropFolderOn(dest, source.mailboxId, source.folder)))
         return;
-      await vm.DropFolderAsync(dest, mailboxId, from);
+      await vm.DropFoldersAsync(dest, sources);
     }
   }
 
@@ -541,8 +592,9 @@ public partial class MainWindow : Window {
 
     if (e.DataTransfer.Contains(FolderDragFormat)) {
       var packed = e.DataTransfer.TryGetValue(FolderDragFormat);
-      return MailDragPayload.TryUnpackFolder(packed, out var mailboxId, out var from)
-        && vm.CanDropFolderOn(dest, mailboxId, from);
+      var node = dest;
+      return MailDragPayload.TryUnpackFolders(packed, out var mailboxId, out var folders)
+        && folders.Any(folder => vm.CanDropFolderOn(node, mailboxId, folder));
     }
 
     return false;
@@ -551,9 +603,10 @@ public partial class MainWindow : Window {
   private void OnMessageMenuOpening(object? sender, EventArgs e) {
     if (sender is not MenuFlyout flyout || DataContext is not MainViewModel vm)
       return;
+    SyncSelectionFromGrid();
     MenuItem? move = null;
     foreach (var item in flyout.Items) {
-      if (item is MenuItem { Header: "Move To" } menu)
+      if (item is MenuItem menu && string.Equals(menu.Header as string, vm.Copy.MoveTo, StringComparison.Ordinal))
         move = menu;
     }
 
@@ -602,44 +655,66 @@ public partial class MainWindow : Window {
     var path = await PickPstFile(DataContext is MainViewModel vm ? vm.Copy.ImportPst : "Import Outlook PST");
     if (string.IsNullOrWhiteSpace(path) || DataContext is not MainViewModel main)
       return;
-    await main.ImportPstPathAsync(path);
+    var proposed = AppPaths.ProposedStoreDirectory(path);
+    Directory.CreateDirectory(AppPaths.StoresDirectory());
+    var dest = await PickFolder(main.Copy.CreateStore, proposed);
+    await main.ImportPstPathAsync(path, dest);
   }
 
   private async void OnAttachPst() {
-    var path = await PickPstFile(DataContext is MainViewModel vm ? vm.Copy.AttachPst : "Attach Outlook data file");
-    if (string.IsNullOrWhiteSpace(path) || DataContext is not MainViewModel main)
+    if (DataContext is not MainViewModel main)
       return;
-    await main.AttachPstPathAsync(path);
+    var path = await PickFolder(main.Copy.AttachStore);
+    if (!string.IsNullOrWhiteSpace(path))
+      await main.AttachStorePathAsync(path);
   }
 
   private async void OnCreatePst() {
-    var title = DataContext is MainViewModel vm ? vm.Copy.CreatePst : "New Outlook data file";
-    var result = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions {
-      Title = title,
-      SuggestedFileName = "mail.pst",
-      DefaultExtension = "pst",
-      FileTypeChoices = [
-        new FilePickerFileType("Outlook data file") { Patterns = ["*.pst"] }
-      ]
-    });
-    var path = result?.TryGetLocalPath();
-    if (string.IsNullOrWhiteSpace(path) || DataContext is not MainViewModel main)
+    if (DataContext is not MainViewModel main)
       return;
-    await main.CreatePstPathAsync(path);
+    var proposed = AppPaths.ProposedStoreDirectory("Mail");
+    Directory.CreateDirectory(AppPaths.StoresDirectory());
+    var path = await PickFolder(main.Copy.CreateStore, proposed);
+    if (!string.IsNullOrWhiteSpace(path))
+      await main.CreateStorePathAsync(path);
   }
 
   private Task<string?> OnPickStorePath() =>
-    PickPstFile(DataContext is MainViewModel vm ? vm.Copy.StorePath : "Outlook data file");
+    PickFolder(DataContext is MainViewModel vm ? vm.Copy.AttachStore : "Store");
 
-  private async Task<string?> PickPstFile(string title) {
-    var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions {
-      Title = title,
-      AllowMultiple = false,
-      FileTypeFilter = [
-        new FilePickerFileType("Outlook data file") { Patterns = ["*.pst", "*.ost"] }
-      ]
-    });
-    return files.FirstOrDefault()?.TryGetLocalPath();
+  private Task<string?> OnMoveStorePath() =>
+    PickFolder(DataContext is MainViewModel vm ? vm.Copy.MoveStore : "Move store");
+
+  private async void OnRetentionRequested() {
+    if (_files is null || DataContext is not MainViewModel vm)
+      return;
+    var window = new RetentionWindow {
+      DataContext = new RetentionViewModel(
+        _files,
+        vm.Mailboxes,
+        vm.FoldersForRules,
+        vm.RunRetentionAsync),
+      WindowStartupLocation = WindowStartupLocation.CenterOwner
+    };
+    await window.ShowDialog(this);
+  }
+
+  private async void OnIdentityHubSignIn(string kind) {
+    if (DataContext is not MainViewModel vm)
+      return;
+    try {
+      var window = new IdentityHubLoginWindow(vm.HubLoginUrl(kind)) {
+        WindowStartupLocation = WindowStartupLocation.CenterOwner
+      };
+      var json = await window.ShowDialog<string?>(_accountWindow ?? this);
+      if (string.IsNullOrWhiteSpace(json))
+        vm.CancelIdentityHubSignIn("Identity Hub sign-in cancelled.");
+      else
+        await vm.CompleteIdentityHubSignIn(kind, json);
+    }
+    catch (Exception ex) {
+      vm.CancelIdentityHubSignIn(ex.Message);
+    }
   }
 
   private async void OnImportThunderbird() {
@@ -701,19 +776,42 @@ public partial class MainWindow : Window {
   private void OnAboutRequested() =>
     _ = AboutWindow.ShowAsync(this);
 
-  private async Task<string?> PickFolder(string title) {
+  private async Task<string?> PickFolder(string title, string? suggested = null) {
+    IStorageFolder? start = null;
+    if (!string.IsNullOrWhiteSpace(suggested)) {
+      try {
+        Directory.CreateDirectory(suggested);
+        start = await StorageProvider.TryGetFolderFromPathAsync(suggested);
+      }
+      catch {
+      }
+    }
+
     var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions {
       Title = title,
-      AllowMultiple = false
+      AllowMultiple = false,
+      SuggestedStartLocation = start
     });
-    return folders.FirstOrDefault()?.TryGetLocalPath();
+    return folders.FirstOrDefault()?.TryGetLocalPath() ?? suggested;
+  }
+
+  private async Task<string?> PickPstFile(string title) {
+    var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions {
+      Title = title,
+      AllowMultiple = false,
+      FileTypeFilter = [
+        new FilePickerFileType("Outlook data file") { Patterns = ["*.pst", "*.ost"] }
+      ]
+    });
+    return files.FirstOrDefault()?.TryGetLocalPath();
   }
 
   protected override void OnClosing(WindowClosingEventArgs e) {
     if (e.IsProgrammatic)
       return;
     e.Cancel = true;
-    Hide();
+    if (IsVisible)
+      Hide();
   }
 
   private void OnExitClick(object? sender, RoutedEventArgs e) {
@@ -759,6 +857,51 @@ public partial class MainWindow : Window {
       return;
     await File.WriteAllBytesAsync(path, file.Bytes);
   }
+
+  private void OnWindowKeyDown(object? sender, KeyEventArgs e) {
+    if (e.Handled || e.Key != Key.Delete || IsTextInputTarget())
+      return;
+    if (FolderTree.IsKeyboardFocusWithin || MessagesGrid.IsKeyboardFocusWithin)
+      return;
+    TryDeleteMessages(e);
+  }
+
+  private void OnMessagesKeyDown(object? sender, KeyEventArgs e) {
+    if (e.Handled || e.Key != Key.Delete || IsTextInputTarget())
+      return;
+    TryDeleteMessages(e);
+  }
+
+  private void OnFolderTreeKeyDown(object? sender, KeyEventArgs e) {
+    if (e.Handled || e.Key != Key.Delete || IsTextInputTarget())
+      return;
+    if (DataContext is not MainViewModel vm || !vm.DeleteCustomFolderCommand.CanExecute(null))
+      return;
+    vm.DeleteCustomFolderCommand.Execute(null);
+    e.Handled = true;
+  }
+
+  private void TryDeleteMessages(KeyEventArgs e) {
+    if (DataContext is not MainViewModel vm || !vm.DeleteMessagesCommand.CanExecute(null))
+      return;
+    vm.DeleteMessagesCommand.Execute(null);
+    e.Handled = true;
+  }
+
+  private bool IsTextInputTarget() {
+    var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+    for (var current = focused as Visual; current is not null; current = current.GetVisualParent()) {
+      if (current is TextBox or ComboBox or NativeWebView)
+        return true;
+    }
+
+    return false;
+  }
+
+  private static bool HasSelectionModifier(KeyModifiers modifiers) =>
+    modifiers.HasFlag(KeyModifiers.Control)
+    || modifiers.HasFlag(KeyModifiers.Meta)
+    || modifiers.HasFlag(KeyModifiers.Shift);
 
   private static MessageRowViewModel? RowAt(object? source) {
     for (var current = source as Control; current is not null; current = current.Parent as Control) {

@@ -114,6 +114,15 @@
     <Setter Property="FontFamily" Value="Consolas, Ubuntu Mono, monospace" />
     <Setter Property="FontSize" Value="12" />
   </Style>
+  <Style Selector="TextBox.error-dump">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Ubuntu Mono, monospace" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="Background" Value="#0E1620" />
+    <Setter Property="Foreground" Value="#E8F4FC" />
+    <Setter Property="CaretBrush" Value="#E8F4FC" />
+  </Style>
   <Style Selector="ListBox">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />

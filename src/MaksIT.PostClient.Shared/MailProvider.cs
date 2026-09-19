@@ -4,6 +4,7 @@ namespace MaksIT.PostClient.Shared;
 public static class MailProvider {
   public const string Imap = "imap";
   public const string Pst = "pst";
+  public const string Store = "store";
   public const string Gmail = "gmail";
   public const string Outlook = "outlook";
   public const string Aruba = "aruba";
@@ -19,6 +20,7 @@ public static class MailProvider {
       return Imap;
     return value.Trim().ToLowerInvariant() switch {
       "gmail" or "google" => Gmail,
+      "store" or "local-store" or "folder-store" or "bucket" => Store,
       "pst" or "ost" or "outlook-store" or "outlook-data" or "outlookpst" => Pst,
       "outlook" or "microsoft" or "office365" or "hotmail" or "live" => Outlook,
       "aruba" or "arubapec" or "pecaruba" => Aruba,
@@ -39,11 +41,19 @@ public static class MailProvider {
 
   public static bool HasHostPreset(string? value) {
     var id = Normalize(value);
-    return id is not Imap and not Pst;
+    return id is not Imap and not Pst and not Store;
   }
 
   public static bool IsPst(string? value) =>
     Normalize(value) == Pst;
+
+  public static bool IsStore(string? value) =>
+    Normalize(value) == Store;
+
+  public static bool IsLocalBucket(string? value) {
+    var id = Normalize(value);
+    return id is Store or Pst;
+  }
 
   public static bool IsPec(string? value) {
     var id = Normalize(value);
@@ -63,8 +73,9 @@ public static class MailProvider {
     var provider = Normalize(box.Provider);
     box.Provider = provider;
     box.CertifiedKind = MailCertifiedKind.ForProvider(provider, box.CertifiedKind);
-    if (IsPst(provider)) {
-      box.IncomingProtocol = MailProtocol.Pst;
+    if (IsStore(provider) || IsPst(provider)) {
+      box.IncomingProtocol = IsPst(provider) ? MailProtocol.Pst : MailProtocol.Store;
+      box.Provider = IsPst(provider) ? Pst : Store;
       return;
     }
 

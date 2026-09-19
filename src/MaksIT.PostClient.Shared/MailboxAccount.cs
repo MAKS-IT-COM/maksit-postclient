@@ -17,6 +17,8 @@ public sealed class MailboxAccount {
 
   public string StorePath { get; set; } = "";
 
+  public string ArchiveStoreId { get; set; } = "";
+
   public string IncomingSecurity { get; set; } = MailSecurity.Ssl;
 
   public string ImapHost { get; set; } = "";
@@ -50,6 +52,12 @@ public sealed class MailboxAccount {
   [JsonIgnore]
   public bool IsPstStore =>
     MailProtocol.IsPst(IncomingProtocol) || MailProvider.IsPst(Provider);
+
+  [JsonIgnore]
+  public bool IsLocalStore =>
+    MailProtocol.IsStore(IncomingProtocol)
+    || MailProvider.IsStore(Provider)
+    || IsPstStore;
 
   [JsonIgnore]
   public string DataFile =>

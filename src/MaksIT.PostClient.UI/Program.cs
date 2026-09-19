@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Logging;
 using Avalonia.Threading;
+using MaksIT.PostClient.Client;
 using MaksIT.PostClient.Shared;
 
 
@@ -10,8 +11,25 @@ namespace MaksIT.PostClient.UI;
 internal static class Program {
   [STAThread]
   public static void Main(string[] args) {
-    WebViewSetup.ConfigureProcess();
-    BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandled;
+    TaskScheduler.UnobservedTaskException += OnUnobservedTask;
+    if (MailWorkerHost.IsWorkerProcess(args)) {
+      try {
+        Environment.Exit(MailWorkerHost.Run(args));
+      }
+      catch (Exception ex) {
+        ErrorReport.Capture(ex);
+        Environment.Exit(1);
+      }
+    }
+
+    try {
+      WebViewSetup.ConfigureProcess();
+      BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+    catch (Exception ex) {
+      ErrorDialog.ReportBlocking(ex);
+    }
   }
 
   // Linux: X11/XWayland. Avalonia 12.1.2 native Wayland still hangs on GNOME's
@@ -23,10 +41,24 @@ internal static class Program {
       .AfterSetup(_ => Dispatcher.UIThread.UnhandledException += OnDispatcherUnhandled);
 
   private static void OnDispatcherUnhandled(object? sender, DispatcherUnhandledExceptionEventArgs e) {
-    if (!IsWebViewFailure(e.Exception))
-      return;
     e.Handled = true;
-    WebViewFailed?.Invoke(e.Exception);
+    if (IsWebViewFailure(e.Exception))
+      WebViewFailed?.Invoke(e.Exception);
+    ErrorDialog.Report(e.Exception);
+  }
+
+  private static void OnDomainUnhandled(object? sender, UnhandledExceptionEventArgs e) {
+    if (e.ExceptionObject is not Exception ex)
+      return;
+    if (e.IsTerminating)
+      ErrorDialog.ReportBlocking(ex);
+    else
+      ErrorDialog.Report(ex);
+  }
+
+  private static void OnUnobservedTask(object? sender, UnobservedTaskExceptionEventArgs e) {
+    e.SetObserved();
+    ErrorDialog.Report(e.Exception);
   }
 
   public static event Action<Exception>? WebViewFailed;

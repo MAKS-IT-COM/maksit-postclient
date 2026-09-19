@@ -39,9 +39,32 @@ public sealed class LayoutSettings {
 
   public SavedColumnSort? ColumnSort { get; set; }
 
+  public List<string> CollapsedFolders { get; set; } = [];
+
+  public static string FolderTreeKey(string? mailboxId, string? folder) {
+    var id = (mailboxId ?? "").Trim();
+    if (id.Length == 0)
+      return "";
+    var name = (folder ?? "").Trim();
+    return name.Length == 0 ? id : id + "\t" + name;
+  }
+
+  public bool IsFolderExpanded(string? mailboxId, string? folder) {
+    var key = FolderTreeKey(mailboxId, folder);
+    if (key.Length == 0)
+      return true;
+    foreach (var row in CollapsedFolders) {
+      if (string.Equals(row, key, StringComparison.OrdinalIgnoreCase))
+        return false;
+    }
+
+    return true;
+  }
+
   public void Normalize() {
     ColumnWidths ??= new Dictionary<string, double>(StringComparer.Ordinal);
     ColumnOrder ??= [];
+    CollapsedFolders ??= [];
     MessageFilter ??= "";
     if (string.IsNullOrWhiteSpace(WindowState))
       WindowState = "Normal";

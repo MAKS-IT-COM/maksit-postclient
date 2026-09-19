@@ -10,7 +10,19 @@ public static class MailDragPayload {
     + string.Join(",", ids ?? []);
 
   public static string PackFolder(string mailboxId, string folder) =>
-    FolderKind + "\n" + (mailboxId ?? "") + "\n" + (folder ?? "");
+    PackFolders(mailboxId, [folder ?? ""]);
+
+  public static string PackFolders(string mailboxId, IEnumerable<string> folders) {
+    var names = new List<string>();
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var folder in folders ?? []) {
+      if (string.IsNullOrWhiteSpace(folder) || !seen.Add(folder))
+        continue;
+      names.Add(folder);
+    }
+
+    return FolderKind + "\n" + (mailboxId ?? "") + "\n" + string.Join("\n", names);
+  }
 
   public static bool TryUnpackMessages(
     string? packed,
@@ -33,13 +45,28 @@ public static class MailDragPayload {
   }
 
   public static bool TryUnpackFolder(string? packed, out string mailboxId, out string folder) {
-    mailboxId = "";
     folder = "";
-    if (!TryParts(packed, FolderKind, 3, out var parts))
+    if (!TryUnpackFolders(packed, out mailboxId, out var folders) || folders.Count == 0)
+      return false;
+    folder = folders[0];
+    return true;
+  }
+
+  public static bool TryUnpackFolders(string? packed, out string mailboxId, out List<string> folders) {
+    mailboxId = "";
+    folders = [];
+    if (string.IsNullOrWhiteSpace(packed))
+      return false;
+    var parts = packed.Split('\n');
+    if (parts.Length < 3 || !parts[0].Equals(FolderKind, StringComparison.Ordinal))
       return false;
     mailboxId = parts[1];
-    folder = parts[2];
-    return mailboxId.Length > 0 && folder.Length > 0;
+    for (var i = 2; i < parts.Length; i++) {
+      if (parts[i].Length > 0)
+        folders.Add(parts[i]);
+    }
+
+    return mailboxId.Length > 0 && folders.Count > 0;
   }
 
   private static bool TryParts(string? packed, string kind, int count, out string[] parts) {

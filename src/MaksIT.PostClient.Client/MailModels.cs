@@ -14,6 +14,8 @@ public sealed class MailFolderInfo {
   public int Total { get; init; }
 
   public string Kind { get; init; } = "";
+
+  public char Delimiter { get; init; }
 }
 
 

@@ -145,10 +145,30 @@ public sealed class Pop3MailSession : IMailSession {
     }
   }
 
-  public Task<Result<MailboxQuota?>> GetQuotaAsync(CancellationToken cancellationToken = default) {
-    _ = cancellationToken;
-    return Task.FromResult(Result<MailboxQuota?>.Ok(null));
-  }
+  public Task<Result<MailboxQuota?>> GetQuotaAsync(CancellationToken cancellationToken = default) =>
+    _io.RunAsync(() => {
+      var client = RequirePop();
+      MailboxAccount? account;
+      lock (_gate)
+        account = _account;
+      if (client is null || account is null)
+        return Task.FromResult(Result<MailboxQuota?>.Ok(null));
+      try {
+        long bytes = 0;
+        var count = client.Count;
+        for (var i = 0; i < count; i++)
+          bytes += client.GetMessageSize(i);
+        var kb = (uint)Math.Min(uint.MaxValue, bytes / 1024);
+        return Task.FromResult(Result<MailboxQuota?>.Ok(new MailboxQuota {
+          Label = account.Label,
+          Host = account.ImapHost,
+          UsedKb = kb
+        }));
+      }
+      catch (Exception ex) {
+        return Task.FromResult(Result<MailboxQuota?>.UnprocessableEntity(null, ex.Message));
+      }
+    }, cancellationToken);
 
   public Task<Result<uint?>> AppendAsync(
     string folder,

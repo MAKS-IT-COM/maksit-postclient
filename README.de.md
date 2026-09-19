@@ -68,11 +68,11 @@ Mehrere Postfächer sind speicherbar. Profile füllen Hosts und Ports:
 | IT PEC — Aruba, Legalmail, Namirial, Poste Italiane, Register.it, Libero | IMAP/SMTP-Hosts des italienischen Gestore (Hostnamen in der [englischen README](README.md)) |
 | EU — Intesi Group | `imap.ig-trustmail.com` / `smtp.ig-trustmail.com` |
 | IMAP / POP3 | Jeder Host, den der Betreiber mitgeteilt hat. **Postfachart** auf italienische PEC oder EU-REM setzen, wenn das Postfach zertifiziert ist (auch mit eigener Domain) |
-| Datendatei (`.pst` / `.ost`) | Lokaler Store als Postfach. Unicode-`.pst` ist schreibbar; `.ost` / ANSI-`.pst` wird beim ersten Schreiben in ein Unicode-`.pst` kopiert. Kein Passwort. |
+| Ordnerarchiv | Ordner auf der Platte (`postclient.store.json` + `mail.db` + `.eml`). Kein Passwort, kein SMTP. Anlegen, anhängen, verschieben oder lösen über das Dateimenü. |
 
 Zertifizierte IMAP-Postfächer nutzen das Gestore-Passwort oder ein App-Passwort bei 2FA. **De-Mail** ist in der Regel **kein** IMAP. Dasselbe gilt für **AR24** (Frankreich), **IncaMail** (Schweiz) und **Lleida** (Spanien). Hat der Betreiber IMAP/POP3-Hosts genannt, wählen Sie **IMAP / POP3**. Sonst öffnet dieser Client das Postfach nicht; ETSI-REM-Nachweise auf importierten `.eml` kann er trotzdem anzeigen.
 
-OAuth: Google-Client-ID (endet auf `.apps.googleusercontent.com`) und bei **Web**-Clients das **Client-Secret** — beides in den Kontoeinstellungen (Secret in `secrets.bin`). Öffentliche Desktop-Clients brauchen kein Secret. Variablen `POSTCLIENT_GOOGLE_CLIENT_ID` / `POSTCLIENT_GOOGLE_CLIENT_SECRET`. **Gmail API** aktivieren, Scope `https://mail.google.com/`, Loopback `http://127.0.0.1`, **IMAP** in Gmail. Microsoft: Azure-Anwendungs-ID (GUID); öffentlicher Client; Redirect `http://localhost`; IMAP/SMTP-Berechtigungen.
+Gmail und Microsoft 365 laufen über **Identity Hub** (`https://identity.maks-it.com`). Kontoeinstellungen öffnen `/desktop-login?provider=Google` oder `Microsoft`. Hub-JWT und Refresh-Token bleiben in `secrets.bin`; IMAP nutzt ein kurzlebiges Mailbox-Token (XOAUTH2). Beim Verbinden erneuert der Client die Hub-Sitzung aus dem Refresh-Token, damit Gmail und Outlook nach dem Beenden angemeldet bleiben. Hat ein älterer Build nur das JWT gespeichert, einmal neu in den Kontoeinstellungen anmelden. Override: `POSTCLIENT_IDENTITY_HUB`. Passwort bleibt für PEC und generisches IMAP gültig.
 
 Passwörter und OAuth-Refresh-Token liegen neben den Einstellungen (`DPAPI` unter Windows, Dateimodus `600` unter Linux/macOS), nie in `settings.json`.
 
@@ -115,7 +115,7 @@ Systemhinweise erscheinen bei neuer PEC, neuen Ricevute und neuer REM (Windows-T
 
 ## Lesen, Ordner, Verfassen
 
-- Der Baum folgt dem Server (Posteingang, Ricevute, Entwürfe, Gesendet, Archiv, Junk, Papierkorb, plus eigene Ordner). Systemordner lassen sich nicht löschen. Ordner anlegen, leeren (in den Papierkorb bzw. endgültig im Papierkorb), alles gelesen/ungelesen, eigenen Ordner löschen, Nachrichten auf einen Ordner ziehen.
+- Der Baum folgt dem Server (Posteingang, Ricevute, Entwürfe, Gesendet, Archiv, Junk, Papierkorb, plus eigene Ordner). Verschachtelte IMAP-Pfade erscheinen als Unterordner, auch Gmail-Labels `[Gmail]/…` unter `[Gmail]`. Entwürfe, Gesendet und Papierkorb als `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` stehen neben dem Posteingang, nicht darunter. Gmail trennt mit `/`, daher bleibt ein Label wie `P.IVA` ein Ordner. Systemordner lassen sich nicht löschen. Ordner anlegen, leeren (in den Papierkorb bzw. endgültig im Papierkorb), alles gelesen/ungelesen, eigenen Ordner löschen, Nachrichten auf einen Ordner ziehen. Welche Konten und Unterordner aufgeklappt oder zugeklappt sind, bleibt in `settings.json`.
 - Spalten: ungelesen, Kennzeichnung, Anlagen, Zustellung, Typ (PEC / RIC / REM / SIG), von, Betreff, Datum (lokal `yyyy-MM-dd HH:mm`), Mandatskennzeichen.
 - Ansicht: HTML (Web-Engine des Systems), Text, Quelltext oder **FatturaPA**. Layout: Liste über dem Lesen, oder drei Spalten (Ordner, Liste, Lesen).
 - **Unterhaltungen gruppieren** rückt Antworten in der Liste ein (Message-ID / In-Reply-To / References, Tiefe bis 8). PEC-Nachweise zum selben Original stehen beieinander. Es gibt kein eigenes Unterhaltungsfenster.

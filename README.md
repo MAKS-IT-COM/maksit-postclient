@@ -37,8 +37,8 @@ Typical desktop and web mail treats a PEC **busta** or an ETSI REM evidence part
 - **Practice labels on this PC** — tag a condominium, a client file, an IMU notice. Labels are local, not a studio-wide database.
 - **Full-folder local archive** — Get Messages stores the **whole IMAP folder** in `mail.db` plus `.eml` on disk (not a last-N window). Keyword FTS on subject, body, PDF/XML/HTML/CSV/JSON attachment text, and labels.
 - **On-device meaning search (RAG)** — optional EmbeddingGemma 300M in **Settings → Indices…**. Vectors stay in `mail.db`. Mail never leaves the machine. Rebuild or repair keyword and meaning indices.
-- **Rules across mailboxes** — move, delete, flag, label; a destination folder can live on another account, including an attached `.pst` / `.ost` data file. Import JSON or a legacy `.rwz` file; export is JSON.
-- **Open `.pst` / `.ost` as a mailbox** — Unicode personal store is writable (folders, flags, move, delete). An offline store is copied to a Unicode `.pst` on first write. No extra mail program required to read the file.
+- **Rules across mailboxes** — move, delete, flag, label; a destination folder can live on another account, including an attached **folder store**. Import JSON or a legacy `.rwz` file; export is JSON.
+- **Folder stores** — create, attach, detach, or move a directory that holds `.eml` plus its own `mail.db` (keyword + meaning index). **Import Outlook PST…** copies into a store; it does not register the `.pst` as a mailbox. Default store path: `%LocalAppData%\Postclient\stores\{name}` (portable: `{install}/data/stores/{name}`).
 - **Country packs** — **Settings → Features** turns Italy (PEC, FatturaPA, fascicolo), Europe (eIDAS REM), France, Germany, Spain, and Switzerland evidence labels on or off. Ordinary IMAP stays available.
 
 ## Who it is for
@@ -51,20 +51,20 @@ Typical use: certified and ordinary mail in one window; see whether the gestore 
 
 ### Practices and agencies
 
-Use it when certified identities must not be mixed: personal PEC, studio PEC, ordinary mail. A commercialista, avvocato, notaio, CAF, condominium administrator, or EU practice that files with PA can keep each gestore mailbox separate (IMAP **QUOTA** in the status bar), group a send with its ricevute, and export a fascicolo without uploading the practice to a third-party archive.
+Use it when certified identities must not be mixed: personal PEC, studio PEC, ordinary mail. A commercialista, avvocato, notaio, CAF, condominium administrator, or EU practice that files with PA can keep each gestore mailbox separate (IMAP **QUOTA** on the account node), group a send with its ricevute, and export a fascicolo without uploading the practice to a third-party archive.
 
 The program does not replace the gestore, does not issue a qualified ricevuta, and does not share labels across office PCs.
 
 ## Accounts and protocols
 
-Incoming: **IMAP** (full folder tree), **POP3** (Inbox only), or an attached **`.pst` / `.ost`**. Unicode `.pst` is writable. Outgoing: **SMTP**. Encryption: Auto, SSL/TLS, STARTTLS, STARTTLS if available, or none. MailKit uses the SASL methods the server advertises.
+Incoming: **IMAP** (full folder tree), **POP3** (Inbox only), or a local **folder store**. Unicode `.pst` can still be **imported** into a store. Outgoing: **SMTP**. Encryption: Auto, SSL/TLS, STARTTLS, STARTTLS if available, or none. MailKit uses the SASL methods the server advertises.
 
 Several mailboxes at once. Presets fill hosts and ports:
 
 | Preset | Role |
 |--|--|
-| Gmail | IMAP/SMTP; Google sign-in (OAuth2 / XOAUTH2) or a Gmail app password |
-| Microsoft 365 | IMAP/SMTP; Microsoft sign-in. Most of these accounts reject a mailbox password |
+| Gmail | IMAP/SMTP; Google sign-in through Identity Hub (`identity.maks-it.com`) or a Gmail app password |
+| Microsoft 365 | IMAP/SMTP; Microsoft sign-in through Identity Hub. Most of these accounts reject a mailbox password |
 | IT PEC — Aruba | `imaps.pec.aruba.it` / `smtps.pec.aruba.it` (POP3: `pop3s.pec.aruba.it`) |
 | IT PEC — InfoCert Legalmail | `mbox.cert.legalmail.it` / `sendm.cert.legalmail.it`. Username is often the InfoCert User ID, not the address |
 | IT/EU PEC — Namirial | `imaps.sicurezzapostale.it` / `smtps.sicurezzapostale.it` |
@@ -73,13 +73,13 @@ Several mailboxes at once. Presets fill hosts and ports:
 | IT PEC — Libero | `mail.postacert.it.net` |
 | EU — Intesi Group | `imap.ig-trustmail.com` / `smtp.ig-trustmail.com` |
 | IMAP / POP3 | Any host the operator gave you. Set **mailbox kind** to Italian PEC or EU REM if that mailbox is certified (including a custom domain) |
-| Data file (`.pst` / `.ost`) | Local store opened as a mailbox. Unicode `.pst` is writable; `.ost` / ANSI `.pst` is copied to a Unicode `.pst` on first write. No password. |
+| Folder store | Local bucket on disk (`postclient.store.json` + `mail.db` + `.eml`). No password and no SMTP. Create, attach, detach, or move from the File menu. |
 
 Certified IMAP mailboxes use the gestore password, or an app password if the gestore has 2FA. **AR24** (France), **De-Mail** (Germany), **IncaMail** (Switzerland), and **Lleida** (Spain) are usually not IMAP. If that operator gave you IMAP/POP3 hosts, choose **IMAP / POP3**. Otherwise this client cannot open that mailbox; it can still display ETSI REM evidence on messages you import as `.eml`.
 
-OAuth needs a Google client ID (ends with `.apps.googleusercontent.com`) and, for **Web** clients, the **client secret** — paste both in Account Settings (the secret is stored in `secrets.bin`, not as the mailbox password). Desktop public clients need no secret. Environment variables `POSTCLIENT_GOOGLE_CLIENT_ID` / `POSTCLIENT_GOOGLE_CLIENT_SECRET` are also accepted. Enable the **Gmail API**, add scope `https://mail.google.com/` on the consent screen, allow loopback `http://127.0.0.1`, and enable **IMAP** in Gmail. Microsoft: Azure Application (client) ID (a GUID); public client; redirect `http://localhost`; IMAP/SMTP permissions.
+Gmail and Microsoft 365 sign-in uses **Identity Hub** at `https://identity.maks-it.com` (covered app `MaksIT.PostClient`). Account Settings opens `/desktop-login?provider=Google` or `Microsoft` in the built-in WebView. The Hub JWT and Hub refresh token stay in `secrets.bin`; IMAP/SMTP use a short-lived **mailbox token** (XOAUTH2), not the Hub JWT. On connect the client refreshes the Hub session from that refresh token so Gmail and Outlook stay signed in after you close the app. If an older build stored a JWT without a refresh token, sign in once more from Account Settings. Override the origin with `POSTCLIENT_IDENTITY_HUB` (Compose: `http://localhost:8080`). Password / app password still work for PEC and generic IMAP.
 
-Passwords and OAuth refresh tokens stay next to settings (`DPAPI` on Windows, file mode `600` on Linux/macOS), never in `settings.json`.
+Passwords and Hub tokens stay next to settings (`DPAPI` on Windows, file mode `600` on Linux/macOS), never in `settings.json`.
 
 ## Italian PEC (posta elettronica certificata)
 
@@ -120,7 +120,7 @@ Desktop notices fire for new PEC, ricevute, and REM (Windows toast, macOS notifi
 
 ## Reading, folders, compose
 
-- Folder tree follows the server (Inbox, Ricevute/Receipts, Drafts, Sent, Archive, Junk, Trash, plus custom folders). System folders cannot be deleted. You can create a folder, empty one (to Trash, or permanently in Trash), mark all read/unread, delete a custom folder, and drag messages onto a folder.
+- Folder tree follows the server (Inbox, Ricevute/Receipts, Drafts, Sent, Archive, Junk, Trash, plus custom folders). Nested IMAP paths show as nested folders, including Gmail’s `[Gmail]/…` labels under `[Gmail]`. Standard folders that the server stores as `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` sit next to Inbox, not under it. Gmail uses `/` as the separator, so a label like `P.IVA` stays one folder. System folders cannot be deleted. You can create a folder, empty one (to Trash, or permanently in Trash), mark all read/unread, delete a custom folder, and drag messages onto a folder. Which accounts and nested folders are expanded or collapsed is kept in `settings.json`.
 - List columns: unread, flag, attachments, delivery, type (PEC / RIC / REM / SIG), from, subject, date (local `yyyy-MM-dd HH:mm`), practice label.
 - View: HTML (OS web engine), plain text, raw source, or **FatturaPA**. Layout: list above reading, or three columns (folders, list, reading).
 - **Group conversations** indents replies in the folder list using Message-ID / In-Reply-To / References (depth up to 8). PEC ricevute that share the same original sit together. There is no separate conversation pane.
@@ -155,7 +155,7 @@ The archive is **only on this PC**. File → Open archive folder / Export archiv
 
 Override with `POSTCLIENT_CONFIG` / `POSTCLIENT_DATA_DIR`. A portable Windows zip that contains `settings.json` with `installType: portable` keeps config next to the executable.
 
-IMAP **QUOTA** from the gestore (when the server supports it) is shown in the status bar. That is the operator mailbox, not cloud storage from this application.
+IMAP **QUOTA** from the gestore (when the server supports it) is a thin bar on that account in the folder tree. POP3 shows used size from STAT when the server has no limit. Local stores have no server quota. That is the operator mailbox, not cloud storage from this application.
 
 ## Import, export, print
 
@@ -163,10 +163,12 @@ IMAP **QUOTA** from the gestore (when the server supports it) is shown in the st
 |--|--|
 | Import EML | Originals into the current folder |
 | Import mbox | Local mbox stores from a desktop mail profile |
-| Import `.pst` / `.ost` | Copies mail from the data file into the **selected** IMAP/POP3 account. Nested stores inside the file are imported too. Close any program that has the file open. |
-| Attach data file | Opens a `.pst` / `.ost` as its own mailbox. Unicode `.pst` can be written. `.ost` cannot be written in place — the first change copies it to a Unicode `.pst` beside the original. File menu or account type *data file*. |
-| New data file | File menu: creates an empty Unicode `.pst` (Inbox, Drafts, Sent, Deleted) and attaches it as a mailbox. |
-| Rules | **Settings → Rules**: **Import rules…** reads this app’s JSON export or a legacy `.rwz` file. **Export rules…** writes JSON. Each rule is bound to an **account**; a move folder can live on another mailbox (including an attached data file). They run on Get Messages, on import, and from **Run all rules**. |
+| Import `.pst` / `.ost` | Copies Outlook mail **into a folder store** (proposed path under app data `stores/`). Re-import into the same store skips duplicates by Message-ID. Close any program that has the file open. |
+| New store | File menu: empty bucket (`Inbox`, `Drafts`, `Sent Items`, `Deleted Items`) with `postclient.store.json` and `mail.db`. |
+| Attach store | File menu: pick a folder that already has `postclient.store.json`. Recovers mail + search after an AppData wipe. |
+| Move / Detach store | Copy the whole directory (or unregister it). The folder stays on disk when detached. |
+| Retention | **Settings → Retention…**: days per folder (`0` = forever). Older messages are deleted permanently after Get Messages. |
+| Rules | **Settings → Rules**: **Import rules…** reads this app’s JSON export or a legacy `.rwz` file. **Export rules…** writes JSON. Each rule is bound to an **account**; a move folder can live on another mailbox (including a store). They run on Get Messages, on import, and from **Run all rules**. |
 | Print | Readable HTML of the (optionally unwrapped) message |
 | Save PDF | Same content as a PDF |
 | Save attachments ZIP | All attachments of the open message |

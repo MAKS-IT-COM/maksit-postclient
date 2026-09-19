@@ -33,7 +33,6 @@ public sealed class ChoiceRow {
 
   public static IReadOnlyList<ChoiceRow> Providers { get; } = [
     new() { Id = MailProvider.Imap, Title = "IMAP / POP3" },
-    new() { Id = MailProvider.Pst, Title = "Outlook data file (PST/OST)" },
     new() { Id = MailProvider.Gmail, Title = "Gmail" },
     new() { Id = MailProvider.Outlook, Title = "Outlook / Microsoft 365" },
     new() { Id = MailProvider.Aruba, Title = "IT PEC — Aruba" },
@@ -71,7 +70,7 @@ public sealed class ChoiceRow {
   public static IReadOnlyList<ChoiceRow> ProvidersFor(FeatureSettings features, string? keepId = null) {
     features ??= new FeatureSettings();
     var rows = Providers.Where(p => {
-      if (p.Id is MailProvider.Imap or MailProvider.Pst or MailProvider.Gmail or MailProvider.Outlook)
+      if (p.Id is MailProvider.Imap or MailProvider.Gmail or MailProvider.Outlook)
         return true;
       if (MailProvider.IsRemPreset(p.Id))
         return features.IsEnabled(AppFeature.RemPresets);
@@ -89,6 +88,8 @@ public sealed class ChoiceRow {
 
 public sealed partial class FolderRowViewModel : ObservableObject {
   public required string FullName { get; init; }
+
+  public char Delimiter { get; init; }
 
   [ObservableProperty]
   [NotifyPropertyChangedFor(nameof(Line))]
@@ -114,14 +115,15 @@ public sealed partial class FolderRowViewModel : ObservableObject {
 }
 
 
-public sealed class FolderNodeViewModel : ObservableObject {
+public sealed partial class FolderNodeViewModel : ObservableObject {
   public bool IsAccount { get; init; }
 
   public MailboxAccount? Mailbox { get; init; }
 
   public FolderRowViewModel? Folder { get; init; }
 
-  public bool IsExpanded { get; set; } = true;
+  [ObservableProperty]
+  private bool isExpanded = true;
 
   public ObservableCollection<FolderNodeViewModel> Children { get; } = [];
 
@@ -132,13 +134,34 @@ public sealed class FolderNodeViewModel : ObservableObject {
     IsAccount ? "✉" : MailFolderRole.Glyph(Folder?.Name, Folder?.FullName);
 
   public int Unread =>
-    IsAccount ? Children.Sum(c => c.Unread) : Folder?.Unread ?? 0;
+    IsAccount ? ChildUnread() : Folder?.Unread ?? 0;
+
+  private int ChildUnread() {
+    var n = 0;
+    foreach (var child in Children) {
+      n += child.Folder?.Unread ?? 0;
+      n += child.ChildUnread();
+    }
+
+    return n;
+  }
 
   public string UnreadLabel =>
     Unread > 0 ? Unread.ToString() : "";
 
   public bool HasUnread =>
     Unread > 0;
+
+  public MailboxQuota? Quota { get; set; }
+
+  public bool ShowQuota =>
+    IsAccount && Quota?.Percent is int;
+
+  public double QuotaPercent =>
+    Quota?.Percent ?? 0;
+
+  public string QuotaTip =>
+    Quota?.Line() ?? "";
 
   public FontWeight Weight =>
     HasUnread ? FontWeight.SemiBold : FontWeight.Normal;
@@ -151,17 +174,25 @@ public sealed class FolderNodeViewModel : ObservableObject {
     OnPropertyChanged(nameof(Weight));
   }
 
-  public static FolderNodeViewModel Account(MailboxAccount box) =>
+  public void NotifyQuota() {
+    OnPropertyChanged(nameof(Quota));
+    OnPropertyChanged(nameof(ShowQuota));
+    OnPropertyChanged(nameof(QuotaPercent));
+    OnPropertyChanged(nameof(QuotaTip));
+  }
+
+  public static FolderNodeViewModel Account(MailboxAccount box, bool expanded = true) =>
     new() {
       IsAccount = true,
       Mailbox = box,
-      IsExpanded = true
+      IsExpanded = expanded
     };
 
-  public static FolderNodeViewModel ForFolder(MailboxAccount box, FolderRowViewModel folder) {
+  public static FolderNodeViewModel ForFolder(MailboxAccount box, FolderRowViewModel folder, bool expanded = true) {
     var node = new FolderNodeViewModel {
       Mailbox = box,
-      Folder = folder
+      Folder = folder,
+      IsExpanded = expanded
     };
     folder.PropertyChanged += (_, _) => node.NotifyCounts();
     return node;
@@ -170,6 +201,8 @@ public sealed class FolderNodeViewModel : ObservableObject {
 
 
 public sealed class MessageRowViewModel : ObservableObject {
+  public string MailboxId { get; set; } = "";
+
   public required MailMessageHeader Header { get; set; }
 
   public string Subject =>

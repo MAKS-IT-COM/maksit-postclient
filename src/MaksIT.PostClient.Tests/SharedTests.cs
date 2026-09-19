@@ -18,6 +18,67 @@ public class AppInfoTests {
 }
 
 
+public class ErrorReportTests {
+  [Fact]
+  public void Format_IncludesTypeMessageInnerAndStack() {
+    Exception thrown;
+    try {
+      throw new InvalidOperationException("outer", new ArgumentException("inner"));
+    }
+    catch (Exception ex) {
+      thrown = ex;
+    }
+
+    var text = ErrorReport.Format(thrown);
+    Assert.Contains(AppInfo.ProductName, text, StringComparison.Ordinal);
+    Assert.Contains(AppInfo.Brand, text, StringComparison.Ordinal);
+    Assert.Contains("InvalidOperationException", text, StringComparison.Ordinal);
+    Assert.Contains("outer", text, StringComparison.Ordinal);
+    Assert.Contains("--- inner ---", text, StringComparison.Ordinal);
+    Assert.Contains("ArgumentException", text, StringComparison.Ordinal);
+    Assert.Contains("inner", text, StringComparison.Ordinal);
+    Assert.Contains(nameof(Format_IncludesTypeMessageInnerAndStack), text, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public void Format_IncludesAggregateInners() {
+    var error = new AggregateException(
+      "batch",
+      new InvalidOperationException("one"),
+      new ArgumentException("two"));
+    var text = ErrorReport.Format(error);
+    Assert.Contains("AggregateException", text, StringComparison.Ordinal);
+    Assert.Contains("one", text, StringComparison.Ordinal);
+    Assert.Contains("two", text, StringComparison.Ordinal);
+    Assert.Contains("--- aggregate ---", text, StringComparison.Ordinal);
+  }
+
+  [Fact]
+  public void Capture_WritesCrashLogAndAppendsPath() {
+    var previous = Environment.GetEnvironmentVariable(AppPaths.DataEnv);
+    var root = Path.Combine(Path.GetTempPath(), "postclient-logs-" + Guid.NewGuid().ToString("N"));
+    string? written = null;
+    try {
+      Environment.SetEnvironmentVariable(AppPaths.DataEnv, root);
+      var text = ErrorReport.Capture(new InvalidOperationException("boom"));
+      Assert.Contains("boom", text, StringComparison.Ordinal);
+      Assert.Contains("Log: ", text, StringComparison.Ordinal);
+      var marker = text.LastIndexOf("Log: ", StringComparison.Ordinal);
+      written = text[(marker + 5)..].Trim();
+      Assert.True(File.Exists(written));
+      Assert.Contains("boom", File.ReadAllText(written), StringComparison.Ordinal);
+    }
+    finally {
+      Environment.SetEnvironmentVariable(AppPaths.DataEnv, previous);
+      if (!string.IsNullOrWhiteSpace(written) && File.Exists(written))
+        File.Delete(written);
+      if (Directory.Exists(root))
+        Directory.Delete(root, recursive: true);
+    }
+  }
+}
+
+
 public class AppPathsTests {
   [Fact]
   public void ProductFolderIsPlaceholderBrandNotMaksIt() {
@@ -128,6 +189,49 @@ public class MailLayoutTests {
     Assert.Equal(MailLayout.Stacked, MailLayout.Normalize(""));
     Assert.True(MailLayout.IsWide("wide"));
     Assert.True(MailLayout.IsStacked("stacked"));
+  }
+}
+
+
+public class MailFolderLayoutTests {
+  [Fact]
+  public void For_SelectsProviderFamily() {
+    Assert.Same(MailFolderLayout.Gmail, MailFolderLayout.For(MailProvider.Gmail));
+    Assert.Same(MailFolderLayout.Pec, MailFolderLayout.For(MailProvider.Aruba));
+    Assert.Same(MailFolderLayout.Pec, MailFolderLayout.For(MailProvider.Legalmail));
+    Assert.Same(MailFolderLayout.Pec, MailFolderLayout.For(MailProvider.Imap, MailCertifiedKind.Pec));
+    Assert.Same(MailFolderLayout.Outlook, MailFolderLayout.For(MailProvider.Outlook));
+    Assert.Same(MailFolderLayout.Store, MailFolderLayout.For(MailProvider.Pst));
+    Assert.Same(MailFolderLayout.Store, MailFolderLayout.For(MailProvider.Store));
+    Assert.Same(MailFolderLayout.Imap, MailFolderLayout.For(MailProvider.Imap));
+    Assert.False(MailFolderLayout.Gmail.LiftSystemFoldersOffInbox);
+    Assert.True(MailFolderLayout.Pec.LiftSystemFoldersOffInbox);
+    Assert.True(MailFolderLayout.Gmail.HideVirtualFolders);
+    Assert.False(MailFolderLayout.Pec.HideVirtualFolders);
+    Assert.True(MailFolderLayout.Gmail.PreferGmailSystemPaths);
+    Assert.False(MailFolderLayout.Pec.PreferGmailSystemPaths);
+  }
+}
+
+
+public class LayoutSettingsTests {
+  [Fact]
+  public void FolderTreeKey_JoinsMailboxAndFolder() {
+    Assert.Equal("box", LayoutSettings.FolderTreeKey("box", null));
+    Assert.Equal("box", LayoutSettings.FolderTreeKey(" box ", "  "));
+    Assert.Equal("box\tINBOX/Work", LayoutSettings.FolderTreeKey("box", "INBOX/Work"));
+    Assert.Equal("", LayoutSettings.FolderTreeKey("", "INBOX"));
+  }
+
+  [Fact]
+  public void IsFolderExpanded_TreatsMissingAsOpen() {
+    var layout = new LayoutSettings {
+      CollapsedFolders = ["box", "box\t[Gmail]"]
+    };
+    Assert.False(layout.IsFolderExpanded("box", null));
+    Assert.False(layout.IsFolderExpanded("BOX", "[Gmail]"));
+    Assert.True(layout.IsFolderExpanded("box", "INBOX"));
+    Assert.True(layout.IsFolderExpanded("other", null));
   }
 }
 
@@ -323,6 +427,29 @@ public class MailFolderRoleTests {
   }
 
   [Fact]
+  public void DisplayParent_PecLiftsSystemFoldersOffInbox() {
+    string[] pec = ["INBOX", "INBOX.Drafts", "INBOX.Sent", "INBOX.Trash", "INBOX.Bin", "INBOX.Clients", "INBOX.Work", "INBOX.Work.2024"];
+    var layout = MailFolderLayout.Pec;
+    Assert.Null(MailFolderRole.DisplayParent("Drafts", "INBOX.Drafts", pec, layout));
+    Assert.Null(MailFolderRole.DisplayParent("Sent", "INBOX.Sent", pec, layout));
+    Assert.Null(MailFolderRole.DisplayParent("Trash", "INBOX.Trash", pec, layout));
+    Assert.Null(MailFolderRole.DisplayParent("Bin", "INBOX.Bin", pec, layout));
+    Assert.Equal("INBOX", MailFolderRole.DisplayParent("Clients", "INBOX.Clients", pec, layout));
+    Assert.Equal("INBOX.Work", MailFolderRole.DisplayParent("2024", "INBOX.Work.2024", pec, layout));
+  }
+
+  [Fact]
+  public void DisplayParent_GmailKeepsLabelsAndMailbox() {
+    string[] gmail = ["INBOX", "[Gmail]", "[Gmail]/Drafts", "[Gmail]/Allianz", "P.IVA", "P.IVA/2024", "INBOX.Clients"];
+    var layout = MailFolderLayout.Gmail;
+    Assert.Equal("[Gmail]", MailFolderRole.DisplayParent("Drafts", "[Gmail]/Drafts", gmail, layout));
+    Assert.Equal("[Gmail]", MailFolderRole.DisplayParent("Allianz", "[Gmail]/Allianz", gmail, layout));
+    Assert.Equal("P.IVA", MailFolderRole.DisplayParent("2024", "P.IVA/2024", gmail, layout));
+    Assert.Null(MailFolderRole.DisplayParent("P.IVA", "P.IVA", gmail, layout));
+    Assert.Null(MailFolderRole.DisplayParent("INBOX.Clients", "INBOX.Clients", gmail, layout));
+  }
+
+  [Fact]
   public void OrdinaryFolder_HasNoSpecialKind() {
     Assert.Equal("", MailFolderRole.Kind("Clients", "INBOX.Clients"));
     Assert.Equal(100, MailFolderRole.SortKey("Clients", "INBOX.Clients"));
@@ -347,7 +474,10 @@ public class MailFolderRoleTests {
 
   [Fact]
   public void GmailVirtualFolders_AreHidden() {
-    Assert.True(MailFolderRole.IsHidden("[Gmail]", "[Gmail]"));
+    Assert.False(MailFolderRole.IsHidden("[Gmail]", "[Gmail]"));
+    Assert.True(MailFolderRole.IsNamespace("[Gmail]", "[Gmail]"));
+    Assert.False(MailFolderRole.IsCustom("[Gmail]", "[Gmail]"));
+    Assert.True(MailFolderRole.CanHoldFolders("[Gmail]", "[Gmail]"));
     Assert.True(MailFolderRole.IsHidden("All Mail", "[Gmail]/All Mail"));
     Assert.True(MailFolderRole.IsHidden("Starred", "[Gmail]/Starred"));
     Assert.True(MailFolderRole.IsHidden("Important", "[Gmail]/Important"));
@@ -358,6 +488,16 @@ public class MailFolderRoleTests {
   public void GmailSpecial_PrefersCanonicalPath() {
     Assert.True(MailFolderRole.PreferOver("[Gmail]/Sent Mail", "Sent"));
     Assert.False(MailFolderRole.PreferOver("Sent", "[Gmail]/Sent Mail"));
+  }
+
+  [Fact]
+  public void GmailUserLabel_UsesLeafName() {
+    Assert.Equal("Allianz", MailFolderRole.DisplayName("[Gmail]/Allianz", "[Gmail]/Allianz"));
+    Assert.True(MailFolderRole.IsCustom("Allianz", "[Gmail]/Allianz"));
+    Assert.Equal("P.IVA", MailFolderRole.DisplayName("P.IVA", "P.IVA"));
+    Assert.True(MailFolderRole.IsCustom("P.IVA", "P.IVA"));
+    Assert.Equal("P.IVA", MailFolderRole.DisplayName("P.IVA", "[Gmail]/P.IVA"));
+    Assert.True(MailFolderRole.IsCustom("P.IVA", "[Gmail]/P.IVA"));
   }
 }
 
@@ -401,6 +541,19 @@ public class UiCopyTests {
     Assert.Equal("Nachrichten abrufen", UiCopy.For("de").GetMessages);
     Assert.Equal("Bandeja de entrada", UiCopy.For("es").Inbox);
     Assert.Equal("Obtener mensajes", UiCopy.For("es").GetMessages);
+    Assert.Equal("_Help", UiCopy.For("en").Help);
+    Assert.Equal("_Aiuto", UiCopy.For("it").Help);
+    Assert.Equal("_Aide", UiCopy.For("fr").Help);
+    Assert.Equal("_Hilfe", UiCopy.For("de").Help);
+    Assert.Equal("A_yuda", UiCopy.For("es").Help);
+    Assert.Equal("New store…", UiCopy.For("en").CreateStore);
+    Assert.Equal("Unexpected error", UiCopy.For("en").ErrorTitle);
+    Assert.Equal("Errore imprevisto", UiCopy.For("it").ErrorTitle);
+    Assert.Equal("Erreur inattendue", UiCopy.For("fr").ErrorTitle);
+    Assert.Equal("Unerwarteter Fehler", UiCopy.For("de").ErrorTitle);
+    Assert.Equal("Error inesperado", UiCopy.For("es").ErrorTitle);
+    Assert.Equal("Copy details", UiCopy.For("en").CopyDetails);
+    Assert.Equal("Copied.", UiCopy.For("en").Copied);
   }
 
   [Fact]
@@ -469,6 +622,23 @@ public class FileSecretStoreTests {
       var got = store.Get("mailbox:1");
       Assert.True(got.IsSuccess);
       Assert.Equal("secret", got.Value);
+    }
+    finally {
+      if (File.Exists(path))
+        File.Delete(path);
+    }
+  }
+
+  [Fact]
+  public void Get_UnprotectFailure_ReturnsError() {
+    if (!OperatingSystem.IsWindows())
+      return;
+    var path = Path.Combine(Path.GetTempPath(), "postclient-secrets-" + Guid.NewGuid().ToString("N") + ".bin");
+    try {
+      File.WriteAllText(path, """{"oauth:x":"bm90LWRwYXBp"}""");
+      var store = new FileSecretStore(path);
+      var got = store.Get("oauth:x");
+      Assert.False(got.IsSuccess);
     }
     finally {
       if (File.Exists(path))
@@ -596,6 +766,7 @@ public class ConfigurationFileServiceTests {
         Direction = "Descending"
       };
       configuration.Layout.ColumnOrder = ["From", "Subject", "Date"];
+      configuration.Layout.CollapsedFolders = ["box1", "box1\tINBOX/Work"];
       files.Save(configuration);
 
       var reloaded = new ConfigurationFileService(path).Current;
@@ -614,6 +785,10 @@ public class ConfigurationFileServiceTests {
       Assert.Equal("Date", reloaded.Layout.ColumnSort?.Header);
       Assert.Equal("Descending", reloaded.Layout.ColumnSort?.Direction);
       Assert.Equal(["From", "Subject", "Date"], reloaded.Layout.ColumnOrder);
+      Assert.Equal(["box1", "box1\tINBOX/Work"], reloaded.Layout.CollapsedFolders);
+      Assert.False(reloaded.Layout.IsFolderExpanded("box1", null));
+      Assert.True(reloaded.Layout.IsFolderExpanded("box1", "INBOX"));
+      Assert.False(reloaded.Layout.IsFolderExpanded("box1", "INBOX/Work"));
     }
     finally {
       Directory.Delete(dir, true);

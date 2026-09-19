@@ -94,6 +94,38 @@ public sealed partial class UiCopy {
 
   public string DetachPstDone { get; init; } = "";
 
+  public string Help { get; init; } = "";
+
+  public string CreateStore { get; init; } = "";
+
+  public string AttachStore { get; init; } = "";
+
+  public string DetachStore { get; init; } = "";
+
+  public string MoveStore { get; init; } = "";
+
+  public string CreateStoreDone { get; init; } = "";
+
+  public string AttachStoreDone { get; init; } = "";
+
+  public string DetachStoreDone { get; init; } = "";
+
+  public string MoveStoreDone { get; init; } = "";
+
+  public string Retention { get; init; } = "";
+
+  public string RetentionHint { get; init; } = "";
+
+  public string RetentionDays { get; init; } = "";
+
+  public string RetentionRun { get; init; } = "";
+
+  public string LocalStore { get; init; } = "";
+
+  public string LocalStoreAppData { get; init; } = "";
+
+  public string IdentityHubHint { get; init; } = "";
+
   public string ImportOutlookRules { get; init; } = "";
 
   public string ImportRulesJson { get; init; } = "";
@@ -286,6 +318,14 @@ public sealed partial class UiCopy {
 
   public string Close { get; init; } = "";
 
+  public string ErrorTitle { get; init; } = "";
+
+  public string ErrorHint { get; init; } = "";
+
+  public string CopyDetails { get; init; } = "";
+
+  public string Copied { get; init; } = "";
+
   public string SaveAccount { get; init; } = "";
 
   public string RemoveAccount { get; init; } = "";
@@ -410,6 +450,8 @@ public sealed partial class UiCopy {
 
   public string DeleteFolderConfirm { get; init; } = "";
 
+  public string DeleteFoldersConfirm { get; init; } = "";
+
   public string CannotDeleteSystemFolder { get; init; } = "";
 
   public string CannotMoveSystemFolder { get; init; } = "";
@@ -418,7 +460,11 @@ public sealed partial class UiCopy {
 
   public string FolderDeleted { get; init; } = "";
 
+  public string FoldersDeleted { get; init; } = "";
+
   public string FolderMoved { get; init; } = "";
+
+  public string FoldersMoved { get; init; } = "";
 
   public string MovedMessages { get; init; } = "";
 
@@ -518,6 +564,7 @@ public sealed partial class UiCopy {
       View = "_View",
       Message = "_Message",
       Settings = "_Settings",
+      Help = "_Help",
       Features = "_Features…",
       FeaturesHint = "Certified-mail packs only. Ordinary mail (IMAP/POP3, search, labels, imports) stays on. Header checkboxes turn a whole country on or off. Italy is PEC and FatturaPA; Europe is eIDAS REM. France, Germany, Spain, and Switzerland add operator evidence labels — those networks are usually not IMAP.",
       Feature = "Feature",
@@ -555,11 +602,26 @@ public sealed partial class UiCopy {
       ImportEml = "Import EML…",
       ImportThunderbird = "Import Thunderbird…",
       ImportPst = "Import Outlook PST…",
-      AttachPst = "Attach Outlook data file…",
-      CreatePst = "New Outlook data file…",
-      CreatePstDone = "Created {0} and attached it as a mailbox.",
-      DetachPst = "Detach data file",
-      DetachPstDone = "Detached {0}. The file is still on disk.",
+      AttachPst = "Attach store…",
+      CreatePst = "New store…",
+      CreatePstDone = "Created {0} and attached it as a store.",
+      DetachPst = "Detach store",
+      DetachPstDone = "Detached {0}. The folder is still on disk.",
+      CreateStore = "New store…",
+      AttachStore = "Attach store…",
+      DetachStore = "Detach store",
+      MoveStore = "Move store…",
+      CreateStoreDone = "Created store {0}.",
+      AttachStoreDone = "Attached store {0}.",
+      DetachStoreDone = "Detached {0}. The folder is still on disk.",
+      MoveStoreDone = "Moved store {0}.",
+      Retention = "_Retention…",
+      RetentionHint = "Per folder. 0 keeps mail forever. A number of days permanently deletes older messages (not Trash).",
+      RetentionDays = "Days",
+      RetentionRun = "Run now",
+      LocalStore = "Local store",
+      LocalStoreAppData = "App data (default)",
+      IdentityHubHint = "Gmail and Microsoft sign-in uses Identity Hub (identity.maks-it.com). Password still works for PEC and generic IMAP.",
       ImportOutlookRules = "Import rules…",
       ImportRulesJson = "JSON (Postclient)",
       ImportRulesOutlook = "Outlook Rules Wizard (.rwz)",
@@ -656,6 +718,10 @@ public sealed partial class UiCopy {
       ZipFileName = "ZIP file name",
       ZipPassword = "Password (optional)",
       Close = "Close",
+      ErrorTitle = "Unexpected error",
+      ErrorHint = "Postclient hit an error. Copy the details below to debug or report it. The same text is also saved in the log file.",
+      CopyDetails = "Copy details",
+      Copied = "Copied.",
       SaveAccount = "Save Account",
       RemoveAccount = "Remove Account",
       AccountHint = "Gmail and Outlook use OAuth when you Sign in. Italian PEC and EU QTSP mailboxes fill IMAP/SMTP. Other accounts use IMAP/POP3 and a password (DPAPI on Windows, mode 600 on Linux).",
@@ -718,11 +784,14 @@ public sealed partial class UiCopy {
       EmptyFolderConfirm = "Empty “{0}”? Messages will be moved to Trash.",
       EmptyTrashConfirm = "Permanently delete all messages in “{0}”?",
       DeleteFolderConfirm = "Delete folder “{0}” and its messages on the server?",
+      DeleteFoldersConfirm = "Delete {0} folders and their messages on the server?",
       CannotDeleteSystemFolder = "System folders cannot be deleted.",
       CannotMoveSystemFolder = "System folders cannot be moved.",
       FolderCreated = "Folder created.",
       FolderDeleted = "Folder deleted.",
+      FoldersDeleted = "{0} folder(s) deleted.",
       FolderMoved = "Folder moved.",
+      FoldersMoved = "{0} folder(s) moved.",
       MovedMessages = "Moved {0} message(s).",
       AlreadyInFolder = "Already in that folder.",
       FolderEmptied = "Folder emptied.",
@@ -759,6 +828,7 @@ public sealed partial class UiCopy {
       View = "_Visualizza",
       Message = "_Messaggio",
       Settings = "_Impostazioni",
+      Help = "_Aiuto",
       Features = "_Funzionalità…",
       FeaturesHint = "Solo posta certificata. La posta ordinaria (IMAP/POP3, ricerca, etichette, import) resta sempre disponibile. Le caselle in intestazione accendono o spengono un intero Paese. Italia è PEC e FatturaPA; Europa è REM eIDAS. Francia, Germania, Spagna e Svizzera aggiungono etichette di evidenza — quelle reti di solito non sono IMAP.",
       Feature = "Funzione",
@@ -796,11 +866,26 @@ public sealed partial class UiCopy {
       ImportEml = "Importa EML…",
       ImportThunderbird = "Importa Thunderbird…",
       ImportPst = "Importa Outlook PST…",
-      AttachPst = "Collega file dati Outlook…",
-      CreatePst = "Nuovo file dati Outlook…",
-      CreatePstDone = "Creato {0} e collegato come casella.",
-      DetachPst = "Sgancia file dati",
-      DetachPstDone = "Sganciato {0}. Il file resta sul disco.",
+      AttachPst = "Collega archivio…",
+      CreatePst = "Nuovo archivio…",
+      CreatePstDone = "Creato l’archivio {0}.",
+      DetachPst = "Sgancia archivio",
+      DetachPstDone = "Sganciato {0}. La cartella resta sul disco.",
+      CreateStore = "Nuovo archivio…",
+      AttachStore = "Collega archivio…",
+      DetachStore = "Sgancia archivio",
+      MoveStore = "Sposta archivio…",
+      CreateStoreDone = "Creato l’archivio {0}.",
+      AttachStoreDone = "Collegato l’archivio {0}.",
+      DetachStoreDone = "Sganciato {0}. La cartella resta sul disco.",
+      MoveStoreDone = "Spostato l’archivio {0}.",
+      Retention = "_Conservazione…",
+      RetentionHint = "Per cartella. 0 conserva per sempre. Un numero di giorni elimina in modo permanente i messaggi più vecchi (non nel Cestino).",
+      RetentionDays = "Giorni",
+      RetentionRun = "Esegui ora",
+      LocalStore = "Archivio locale",
+      LocalStoreAppData = "Dati app (predefinito)",
+      IdentityHubHint = "Gmail e Microsoft accedono tramite Identity Hub (identity.maks-it.com). La password resta valida per PEC e IMAP generico.",
       ImportOutlookRules = "Importa regole…",
       ImportRulesJson = "JSON (Postclient)",
       ImportRulesOutlook = "Creazione guidata regole Outlook (.rwz)",
@@ -897,6 +982,10 @@ public sealed partial class UiCopy {
       ZipFileName = "Nome del file ZIP",
       ZipPassword = "Password (facoltativa)",
       Close = "Chiudi",
+      ErrorTitle = "Errore imprevisto",
+      ErrorHint = "Postclient ha riscontrato un errore. Copia i dettagli sotto per il debug o per segnalarlo. Lo stesso testo è anche nel file di log.",
+      CopyDetails = "Copia dettagli",
+      Copied = "Copiato.",
       SaveAccount = "Salva account",
       RemoveAccount = "Rimuovi account",
       AccountHint = "Gmail e Outlook usano OAuth con Accedi. PEC italiane e caselle QTSP UE compilano IMAP/SMTP. Gli altri account usano IMAP/POP3 e una password (DPAPI su Windows, mode 600 su Linux).",
@@ -959,11 +1048,14 @@ public sealed partial class UiCopy {
       EmptyFolderConfirm = "Svuotare “{0}”? I messaggi verranno spostati nel Cestino.",
       EmptyTrashConfirm = "Eliminare definitivamente tutti i messaggi in “{0}”?",
       DeleteFolderConfirm = "Eliminare la cartella “{0}” e i suoi messaggi sul server?",
+      DeleteFoldersConfirm = "Eliminare {0} cartelle e i loro messaggi sul server?",
       CannotDeleteSystemFolder = "Le cartelle di sistema non si possono eliminare.",
       CannotMoveSystemFolder = "Le cartelle di sistema non si possono spostare.",
       FolderCreated = "Cartella creata.",
       FolderDeleted = "Cartella eliminata.",
+      FoldersDeleted = "Eliminate {0} cartelle.",
       FolderMoved = "Cartella spostata.",
+      FoldersMoved = "Spostate {0} cartelle.",
       MovedMessages = "Spostati {0} messaggi.",
       AlreadyInFolder = "Già in quella cartella.",
       FolderEmptied = "Cartella svuotata.",

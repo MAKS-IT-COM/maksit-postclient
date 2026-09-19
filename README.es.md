@@ -68,11 +68,11 @@ Se pueden guardar varios buzones. Los perfiles rellenan hosts y puertos:
 | IT PEC — Aruba, Legalmail, Namirial, Poste Italiane, Register.it, Libero | Hosts IMAP/SMTP del gestor italiano (nombres de host en el [README en inglés](README.md)) |
 | EU — Intesi Group | `imap.ig-trustmail.com` / `smtp.ig-trustmail.com` |
 | IMAP / POP3 | Cualquier host que indique el operador. Ponga el **tipo de buzón** en PEC italiana o REM UE si esa cuenta es certificada (también con dominio propio) |
-| Archivo de datos (`.pst` / `.ost`) | Almacén local abierto como buzón. El `.pst` Unicode es escribible; `.ost` / `.pst` ANSI se copia a un `.pst` Unicode en la primera escritura. Sin contraseña. |
+| Archivo local | Carpeta en disco (`postclient.store.json` + `mail.db` + `.eml`). Sin contraseña ni SMTP. Crear, adjuntar, mover o desconectar desde el menú Archivo. |
 
 Los buzones IMAP certificados usan la contraseña del gestor, o una contraseña de aplicación si hay 2FA. **Lleida.net** y otras notificaciones certificadas españolas **no** suelen ser IMAP. Tampoco **AR24** (Francia), **De-Mail** (Alemania) ni **IncaMail** (Suiza). Si el operador dio hosts IMAP/POP3, elija **IMAP / POP3**. Si no, este cliente no abre ese buzón; sí puede mostrar evidencia ETSI REM en mensajes importados como `.eml`.
 
-OAuth: ID de cliente de Google (termina en `.apps.googleusercontent.com`) y, para clientes **Web**, el **secreto de cliente** — ambos en Ajustes de cuenta (el secreto va a `secrets.bin`). Los clientes públicos de escritorio no necesitan secreto. Variables `POSTCLIENT_GOOGLE_CLIENT_ID` / `POSTCLIENT_GOOGLE_CLIENT_SECRET`. Activar la **API de Gmail**, el alcance `https://mail.google.com/`, el bucle local `http://127.0.0.1` e **IMAP** en Gmail. Microsoft: ID de aplicación de Azure (GUID); cliente público; redirección `http://localhost`; permisos IMAP/SMTP.
+Gmail y Microsoft 365 pasan por **Identity Hub** (`https://identity.maks-it.com`). Ajustes de cuenta abre `/desktop-login?provider=Google` o `Microsoft`. El JWT y el token de actualización del Hub quedan en `secrets.bin`; IMAP usa un token de buzón de corta vida (XOAUTH2). Al conectar, el cliente renueva la sesión Hub con ese token de actualización para que Gmail y Outlook sigan conectados tras cerrar la app. Si una versión anterior guardó solo el JWT, inicie sesión otra vez en Ajustes de cuenta. Override: `POSTCLIENT_IDENTITY_HUB`. La contraseña sigue valiendo para PEC e IMAP genérico.
 
 Las contraseñas y los tokens OAuth quedan junto a la configuración (`DPAPI` en Windows, modo `600` en Linux/macOS), nunca en `settings.json`.
 
@@ -115,7 +115,7 @@ Las notificaciones del sistema avisan de PEC, acuses y REM nuevos (toast de Wind
 
 ## Lectura, carpetas, redacción
 
-- El árbol sigue al servidor (Bandeja de entrada, Ricevute, Borradores, Enviados, Archivo, No deseado, Papelera, más carpetas propias). Las de sistema no se pueden borrar. Se puede crear una carpeta, vaciarla (a Papelera, o de forma definitiva en Papelera), marcar todo leído/no leído, eliminar una carpeta propia y arrastrar mensajes a una carpeta.
+- El árbol sigue al servidor (Bandeja de entrada, Ricevute, Borradores, Enviados, Archivo, No deseado, Papelera, más carpetas propias). Las rutas IMAP anidadas se muestran como carpetas anidadas, incluidas las etiquetas de Gmail `[Gmail]/…` bajo `[Gmail]`. Borradores, Enviados y Papelera que el servidor guarda como `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` quedan junto a la bandeja, no debajo. Gmail usa `/` como separador, así que una etiqueta como `P.IVA` sigue siendo una sola carpeta. Las de sistema no se pueden borrar. Se puede crear una carpeta, vaciarla (a Papelera, o de forma definitiva en Papelera), marcar todo leído/no leído, eliminar una carpeta propia y arrastrar mensajes a una carpeta. Qué cuentas y carpetas anidadas están abiertas o cerradas se guarda en `settings.json`.
 - Columnas: no leído, marca, adjuntos, entrega, tipo (PEC / RIC / REM / SIG), de, asunto, fecha (local `yyyy-MM-dd HH:mm`), etiqueta de expediente.
 - Vista: HTML (motor web del sistema), texto, fuente o **FatturaPA**. Disposición: lista encima de la lectura, o tres columnas (carpetas, lista, lectura).
 - **Agrupar conversaciones** sangra las respuestas en la lista (Message-ID / In-Reply-To / References, profundidad máxima 8). Los acuses PEC del mismo original quedan juntos. No hay un panel de conversación aparte.

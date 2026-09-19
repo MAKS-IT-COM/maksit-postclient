@@ -91,7 +91,7 @@ public sealed class MailArchiveStore : IDisposable {
     lock (_gate) {
       using var cmd = _db.CreateCommand();
       cmd.CommandText = """
-        SELECT m.id, m.subject, m.from_addr, m.body_text, m.attachment_text
+        SELECT m.mailbox_id, m.id, m.subject, m.from_addr, m.body_text, m.attachment_text
         FROM messages m
         LEFT JOIN message_embeddings e ON e.message_id = m.id
         WHERE (e.message_id IS NULL OR e.model_id <> $model)
@@ -105,11 +105,12 @@ public sealed class MailArchiveStore : IDisposable {
       using var reader = cmd.ExecuteReader();
       while (reader.Read()) {
         rows.Add(new EmbeddingWorkItem(
-          reader.GetInt64(0),
-          reader.IsDBNull(1) ? "" : reader.GetString(1),
+          reader.GetString(0),
+          reader.GetInt64(1),
           reader.IsDBNull(2) ? "" : reader.GetString(2),
           reader.IsDBNull(3) ? "" : reader.GetString(3),
-          reader.IsDBNull(4) ? "" : reader.GetString(4)));
+          reader.IsDBNull(4) ? "" : reader.GetString(4),
+          reader.IsDBNull(5) ? "" : reader.GetString(5)));
       }
 
       return rows;
@@ -618,6 +619,186 @@ public sealed class MailArchiveStore : IDisposable {
     }
   }
 
+  public bool HasMessageId(string mailboxId, string messageId) {
+    if (string.IsNullOrWhiteSpace(messageId))
+      return false;
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT 1 FROM messages
+        WHERE mailbox_id = $m AND message_id = $mid
+        LIMIT 1;
+        """;
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      cmd.Parameters.AddWithValue("$mid", messageId.Trim());
+      return cmd.ExecuteScalar() is not null;
+    }
+  }
+
+  public MailArchiveCopy? ReadCopy(string mailboxId, string folder, uint uid) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT m.uid, m.folder, m.subject, m.from_addr, m.date_utc, m.is_seen, m.is_flagged, m.has_attachments,
+               m.priority, m.envelope_kind, m.envelope_badge, m.envelope_tipo, m.message_id, m.in_reply_to, m.eml_path,
+               (SELECT GROUP_CONCAT(name, ', ') FROM message_labels l
+                WHERE l.mailbox_id = m.mailbox_id AND l.folder = m.folder AND l.uid = m.uid),
+               m.body_text, m.attachment_text, e.model_id, e.vector
+        FROM messages m
+        LEFT JOIN message_embeddings e ON e.message_id = m.id
+        WHERE m.mailbox_id = $m AND m.folder = $f AND m.uid = $u;
+        """;
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      cmd.Parameters.AddWithValue("$f", folder);
+      cmd.Parameters.AddWithValue("$u", uid);
+      using var reader = cmd.ExecuteReader();
+      if (!reader.Read())
+        return null;
+      var header = ReadHeader(reader);
+      var body = reader.IsDBNull(16) ? "" : reader.GetString(16);
+      var att = reader.IsDBNull(17) ? "" : reader.GetString(17);
+      var model = reader.IsDBNull(18) ? "" : reader.GetString(18);
+      float[]? vector = null;
+      if (!reader.IsDBNull(19))
+        vector = EmbeddingVector.FromBlob(reader.GetFieldValue<byte[]>(19));
+      var labels = string.IsNullOrWhiteSpace(header.Labels)
+        ? Array.Empty<string>()
+        : header.Labels.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+      return new MailArchiveCopy {
+        Header = header,
+        BodyText = body,
+        AttachmentText = att,
+        Labels = labels,
+        ModelId = model,
+        Vector = vector
+      };
+    }
+  }
+
+  public uint InsertCopy(string mailboxId, string folder, MailArchiveCopy copy) {
+    ArgumentNullException.ThrowIfNull(copy);
+    lock (_gate) {
+      using var tx = _db.BeginTransaction();
+      var uid = copy.Header.Uid;
+      if (uid == 0)
+        uid = NextUidUnlocked(mailboxId, folder);
+      var header = new MailArchiveHeader {
+        Uid = uid,
+        Folder = folder,
+        Subject = copy.Header.Subject,
+        From = copy.Header.From,
+        Date = copy.Header.Date,
+        IsSeen = copy.Header.IsSeen,
+        IsFlagged = copy.Header.IsFlagged,
+        HasAttachments = copy.Header.HasAttachments,
+        Priority = copy.Header.Priority,
+        EnvelopeKind = copy.Header.EnvelopeKind,
+        EnvelopeBadge = copy.Header.EnvelopeBadge,
+        EnvelopeTipo = copy.Header.EnvelopeTipo,
+        MessageId = copy.Header.MessageId,
+        InReplyTo = copy.Header.InReplyTo,
+        EmlPath = copy.Header.EmlPath,
+        Labels = copy.Header.Labels
+      };
+      var id = UpsertHeader(tx, mailboxId, header, updateFlags: true);
+      using (var body = _db.CreateCommand()) {
+        body.Transaction = tx;
+        body.CommandText = """
+          UPDATE messages
+          SET eml_path = $eml, body_text = $body, attachment_text = $att
+          WHERE id = $id;
+          """;
+        body.Parameters.AddWithValue("$eml", header.EmlPath ?? "");
+        body.Parameters.AddWithValue("$body", copy.BodyText ?? "");
+        body.Parameters.AddWithValue("$att", copy.AttachmentText ?? "");
+        body.Parameters.AddWithValue("$id", id);
+        body.ExecuteNonQuery();
+      }
+
+      IndexFts(tx, id, header, copy.BodyText, copy.AttachmentText);
+      if (copy.Vector is { Length: > 0 }) {
+        using var emb = _db.CreateCommand();
+        emb.Transaction = tx;
+        emb.CommandText = """
+          INSERT INTO message_embeddings (message_id, model_id, dims, vector)
+          VALUES ($id, $model, $dims, $vec)
+          ON CONFLICT(message_id) DO UPDATE SET
+            model_id = excluded.model_id,
+            dims = excluded.dims,
+            vector = excluded.vector;
+          """;
+        var stored = EmbeddingVector.Truncate(copy.Vector, EmbeddingModelSpec.StoredDimensions);
+        emb.Parameters.AddWithValue("$id", id);
+        emb.Parameters.AddWithValue("$model", string.IsNullOrWhiteSpace(copy.ModelId) ? EmbeddingModelSpec.Id : copy.ModelId);
+        emb.Parameters.AddWithValue("$dims", stored.Length);
+        emb.Parameters.AddWithValue("$vec", EmbeddingVector.ToBlob(stored));
+        emb.ExecuteNonQuery();
+      }
+
+      foreach (var label in copy.Labels) {
+        if (string.IsNullOrWhiteSpace(label))
+          continue;
+        using var lab = _db.CreateCommand();
+        lab.Transaction = tx;
+        lab.CommandText = """
+          INSERT OR IGNORE INTO message_labels (mailbox_id, folder, uid, name)
+          VALUES ($m, $f, $u, $n);
+          """;
+        lab.Parameters.AddWithValue("$m", mailboxId);
+        lab.Parameters.AddWithValue("$f", folder);
+        lab.Parameters.AddWithValue("$u", uid);
+        lab.Parameters.AddWithValue("$n", label.Trim());
+        lab.ExecuteNonQuery();
+      }
+
+      tx.Commit();
+      return uid;
+    }
+  }
+
+  public IReadOnlyList<uint> UidsOlderThan(string mailboxId, string folder, DateTimeOffset cutoff) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT uid FROM messages
+        WHERE mailbox_id = $m AND folder = $f AND date_utc <> '' AND date_utc < $cut
+        ORDER BY date_utc;
+        """;
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      cmd.Parameters.AddWithValue("$f", folder);
+      cmd.Parameters.AddWithValue("$cut", cutoff.ToString("O"));
+      var ids = new List<uint>();
+      using var reader = cmd.ExecuteReader();
+      while (reader.Read())
+        ids.Add((uint)reader.GetInt64(0));
+      return ids;
+    }
+  }
+
+  public IReadOnlyList<string> DistinctMailboxIds() {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = "SELECT DISTINCT mailbox_id FROM messages ORDER BY mailbox_id;";
+      var ids = new List<string>();
+      using var reader = cmd.ExecuteReader();
+      while (reader.Read())
+        ids.Add(reader.GetString(0));
+      return ids;
+    }
+  }
+
+  public void CopyMailboxInto(string mailboxId, MailArchiveStore dest) {
+    ArgumentNullException.ThrowIfNull(dest);
+    foreach (var folder in ListFolders(mailboxId)) {
+      foreach (var header in ListFolder(mailboxId, folder)) {
+        var copy = ReadCopy(mailboxId, folder, header.Uid);
+        if (copy is null)
+          continue;
+        dest.InsertCopy(mailboxId, folder, copy);
+      }
+    }
+  }
+
   public void Dispose() {
     lock (_gate) {
       try {
@@ -630,6 +811,15 @@ public sealed class MailArchiveStore : IDisposable {
 
       _db.Dispose();
     }
+  }
+
+  private uint NextUidUnlocked(string mailboxId, string folder) {
+    using var cmd = _db.CreateCommand();
+    cmd.CommandText = "SELECT COALESCE(MAX(uid), 0) FROM messages WHERE mailbox_id = $m AND folder = $f;";
+    cmd.Parameters.AddWithValue("$m", mailboxId);
+    cmd.Parameters.AddWithValue("$f", folder);
+    var max = (long)(cmd.ExecuteScalar() ?? 0L);
+    return (uint)max + 1;
   }
 
   private IReadOnlyList<MailArchiveHeader> SearchLike(string mailboxId, string folder, string text) {
@@ -1001,6 +1191,7 @@ public readonly record struct MailArchiveUid(string MailboxId, string Folder, ui
 
 
 public readonly record struct EmbeddingWorkItem(
+  string MailboxId,
   long MessageId,
   string Subject,
   string From,
@@ -1017,6 +1208,8 @@ public readonly record struct ArchiveIndexStats(
 
 
 public sealed class MailArchiveHeader {
+  public string MailboxId { get; set; } = "";
+
   public uint Uid { get; init; }
 
   public string Folder { get; init; } = "";

@@ -71,6 +71,19 @@ public class MailboxQuotaTests {
     Assert.Contains("Aruba 95%", line);
     Assert.Contains("imaps.pec.aruba.it", line);
   }
+
+  [Fact]
+  public void Line_WithoutLimit_ShowsUsedAndHidesPercent() {
+    var quota = new MailboxQuota {
+      Label = "POP",
+      Host = "pop.example.com",
+      UsedKb = 2048
+    };
+    Assert.Null(quota.Percent);
+    var line = quota.Line();
+    Assert.Contains("used", line);
+    Assert.DoesNotContain("%", line);
+  }
 }
 
 

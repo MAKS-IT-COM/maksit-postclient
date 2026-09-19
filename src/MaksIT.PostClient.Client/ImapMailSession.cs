@@ -17,11 +17,6 @@ public sealed class ImapMailSession : IMailSession {
   private MailboxAccount? _account;
   private MailAuthMaterial? _material;
 
-  private static readonly string[] ListHeaders = [
-    "X-Trasporto", "X-Ricevuta", "X-TipoRicevuta", "X-Riferimento-Message-ID",
-    "In-Reply-To", "References", "X-Priority", "Importance", "Priority"
-  ];
-
   private const MessageSummaryItems FlagItems =
     MessageSummaryItems.UniqueId | MessageSummaryItems.Flags;
 
@@ -93,14 +88,15 @@ public sealed class ImapMailSession : IMailSession {
       return Result<IReadOnlyList<MailFolderInfo>>.UnprocessableEntity(null, "Not connected.");
 
     try {
+      var layout = AccountLayout();
       var folders = new List<MailFolderInfo>();
-      await AddFolderAsync(client.Inbox, folders, cancellationToken).ConfigureAwait(false);
+      await AddFolderAsync(client.Inbox, folders, layout, cancellationToken).ConfigureAwait(false);
       foreach (var ns in client.PersonalNamespaces) {
-        var root = client.GetFolder(ns);
-        await WalkAsync(root, folders, cancellationToken).ConfigureAwait(false);
+        foreach (var folder in await ListNamespaceAsync(client, ns, cancellationToken).ConfigureAwait(false))
+          await AddFolderAsync(folder, folders, layout, cancellationToken).ConfigureAwait(false);
       }
 
-      return Result<IReadOnlyList<MailFolderInfo>>.Ok(MailFolderCatalog.Normalize(folders));
+      return Result<IReadOnlyList<MailFolderInfo>>.Ok(MailFolderCatalog.Normalize(folders, layout));
     }
     catch (Exception ex) {
       return Result<IReadOnlyList<MailFolderInfo>>.UnprocessableEntity(null, ex.Message);
@@ -127,11 +123,12 @@ public sealed class ImapMailSession : IMailSession {
       return Result<MailFolderSync>.BadRequest(null, "Folder is required.");
 
     try {
-      var imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       await OpenReadOnlyAsync(imapFolder, cancellationToken).ConfigureAwait(false);
       if (imapFolder.Count == 0)
         return Result<MailFolderSync>.Ok(new MailFolderSync { Present = [] });
 
+      var extraHeaders = ImapFetchPolicy.ExtraHeaders(AccountProvider());
       var known = knownIds ?? (IReadOnlySet<uint>)new HashSet<uint>();
       if (known.Count > 0 && known.Count >= imapFolder.Count / 2) {
         var flagRows = await FetchSummariesAsync(
@@ -139,34 +136,38 @@ public sealed class ImapMailSession : IMailSession {
           FlagItems,
           extraHeaders: null,
           cancellationToken).ConfigureAwait(false);
-        var flags = FlagsOf(flagRows);
         var present = IdsOf(flagRows);
-        var unknown = flagRows
-          .Where(s => s.UniqueId.IsValid && !known.Contains(s.UniqueId.Id))
-          .Select(s => s.UniqueId)
-          .ToList();
-        if (unknown.Count == 0)
-          return Result<MailFolderSync>.Ok(new MailFolderSync { Flags = flags, Present = present });
+        if (present.Count > 0) {
+          var flags = FlagsOf(flagRows);
+          var unknown = flagRows
+            .Where(s => s.UniqueId.IsValid && !known.Contains(s.UniqueId.Id))
+            .Select(s => s.UniqueId)
+            .ToList();
+          if (unknown.Count == 0)
+            return Result<MailFolderSync>.Ok(new MailFolderSync { Flags = flags, Present = present });
 
-        var added = await FetchByUidsAsync(imapFolder, unknown, cancellationToken).ConfigureAwait(false);
-        return Result<MailFolderSync>.Ok(new MailFolderSync {
-          Headers = HeadersOf(folder, added),
-          Flags = flags,
-          Present = present
-        });
+          var added = await FetchByUidsAsync(imapFolder, unknown, extraHeaders, cancellationToken)
+            .ConfigureAwait(false);
+          return Result<MailFolderSync>.Ok(new MailFolderSync {
+            Headers = HeadersOf(folder, added),
+            Flags = flags,
+            Present = present
+          });
+        }
       }
 
-      var extraHeaders = MailProvider.Normalize(AccountProvider()) == MailProvider.Gmail
-        ? null
-        : ListHeaders;
       var summaries = await FetchSummariesAsync(
         imapFolder,
         ListItems,
         extraHeaders,
         cancellationToken).ConfigureAwait(false);
+      var headers = HeadersOf(folder, summaries);
+      var ids = IdsOf(summaries);
+      if (ids.Count == 0 && imapFolder.Count > 0)
+        return Result<MailFolderSync>.Ok(new MailFolderSync { Headers = headers, Present = null });
       return Result<MailFolderSync>.Ok(new MailFolderSync {
-        Headers = HeadersOf(folder, summaries),
-        Present = IdsOf(summaries)
+        Headers = headers,
+        Present = ids
       });
     }
     catch (Exception ex) {
@@ -189,7 +190,7 @@ public sealed class ImapMailSession : IMailSession {
       return Result<MailMessageBody>.UnprocessableEntity(null, "Not connected.");
 
     try {
-      var imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       await OpenReadOnlyAsync(imapFolder, cancellationToken).ConfigureAwait(false);
       var mime = await imapFolder.GetMessageAsync(new UniqueId(id), cancellationToken).ConfigureAwait(false);
       return Result<MailMessageBody>.Ok(await MimeBody.FromMimeAsync(folder, id, mime, cancellationToken).ConfigureAwait(false));
@@ -247,10 +248,12 @@ public sealed class ImapMailSession : IMailSession {
       var mime = await MimeMessage.LoadAsync(stream, cancellationToken).ConfigureAwait(false);
       IMailFolder? imapFolder;
       try {
-        imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+        imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       }
       catch {
-        imapFolder = await client.Inbox.CreateAsync(folder, true, cancellationToken).ConfigureAwait(false);
+        var root = await ResolveCreateParentAsync(client, null, cancellationToken).ConfigureAwait(false);
+        imapFolder = await root.CreateAsync(MailFolderPath.Leaf(folder), true, cancellationToken)
+          .ConfigureAwait(false);
       }
 
       if (imapFolder is null)
@@ -306,8 +309,8 @@ public sealed class ImapMailSession : IMailSession {
       return Result.BadRequest("Select at least one message.");
 
     try {
-      var source = await client.GetFolderAsync(fromFolder, cancellationToken).ConfigureAwait(false);
-      var dest = await client.GetFolderAsync(toFolder, cancellationToken).ConfigureAwait(false);
+      var source = await GetMailFolderAsync(client, fromFolder, cancellationToken).ConfigureAwait(false);
+      var dest = await GetMailFolderAsync(client, toFolder, cancellationToken).ConfigureAwait(false);
       await source.OpenAsync(FolderAccess.ReadWrite, cancellationToken).ConfigureAwait(false);
       try {
         if (client.Capabilities.HasFlag(ImapCapabilities.Move))
@@ -360,7 +363,7 @@ public sealed class ImapMailSession : IMailSession {
       return Result.BadRequest("Select at least one message.");
 
     try {
-      var imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       await imapFolder.OpenAsync(FolderAccess.ReadWrite, cancellationToken).ConfigureAwait(false);
       if (update.Seen == true)
         await StoreFlagsAsync(imapFolder, uids, StoreAction.Add, MessageFlags.Seen, cancellationToken).ConfigureAwait(false);
@@ -403,9 +406,8 @@ public sealed class ImapMailSession : IMailSession {
       return Result.BadRequest("Folder name cannot contain slashes.");
 
     try {
-      var parent = string.IsNullOrWhiteSpace(parentFolder)
-        ? client.GetFolder(client.PersonalNamespaces[0])
-        : await client.GetFolderAsync(parentFolder, cancellationToken).ConfigureAwait(false);
+      var parent = await ResolveCreateParentAsync(client, parentFolder, cancellationToken)
+        .ConfigureAwait(false);
       await parent.CreateAsync(leaf, true, cancellationToken).ConfigureAwait(false);
       return Result.Ok();
     }
@@ -440,7 +442,7 @@ public sealed class ImapMailSession : IMailSession {
       return Result.BadRequest("Folder name cannot contain slashes.");
 
     try {
-      var imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       if (imapFolder.IsNamespace || imapFolder.Attributes.HasFlag(FolderAttributes.Inbox))
         return Result.BadRequest("System folders cannot be moved.");
       if (MailFolderPath.IsSelfOrUnder(parentFolder, folder))
@@ -448,12 +450,11 @@ public sealed class ImapMailSession : IMailSession {
       if (imapFolder.IsOpen)
         await imapFolder.CloseAsync(false, cancellationToken).ConfigureAwait(false);
       await OpenReadOnlyAsync(client.Inbox, cancellationToken).ConfigureAwait(false);
-      imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       if (imapFolder.IsOpen)
         await imapFolder.CloseAsync(false, cancellationToken).ConfigureAwait(false);
-      var parent = string.IsNullOrWhiteSpace(parentFolder)
-        ? client.GetFolder(client.PersonalNamespaces[0])
-        : await client.GetFolderAsync(parentFolder, cancellationToken).ConfigureAwait(false);
+      var parent = await ResolveCreateParentAsync(client, parentFolder, cancellationToken)
+        .ConfigureAwait(false);
       await imapFolder.RenameAsync(parent, leaf, cancellationToken).ConfigureAwait(false);
       return Result.Ok();
     }
@@ -473,7 +474,7 @@ public sealed class ImapMailSession : IMailSession {
       return Result.BadRequest("Folder is required.");
 
     try {
-      var imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       if (imapFolder.IsNamespace || imapFolder.Attributes.HasFlag(FolderAttributes.Inbox))
         return Result.BadRequest("System folders cannot be deleted.");
 
@@ -487,13 +488,13 @@ public sealed class ImapMailSession : IMailSession {
         var emptied = await EmptyFolderCoreAsync(folder, null, cancellationToken).ConfigureAwait(false);
         if (!emptied.IsSuccess)
           return emptied;
-        imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+        imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       }
 
       if (imapFolder.IsOpen)
         await imapFolder.CloseAsync(false, cancellationToken).ConfigureAwait(false);
       await OpenReadOnlyAsync(client.Inbox, cancellationToken).ConfigureAwait(false);
-      imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       if (imapFolder.IsOpen)
         await imapFolder.CloseAsync(false, cancellationToken).ConfigureAwait(false);
       if (imapFolder.IsSubscribed) {
@@ -538,7 +539,7 @@ public sealed class ImapMailSession : IMailSession {
       return Result.BadRequest("Folder is required.");
 
     try {
-      var imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       try {
         await imapFolder.StatusAsync(StatusItems.Count, cancellationToken).ConfigureAwait(false);
       }
@@ -556,7 +557,7 @@ public sealed class ImapMailSession : IMailSession {
       var toTrash = !string.IsNullOrWhiteSpace(trashFolder)
         && !folder.Equals(trashFolder, StringComparison.OrdinalIgnoreCase);
       if (toTrash) {
-        var dest = await client.GetFolderAsync(trashFolder!, cancellationToken).ConfigureAwait(false);
+        var dest = await GetMailFolderAsync(client, trashFolder!, cancellationToken).ConfigureAwait(false);
         if (client.Capabilities.HasFlag(ImapCapabilities.Move))
           await imapFolder.MoveToAsync(uids, dest, cancellationToken).ConfigureAwait(false);
         else {
@@ -596,7 +597,7 @@ public sealed class ImapMailSession : IMailSession {
       return Result.BadRequest("Folder is required.");
 
     try {
-      var imapFolder = await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+      var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
       await imapFolder.OpenAsync(FolderAccess.ReadWrite, cancellationToken).ConfigureAwait(false);
       var uids = await imapFolder.SearchAsync(SearchQuery.All, cancellationToken).ConfigureAwait(false);
       if (uids.Count == 0)
@@ -648,9 +649,57 @@ public sealed class ImapMailSession : IMailSession {
     client.Dispose();
   }
 
+  private static async Task<IMailFolder> GetMailFolderAsync(
+    ImapClient client,
+    string folder,
+    CancellationToken cancellationToken) {
+    if (ImapFetchPolicy.IsInboxPath(folder))
+      return client.Inbox;
+    return await client.GetFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+  }
+
+  private static async Task<IMailFolder> ResolveCreateParentAsync(
+    ImapClient client,
+    string? parentFolder,
+    CancellationToken cancellationToken) {
+    if (!string.IsNullOrWhiteSpace(parentFolder))
+      return await GetMailFolderAsync(client, parentFolder, cancellationToken).ConfigureAwait(false);
+    if (client.PersonalNamespaces.Count > 0)
+      return client.GetFolder(client.PersonalNamespaces[0]);
+    return client.Inbox.ParentFolder ?? client.Inbox;
+  }
+
+  private static async Task<IReadOnlyList<IMailFolder>> ListNamespaceAsync(
+    ImapClient client,
+    FolderNamespace ns,
+    CancellationToken cancellationToken) {
+    try {
+      var all = await client.GetFoldersAsync(ns, StatusItems.Unread | StatusItems.Count, false, cancellationToken)
+        .ConfigureAwait(false);
+      if (all.Count > 0)
+        return all.ToList();
+    }
+    catch {
+    }
+
+    try {
+      var subscribed = await client
+        .GetFoldersAsync(ns, StatusItems.Unread | StatusItems.Count, true, cancellationToken)
+        .ConfigureAwait(false);
+      if (subscribed.Count > 0)
+        return subscribed.ToList();
+    }
+    catch {
+    }
+
+    var folders = new List<IMailFolder>();
+    await WalkAsync(client.GetFolder(ns), folders, cancellationToken).ConfigureAwait(false);
+    return folders;
+  }
+
   private static async Task WalkAsync(
     IMailFolder root,
-    List<MailFolderInfo> folders,
+    List<IMailFolder> folders,
     CancellationToken cancellationToken) {
     IList<IMailFolder> children;
     try {
@@ -661,7 +710,7 @@ public sealed class ImapMailSession : IMailSession {
     }
 
     foreach (var child in children) {
-      await AddFolderAsync(child, folders, cancellationToken).ConfigureAwait(false);
+      folders.Add(child);
       await WalkAsync(child, folders, cancellationToken).ConfigureAwait(false);
     }
   }
@@ -669,8 +718,9 @@ public sealed class ImapMailSession : IMailSession {
   private static async Task AddFolderAsync(
     IMailFolder folder,
     List<MailFolderInfo> folders,
+    MailFolderLayout layout,
     CancellationToken cancellationToken) {
-    if (ShouldSkip(folder))
+    if (ShouldSkip(folder, layout))
       return;
     if (folders.Any(f => f.FullName.Equals(folder.FullName, StringComparison.OrdinalIgnoreCase)))
       return;
@@ -697,19 +747,31 @@ public sealed class ImapMailSession : IMailSession {
       Name = folder.Name,
       Unread = unread,
       Total = total,
-      Kind = KindFrom(folder)
+      Kind = KindFrom(folder),
+      Delimiter = FolderDelimiter(folder)
     });
   }
 
-  private static bool ShouldSkip(IMailFolder folder) {
+  private MailFolderLayout AccountLayout() {
+    lock (_gate)
+      return MailFolderLayout.For(_account);
+  }
+
+  private static bool ShouldSkip(IMailFolder folder, MailFolderLayout layout) {
     var attrs = folder.Attributes;
     if (attrs.HasFlag(FolderAttributes.NonExistent))
       return true;
-    if (attrs.HasFlag(FolderAttributes.All)
-        || attrs.HasFlag(FolderAttributes.Flagged)
-        || attrs.HasFlag(FolderAttributes.Important))
+    if (layout.HideVirtualFolders
+        && (attrs.HasFlag(FolderAttributes.All)
+          || attrs.HasFlag(FolderAttributes.Flagged)
+          || attrs.HasFlag(FolderAttributes.Important)))
       return true;
-    return MailFolderRole.IsHidden(folder.Name, folder.FullName);
+    return layout.HideVirtualFolders && MailFolderRole.IsHidden(folder.Name, folder.FullName);
+  }
+
+  private static char FolderDelimiter(IMailFolder folder) {
+    var sep = folder.DirectorySeparator;
+    return sep is MailFolderPath.Slash or MailFolderPath.Dot ? sep : MailFolderPath.Slash;
   }
 
   private static string KindFrom(IMailFolder folder) {
@@ -750,40 +812,57 @@ public sealed class ImapMailSession : IMailSession {
     try {
       var chunk = await FetchRangeAsync(folder, 0, -1, items, extraHeaders, cancellationToken)
         .ConfigureAwait(false);
-      return DistinctUids(chunk);
+      var rows = DistinctUids(chunk);
+      if (rows.Count > 0 || folder.Count == 0)
+        return rows;
     }
     catch {
-      const int batch = 500;
-      var summaries = new List<IMessageSummary>();
-      for (var end = folder.Count - 1; end >= 0; end -= batch) {
-        var start = Math.Max(0, end - batch + 1);
-        var chunk = await FetchRangeAsync(folder, start, end, items, extraHeaders, cancellationToken)
-          .ConfigureAwait(false);
-        summaries.AddRange(chunk);
-      }
-
-      return DistinctUids(summaries);
     }
+
+    const int batch = 500;
+    var summaries = new List<IMessageSummary>();
+    for (var end = folder.Count - 1; end >= 0; end -= batch) {
+      var start = Math.Max(0, end - batch + 1);
+      var chunk = await FetchRangeAsync(folder, start, end, items, extraHeaders, cancellationToken)
+        .ConfigureAwait(false);
+      summaries.AddRange(chunk);
+    }
+
+    return DistinctUids(summaries);
   }
 
   private static async Task<List<IMessageSummary>> FetchByUidsAsync(
     IMailFolder folder,
     IList<UniqueId> uids,
+    string[]? extraHeaders,
     CancellationToken cancellationToken) {
     const int batch = 250;
     var summaries = new List<IMessageSummary>(uids.Count);
     for (var start = 0; start < uids.Count; start += batch) {
       var slice = uids.Skip(start).Take(batch).ToList();
-      try {
-        var request = new FetchRequest(ListItems, ListHeaders);
-        summaries.AddRange(await folder.FetchAsync(slice, request, cancellationToken).ConfigureAwait(false));
-      }
-      catch {
-        summaries.AddRange(await folder.FetchAsync(slice, ListItems, cancellationToken).ConfigureAwait(false));
-      }
+      summaries.AddRange(await FetchSliceAsync(folder, slice, extraHeaders, cancellationToken).ConfigureAwait(false));
     }
 
     return DistinctUids(summaries);
+  }
+
+  private static async Task<IList<IMessageSummary>> FetchSliceAsync(
+    IMailFolder folder,
+    IList<UniqueId> uids,
+    string[]? extraHeaders,
+    CancellationToken cancellationToken) {
+    if (extraHeaders is { Length: > 0 }) {
+      try {
+        var rows = await folder.FetchAsync(uids, new FetchRequest(ListItems, extraHeaders), cancellationToken)
+          .ConfigureAwait(false);
+        if (rows.Count > 0)
+          return rows;
+      }
+      catch {
+      }
+    }
+
+    return await folder.FetchAsync(uids, ListItems, cancellationToken).ConfigureAwait(false);
   }
 
   private static async Task<IList<IMessageSummary>> FetchRangeAsync(
@@ -795,8 +874,10 @@ public sealed class ImapMailSession : IMailSession {
     CancellationToken cancellationToken) {
     if (extraHeaders is { Length: > 0 }) {
       try {
-        return await folder.FetchAsync(start, end, new FetchRequest(items, extraHeaders), cancellationToken)
+        var rows = await folder.FetchAsync(start, end, new FetchRequest(items, extraHeaders), cancellationToken)
           .ConfigureAwait(false);
+        if (rows.Count > 0)
+          return rows;
       }
       catch {
       }
@@ -810,6 +891,13 @@ public sealed class ImapMailSession : IMailSession {
     foreach (var summary in summaries) {
       if (!summary.UniqueId.IsValid)
         continue;
+      if (map.TryGetValue(summary.UniqueId.Id, out var current)
+          && !ImapFetchPolicy.PreferComplete(
+            summary.Envelope is not null,
+            current.Envelope is not null,
+            summary.InternalDate.HasValue || summary.Envelope?.Date is not null,
+            current.InternalDate.HasValue || current.Envelope?.Date is not null))
+        continue;
       map[summary.UniqueId.Id] = summary;
     }
 
@@ -818,7 +906,7 @@ public sealed class ImapMailSession : IMailSession {
 
   private static List<MailMessageHeader> HeadersOf(string folder, IEnumerable<IMessageSummary> summaries) =>
     summaries
-      .Where(s => s.Envelope is not null)
+      .Where(s => s.UniqueId.IsValid)
       .OrderByDescending(s => s.Envelope?.Date ?? s.InternalDate ?? DateTimeOffset.MinValue)
       .Select(s => ToHeader(folder, s))
       .ToList();

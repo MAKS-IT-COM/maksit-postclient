@@ -6,7 +6,7 @@ namespace MaksIT.PostClient.Client;
 
 public sealed class SemanticSearchService : ISemanticSearchService {
   private readonly ConfigurationFileService _files;
-  private readonly MailArchiveStore _archive;
+  private readonly MailArchiveCatalog _archive;
   private readonly EmbeddingModelDownloader _downloader;
   private readonly Lock _gate = new();
   private readonly SemaphoreSlim _wake = new(0, 1);
@@ -17,7 +17,7 @@ public sealed class SemanticSearchService : ISemanticSearchService {
   private string _status = "";
   private bool _ready;
 
-  public SemanticSearchService(ConfigurationFileService files, MailArchiveStore archive) {
+  public SemanticSearchService(ConfigurationFileService files, MailArchiveCatalog archive) {
     _files = files;
     _archive = archive;
     _downloader = new EmbeddingModelDownloader();
@@ -177,9 +177,7 @@ public sealed class SemanticSearchService : ISemanticSearchService {
         return;
       var pending = _archive.PendingEmbeddings(EmbeddingModelSpec.Id, 8);
       if (pending.Count == 0) {
-        var done = _archive.EmbeddingCount(EmbeddingModelSpec.Id);
-        var gpu = UsesGpu ? "GPU" : "CPU";
-        SetStatus(MailIndexProgress.MeaningReady(gpu, done), ready: true);
+        SetStatus("", ready: true);
         await WaitAsync(token).ConfigureAwait(false);
         return;
       }
@@ -202,7 +200,7 @@ public sealed class SemanticSearchService : ISemanticSearchService {
           return;
         }
 
-        _archive.UpsertEmbedding(item.MessageId, EmbeddingModelSpec.Id, vector);
+        _archive.UpsertEmbedding(item.MailboxId, item.MessageId, EmbeddingModelSpec.Id, vector);
       }
     }
   }

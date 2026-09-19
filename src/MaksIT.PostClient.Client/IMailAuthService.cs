@@ -30,4 +30,13 @@ public interface IMailAuthService {
   Result DeleteTokens(string mailboxId);
 
   bool HasTokens(string mailboxId);
+
+  string DesktopLoginUrl(string authKind);
+
+  Result<OAuthTokenSet> CompleteHubSignIn(string json, string authKind);
+
+  Task<Result<OAuthTokenSet>> CompleteHubSignInAsync(
+    string json,
+    string authKind,
+    CancellationToken cancellationToken = default);
 }

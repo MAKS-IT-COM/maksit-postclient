@@ -1,13 +1,13 @@
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Controls.ApplicationLifetimes;
 using MaksIT.PostClient.Client;
 using MaksIT.PostClient.Shared;
 using MaksIT.PostClient.UI.ViewModels;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 
 namespace MaksIT.PostClient.UI;
@@ -20,11 +20,23 @@ public partial class App : Application {
     AvaloniaXamlLoader.Load(this);
 
   public override void OnFrameworkInitializationCompleted() {
+    try {
+      CompleteStartup();
+    }
+    catch (Exception ex) {
+      ErrorDialog.ReportBlocking(ex);
+    }
+
+    base.OnFrameworkInitializationCompleted();
+    ShowMain();
+  }
+
+  private void CompleteStartup() {
     AppPaths.EnsureDirectories();
     _host = Host.CreateDefaultBuilder()
       .ConfigureAppConfiguration(builder => {
         builder.SetBasePath(AppContext.BaseDirectory);
-        builder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+        builder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
         builder.AddJsonFile(AppPaths.SettingsFile(), optional: true, reloadOnChange: true);
       })
       .ConfigureServices((_, services) => {
@@ -38,6 +50,7 @@ public partial class App : Application {
     if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
       desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
       desktop.MainWindow = _host.Services.GetRequiredService<MainWindow>();
+      ShowMain();
       ApplyTrayCopy();
       UiLocale.Changed += ApplyTrayCopy;
       desktop.ShutdownRequested += async (_, _) => {
@@ -50,8 +63,6 @@ public partial class App : Application {
         _host = null;
       };
     }
-
-    base.OnFrameworkInitializationCompleted();
   }
 
   private void OnTrayClicked(object? sender, EventArgs e) =>
