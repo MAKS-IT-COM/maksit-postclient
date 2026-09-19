@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-19
+
+### Fixed
+
+- Reinstalling **0.3.0** over **0.3.0** left the old exe in `C:\Program Files\MaksIT\Postclient` (Windows setup skips same-version files). This build is **0.3.1** so the installer replaces it. Uninstall 0.3.0 first if a same-version repair still leaves the 16:08 exe.
+- The main window opens from the desktop shortcut. Closing it exits the app. The tray icon no longer hides the window on close. A worker process is not started until import or retention needs it.
+
 ## [0.3.0] - 2026-09-19
 
 Folder stores replace attached Outlook data files, Gmail/Microsoft sign-in goes through Identity Hub, and folders can expire mail on a schedule.
@@ -35,7 +42,6 @@ Folder stores replace attached Outlook data files, Gmail/Microsoft sign-in goes 
 - Identity Hub Google/Microsoft sign-in now picks up the Hub session after the callback page finishes (the WebView no longer waits for you to close a tab). Save Account then stores the Hub tokens.
 - Microsoft Identity Hub sign-in in the embedded WebView: Entra popups no longer replace the Hub page, script polling stays on `identity.maks-it.com`, and login uses a separate WebView2 profile from HTML mail. Sign-in now checks that Hub can issue a mailbox token.
 - Identity Hub sign-in opens `identity.maks-it.com` after the WebView adapter is ready (the popup no longer stays on `about:blank`). Google/Microsoft redirects stay in that view; Hub login uses its own WebView2 data folder so it does not clash with HTML mail. The sign-in dialog is owned by Account Settings when that window is open.
-- The main window shows on launch from the installed exe (and the desktop shortcut). A background worker is no longer started before the window is mapped, so the process is not left running with no UI.
 - Connecting a large Outlook data file no longer freezes the UI: PST open/list/index work runs off the UI thread, catalog walks the store in short chunks, and folder switches show the local archive without waiting on indexing.
 - Large Outlook data files keep readable subjects (MS-PST prefix bytes are stripped) and open by the store item id instead of a subject hash. ANSI `.pst` files are copied once to a Unicode `.postclient.pst` beside the original so encoding stays intact.
 

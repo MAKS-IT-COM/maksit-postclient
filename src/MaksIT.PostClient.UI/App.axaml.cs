@@ -1,8 +1,7 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Avalonia.Markup.Xaml;
 using Avalonia.Controls.ApplicationLifetimes;
 using MaksIT.PostClient.Client;
@@ -14,7 +13,7 @@ namespace MaksIT.PostClient.UI;
 
 
 public partial class App : Application {
-  private IHost? _host;
+  private ServiceProvider? _services;
 
   public override void Initialize() =>
     AvaloniaXamlLoader.Load(this);
@@ -28,39 +27,30 @@ public partial class App : Application {
     }
 
     base.OnFrameworkInitializationCompleted();
-    ShowMain();
+    Dispatcher.UIThread.Post(ShowMain, DispatcherPriority.Loaded);
   }
 
   private void CompleteStartup() {
     AppPaths.EnsureDirectories();
-    _host = Host.CreateDefaultBuilder()
-      .ConfigureAppConfiguration(builder => {
-        builder.SetBasePath(AppContext.BaseDirectory);
-        builder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
-        builder.AddJsonFile(AppPaths.SettingsFile(), optional: true, reloadOnChange: true);
-      })
-      .ConfigureServices((_, services) => {
-        services.AddSingleton(_ => new ConfigurationFileService());
-        services.AddPostClient();
-        services.AddSingleton<MainViewModel>();
-        services.AddSingleton<MainWindow>();
-      })
-      .Build();
+    var services = new ServiceCollection();
+    services.AddSingleton(_ => new ConfigurationFileService());
+    services.AddPostClient();
+    services.AddSingleton<MainViewModel>();
+    services.AddSingleton<MainWindow>();
+    _services = services.BuildServiceProvider();
 
     if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
-      desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-      desktop.MainWindow = _host.Services.GetRequiredService<MainWindow>();
-      ShowMain();
+      desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+      desktop.MainWindow = _services.GetRequiredService<MainWindow>();
       ApplyTrayCopy();
       UiLocale.Changed += ApplyTrayCopy;
       desktop.ShutdownRequested += async (_, _) => {
-        if (_host is null)
+        if (_services is null)
           return;
 
-        await _host.Services.GetRequiredService<MainViewModel>().DisposeAsync();
-        await _host.StopAsync();
-        _host.Dispose();
-        _host = null;
+        await _services.GetRequiredService<MainViewModel>().DisposeAsync();
+        await _services.DisposeAsync();
+        _services = null;
       };
     }
   }

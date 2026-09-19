@@ -806,14 +806,6 @@ public partial class MainWindow : Window {
     return files.FirstOrDefault()?.TryGetLocalPath();
   }
 
-  protected override void OnClosing(WindowClosingEventArgs e) {
-    if (e.IsProgrammatic)
-      return;
-    e.Cancel = true;
-    if (IsVisible)
-      Hide();
-  }
-
   private void OnExitClick(object? sender, RoutedEventArgs e) {
     if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime life)
       life.Shutdown();
