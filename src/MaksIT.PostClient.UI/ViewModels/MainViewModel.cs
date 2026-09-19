@@ -987,26 +987,47 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   public async Task RunRetentionAsync() {
     var configuration = _files.Current;
     configuration.EnsureDefaults();
-    foreach (var rule in configuration.Retention) {
-      if (rule.Days <= 0 || string.IsNullOrWhiteSpace(rule.MailboxId) || string.IsNullOrWhiteSpace(rule.Folder))
-        continue;
-      var box = Mailboxes.FirstOrDefault(m => m.Id.Equals(rule.MailboxId, StringComparison.OrdinalIgnoreCase));
+    foreach (var job in MailRetention.Jobs(configuration.Retention)) {
+      var box = Mailboxes.FirstOrDefault(m => m.Id.Equals(job.MailboxId, StringComparison.OrdinalIgnoreCase));
       if (box is null || box.IsLocalStore)
         continue;
-      var cutoff = DateTimeOffset.UtcNow.AddDays(-rule.Days);
-      var ids = _archive.UidsOlderThan(rule.MailboxId, rule.Folder, cutoff);
+      var known = FoldersFor(box).Select(f => f.FullName).ToList();
+      if (known.Count == 0)
+        known = _archive.ListFolders(box.Id).ToList();
+      var folder = MailRetention.BindFolder(job.Folder, known);
+      if (string.IsNullOrWhiteSpace(folder))
+        continue;
+      var cutoff = DateTimeOffset.UtcNow.AddDays(-job.Days);
+      var ids = _archive.UidsOlderThan(box.Id, folder, cutoff);
       if (ids.Count == 0)
         continue;
       var session = SessionFor(box);
-      if (session is { IsConnected: true })
-        await session.SetMessageFlagsAsync(rule.Folder, ids, new MailFlagUpdate { Deleted = true });
+      if (session is not { IsConnected: true })
+        continue;
+      if (MailRetention.IsTrash(folder)) {
+        await session.SetMessageFlagsAsync(folder, ids, new MailFlagUpdate { Deleted = true });
+        continue;
+      }
+
+      if (session is not { SupportsFolders: true })
+        continue;
+      var trash = MailRetention.ResolveTrash(
+        FoldersFor(box).Select(f => (f.Name, f.FullName)).ToList());
+      if (folder.Equals(trash, StringComparison.OrdinalIgnoreCase)) {
+        await session.SetMessageFlagsAsync(folder, ids, new MailFlagUpdate { Deleted = true });
+        continue;
+      }
+
+      var moved = await session.MoveMessagesAsync(folder, ids, trash, CancellationToken.None);
+      if (moved.IsSuccess)
+        DropArchived(box.Id, folder, ids);
     }
 
     var result = await Task.Run(() => _worker.Call(new WorkerRequest { Op = "retention" }))
       .ConfigureAwait(false);
     await Dispatcher.UIThread.InvokeAsync(() => {
       Status = result.Ok
-        ? "Retention deleted " + (result.Value ?? "0") + " messages."
+        ? "Retention processed " + (result.Value ?? "0") + " messages."
         : result.Error ?? "Retention failed.";
     });
     if (SelectedFolder is not null)
@@ -1598,20 +1619,22 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var rows = TargetRows();
     if (rows.Count == 0)
       return;
-    var trash = Folders.Concat(FoldersFor(SelectedMailbox))
-      .FirstOrDefault(f => MailFolderRole.Kind(f.Name, f.FullName) == "trash");
-    if (trash is not null
-        && SelectedFolder is not null
-        && !trash.FullName.Equals(SelectedFolder.FullName, StringComparison.OrdinalIgnoreCase)) {
-      await MoveRowsAsync(rows, trash.FullName);
+    var box = SelectedMailbox;
+    var folder = SelectedFolder;
+    if (box is null || folder is null)
       return;
+    if (!MailRetention.IsTrash(folder.Name, folder.FullName)) {
+      var trash = await EnsureTrashFolderAsync(box, CancellationToken.None);
+      if (!string.IsNullOrWhiteSpace(trash)
+          && !trash.Equals(folder.FullName, StringComparison.OrdinalIgnoreCase)) {
+        await MoveRowsAsync(rows, trash);
+        return;
+      }
     }
 
     if (!await ApplyFlagsAsync(new MailFlagUpdate { Deleted = true }, null, rows))
       return;
-    if (SelectedMailbox is null || SelectedFolder is null)
-      return;
-    DropArchived(SelectedMailbox.Id, SelectedFolder.FullName, TargetIds(rows));
+    DropArchived(box.Id, folder.FullName, TargetIds(rows));
     RemoveRows(rows);
     Status = "Deleted.";
   }
@@ -1647,17 +1670,16 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var folder = SelectedFolder;
     if (session is not { IsConnected: true, SupportsFolders: true } || box is null || folder is null)
       return;
-    var trash = Folders.Concat(FoldersFor(SelectedMailbox))
-      .FirstOrDefault(f => MailFolderRole.Kind(f.Name, f.FullName) == "trash");
-    var purge = trash is null
-      || trash.FullName.Equals(folder.FullName, StringComparison.OrdinalIgnoreCase);
+    var trash = await EnsureTrashFolderAsync(box, CancellationToken.None);
+    var purge = string.IsNullOrWhiteSpace(trash)
+      || trash.Equals(folder.FullName, StringComparison.OrdinalIgnoreCase);
     var confirm = string.Format(purge ? Copy.EmptyTrashConfirm : Copy.EmptyFolderConfirm, folder.Name);
     if (!await ConfirmAsync(Copy.EmptyFolder, confirm))
       return;
     await RunAsync(Copy.EmptyingFolder, async token => {
       var result = await session.EmptyFolderAsync(
         folder.FullName,
-        purge ? null : trash!.FullName,
+        purge ? null : trash,
         token);
       if (!result.IsSuccess) {
         Status = string.Join(" ", result.Messages);
@@ -2687,6 +2709,30 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     return _foldersByMailbox.TryGetValue(box.Id, out var rows) ? rows : [];
   }
 
+  private FolderRowViewModel? TrashFolderOf(MailboxAccount? box) {
+    if (box is null)
+      return null;
+    return FoldersFor(box)
+      .Concat(Folders)
+      .FirstOrDefault(f => MailRetention.IsTrash(f.Name, f.FullName));
+  }
+
+  private async Task<string?> EnsureTrashFolderAsync(MailboxAccount box, CancellationToken token) {
+    var existing = TrashFolderOf(box);
+    if (existing is not null)
+      return existing.FullName;
+    var session = SessionFor(box);
+    if (session is not { IsConnected: true, SupportsFolders: true })
+      return null;
+    var created = await session.CreateFolderAsync(MailRetention.TrashFolder, null, token);
+    if (!created.IsSuccess)
+      created = await session.CreateFolderAsync("Trash", null, token);
+    if (created.IsSuccess)
+      await LoadFoldersAsync(box, session, token);
+    return TrashFolderOf(box)?.FullName
+      ?? (created.IsSuccess ? MailRetention.TrashFolder : null);
+  }
+
   private IReadOnlyList<MailRule> ActiveRules() =>
     _files.Current.Rules ?? [];
 
@@ -2794,7 +2840,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
           continue;
         touched.Add(header.Id);
         if (rule.Action == MailRuleAction.Delete) {
-          var trash = MailRuleEngine.ResolveFolder("Trash", folders);
+          var trash = MailRetention.ResolveTrash(folders);
           if (!string.IsNullOrWhiteSpace(trash))
             AddUid(moves, trash, header.Id);
         }
@@ -2908,7 +2954,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       return;
     var unique = copied.Distinct().ToList();
     if (sourceSession is { IsConnected: true, SupportsFolders: true }) {
-      var trash = MailRuleEngine.ResolveFolder("Trash", sourceFolders);
+      var trash = MailRetention.ResolveTrash(sourceFolders);
       if (!string.IsNullOrWhiteSpace(trash) && !trash.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase))
         await sourceSession.MoveMessagesAsync(sourceFolder, unique, trash, token);
       else
@@ -4107,11 +4153,11 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     if (ids.Count == 0)
       return;
     if (session is { IsConnected: true, SupportsFolders: true }) {
-      var trash = FoldersFor(source)
-        .FirstOrDefault(f => MailFolderRole.Kind(f.Name, f.FullName) == "trash");
-      if (trash is not null
-          && !trash.FullName.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase))
-        await session.MoveMessagesAsync(sourceFolder, ids, trash.FullName, token);
+      var trash = MailRetention.ResolveTrash(
+        FoldersFor(source).Select(f => (f.Name, f.FullName)).ToList());
+      if (!string.IsNullOrWhiteSpace(trash)
+          && !trash.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase))
+        await session.MoveMessagesAsync(sourceFolder, ids, trash, token);
       else
         await session.SetMessageFlagsAsync(sourceFolder, ids, new MailFlagUpdate { Deleted = true }, token);
     }

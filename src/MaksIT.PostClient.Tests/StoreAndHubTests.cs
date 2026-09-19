@@ -439,7 +439,7 @@ public class LocalStoreTests {
   }
 
   [Fact]
-  public void Retention_ZeroKeeps_PositiveDeletesPermanently() {
+  public void Retention_ZeroKeeps_PositiveMovesToTrashThenPurgesTrash() {
     var root = Path.Combine(Path.GetTempPath(), "postclient-ret-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(root);
     var settings = Path.Combine(root, "settings.json");
@@ -472,6 +472,15 @@ public class LocalStoreTests {
         "");
       File.WriteAllText(Path.Combine(root, "1.eml"), "old");
       var files = new ConfigurationFileService(settings);
+      files.Current.Mailboxes =
+      [
+        new MailboxAccount {
+          Id = "box",
+          IncomingProtocol = MailProtocol.Store,
+          Provider = MailProvider.Store,
+          StorePath = root
+        }
+      ];
       files.Current.Retention =
       [
         new FolderRetention { MailboxId = "box", Folder = "INBOX", Days = 0 }
@@ -490,7 +499,23 @@ public class LocalStoreTests {
       var left = catalog.Search("box", "INBOX", "IMU");
       Assert.Single(left);
       Assert.Equal(2u, left[0].Uid);
+      var trashed = catalog.Search("box", MailRetention.TrashFolder, "IMU");
+      Assert.Single(trashed);
+      Assert.Equal("Old", trashed[0].Subject);
       Assert.False(File.Exists(Path.Combine(root, "1.eml")));
+      Assert.True(File.Exists(MailArchiveLayout.EmlPath(
+        files.Current.Mailboxes[0],
+        files.Current.Mailboxes,
+        MailRetention.TrashFolder,
+        trashed[0].Uid)));
+      files.Current.Retention =
+      [
+        new FolderRetention { MailboxId = "box", Folder = MailRetention.TrashFolder, Days = 5 }
+      ];
+      files.Save(files.Current);
+      using var purgeHost = new MailWorkerHost(catalog, files);
+      purgeHost.Retention(new WorkerRequest { Op = "retention" });
+      Assert.Empty(catalog.Search("box", MailRetention.TrashFolder, "IMU"));
     }
     finally {
       Directory.Delete(root, recursive: true);

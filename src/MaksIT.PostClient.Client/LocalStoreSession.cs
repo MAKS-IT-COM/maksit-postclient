@@ -247,12 +247,21 @@ public sealed class LocalStoreSession : IMailSession, IFileMailStore {
     string? trashFolder,
     CancellationToken cancellationToken = default) =>
     _io.RunAsync(() => {
-      _ = trashFolder;
       var dir = FolderDir(folder);
       if (!Directory.Exists(dir))
         return Task.FromResult(Result.Ok());
-      foreach (var file in Directory.EnumerateFiles(dir, "*.eml")) {
+      var files = Directory.EnumerateFiles(dir, "*.eml").ToList();
+      var toTrash = !string.IsNullOrWhiteSpace(trashFolder)
+        && !folder.Equals(trashFolder, StringComparison.OrdinalIgnoreCase);
+      if (toTrash)
+        Directory.CreateDirectory(FolderDir(trashFolder!));
+      foreach (var file in files) {
         cancellationToken.ThrowIfCancellationRequested();
+        if (toTrash) {
+          var dest = MessagePath(trashFolder!, NextUid(trashFolder!));
+          File.Copy(file, dest, overwrite: false);
+        }
+
         File.Delete(file);
       }
 

@@ -30,6 +30,11 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.2" date="2026-09-19">
+      <description>
+        <p>Retention moves expired folder mail to Trash. Trash can be kept forever or purged after a number of days. Delete sends messages to Trash.</p>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-09-19">
       <description>
         <p>The main window opens on launch from the Windows setup. Closing the window exits the app.</p>

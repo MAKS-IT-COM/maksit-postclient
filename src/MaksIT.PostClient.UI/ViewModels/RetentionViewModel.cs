@@ -14,6 +14,11 @@ public sealed class RetentionRowViewModel : ObservableObject {
 
   public required string Folder { get; init; }
 
+  public required bool IsTrash { get; init; }
+
+  public string ActionLabel =>
+    IsTrash ? UiLocale.Copy.RetentionPurge : UiLocale.Copy.RetentionToTrash;
+
   private int _days;
 
   public int Days {
@@ -38,8 +43,10 @@ public sealed partial class RetentionViewModel : ObservableObject {
     foreach (var box in mailboxes) {
       var listed = folders(box.Id);
       var names = listed.Count > 0
-        ? listed.Select(f => f.FullName)
-        : MailArchiveLayout.SystemFolders;
+        ? listed.Select(f => f.FullName).ToList()
+        : MailArchiveLayout.SystemFolders.ToList();
+      if (!names.Any(folder => MailRetention.IsTrash(folder)))
+        names.Add(MailRetention.TrashFolder);
       foreach (var folder in names.Distinct(StringComparer.OrdinalIgnoreCase)) {
         var rule = saved.FirstOrDefault(r =>
           r.MailboxId.Equals(box.Id, StringComparison.OrdinalIgnoreCase)
@@ -48,6 +55,7 @@ public sealed partial class RetentionViewModel : ObservableObject {
           MailboxId = box.Id,
           MailboxLabel = box.Label,
           Folder = folder,
+          IsTrash = MailRetention.IsTrash(folder),
           Days = rule?.Days ?? 0
         });
       }

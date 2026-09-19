@@ -41,6 +41,10 @@
                             Binding="{Binding Folder}"
                             IsReadOnly="True"
                             Width="*" />
+        <DataGridTextColumn Header="{Binding Copy.RetentionAction, ElementName=Root}"
+                            Binding="{Binding ActionLabel}"
+                            IsReadOnly="True"
+                            Width="140" />
         <DataGridTextColumn Header="{Binding Copy.RetentionDays, ElementName=Root}"
                             Binding="{Binding Days}"
                             Width="90" />

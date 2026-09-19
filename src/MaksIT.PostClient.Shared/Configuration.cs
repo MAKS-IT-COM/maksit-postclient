@@ -68,6 +68,12 @@ public sealed class Configuration {
     Semantic ??= new SemanticSearchSettings();
     Semantic.Normalize();
     Rules ??= [];
+    foreach (var rule in Rules) {
+      rule.MailboxId ??= "";
+      rule.FolderMailboxId ??= "";
+      rule.Folder ??= "";
+    }
+
     Retention ??= [];
     foreach (var row in Retention) {
       row.MailboxId ??= "";

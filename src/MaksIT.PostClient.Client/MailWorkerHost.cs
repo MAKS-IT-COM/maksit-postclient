@@ -112,27 +112,87 @@ public sealed class MailWorkerHost : IDisposable {
     var count = 0;
     var configuration = _files.Current;
     configuration.EnsureDefaults();
-    foreach (var rule in configuration.Retention) {
-      if (rule.Days <= 0 || string.IsNullOrWhiteSpace(rule.MailboxId) || string.IsNullOrWhiteSpace(rule.Folder))
+    foreach (var job in MailRetention.Jobs(configuration.Retention)) {
+      var known = _archive.ListFolders(job.MailboxId);
+      var folder = MailRetention.BindFolder(job.Folder, known);
+      if (string.IsNullOrWhiteSpace(folder))
         continue;
-      var cutoff = DateTimeOffset.UtcNow.AddDays(-rule.Days);
-      var ids = _archive.UidsOlderThan(rule.MailboxId, rule.Folder, cutoff);
+      var cutoff = DateTimeOffset.UtcNow.AddDays(-job.Days);
+      var ids = _archive.UidsOlderThan(job.MailboxId, folder, cutoff);
       if (ids.Count == 0)
         continue;
-      var paths = _archive.RemoveUids(rule.MailboxId, rule.Folder, ids);
-      foreach (var path in paths) {
-        try {
-          if (File.Exists(path))
-            File.Delete(path);
-        }
-        catch {
-        }
+      if (MailRetention.IsTrash(folder)) {
+        DeleteFiles(_archive.RemoveUids(job.MailboxId, folder, ids));
+        count += ids.Count;
+        continue;
       }
 
-      count += ids.Count;
+      var trash = MailRetention.ResolveTrash(known);
+      if (folder.Equals(trash, StringComparison.OrdinalIgnoreCase)) {
+        DeleteFiles(_archive.RemoveUids(job.MailboxId, folder, ids));
+        count += ids.Count;
+        continue;
+      }
+
+      count += MoveToTrash(configuration, job.MailboxId, folder, trash, ids);
     }
 
     return Ok(count.ToString());
+  }
+
+  private int MoveToTrash(
+    Configuration configuration,
+    string mailboxId,
+    string folder,
+    string trash,
+    IReadOnlyList<uint> ids) {
+    var moved = new List<uint>();
+    foreach (var uid in ids) {
+      try {
+        var source = _archive.EmlPath(mailboxId, folder, uid);
+        var destUid = _archive.NextUid(mailboxId, trash);
+        var dest = RetentionDestPath(configuration, mailboxId, trash, destUid);
+        if (!string.IsNullOrWhiteSpace(source)
+            && File.Exists(source)
+            && !source.Equals(dest, StringComparison.OrdinalIgnoreCase)) {
+          var dir = Path.GetDirectoryName(dest);
+          if (!string.IsNullOrWhiteSpace(dir))
+            Directory.CreateDirectory(dir);
+          File.Copy(source, dest, overwrite: false);
+        }
+
+        _archive.CopyIndexed(mailboxId, folder, uid, mailboxId, trash, dest, destUid);
+        moved.Add(uid);
+      }
+      catch {
+      }
+    }
+
+    if (moved.Count > 0)
+      DeleteFiles(_archive.RemoveUids(mailboxId, folder, moved));
+    return moved.Count;
+  }
+
+  private static string RetentionDestPath(
+    Configuration configuration,
+    string mailboxId,
+    string folder,
+    uint uid) {
+    var box = configuration.FindMailbox(mailboxId);
+    if (box is not null)
+      return MailArchiveLayout.EmlPath(box, configuration.Mailboxes, folder, uid);
+    return ArchiveFiles.EmlPath(mailboxId, folder, uid);
+  }
+
+  private static void DeleteFiles(IEnumerable<string> paths) {
+    foreach (var path in paths) {
+      try {
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+          File.Delete(path);
+      }
+      catch {
+      }
+    }
   }
 
   public void Dispose() =>

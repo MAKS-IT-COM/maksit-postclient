@@ -174,6 +174,29 @@ public class MailRuleEngineTests {
 }
 
 
+public class MailRetentionTests {
+  [Fact]
+  public void Jobs_SkipsZeroDays() {
+    var jobs = MailRetention.Jobs(
+      [
+        new FolderRetention { MailboxId = "box", Folder = "INBOX", Days = 0 },
+        new FolderRetention { MailboxId = "box", Folder = "Pratiche", Days = 30 }
+      ]);
+    var job = Assert.Single(jobs);
+    Assert.Equal("box", job.MailboxId);
+    Assert.Equal("Pratiche", job.Folder);
+    Assert.Equal(30, job.Days);
+  }
+
+  [Fact]
+  public void ResolveTrash_PrefersExistingTrashFolder() {
+    Assert.Equal("Cestino", MailRetention.ResolveTrash(["INBOX", "Cestino"]));
+    Assert.Equal(MailRetention.TrashFolder, MailRetention.ResolveTrash(["INBOX"]));
+    Assert.True(MailRetention.IsTrash("Deleted Items"));
+  }
+}
+
+
 public class MapiRestrictionTests {
   [Fact]
   public void Parse_SubjectContainsAndMarkRead() {

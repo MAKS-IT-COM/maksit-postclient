@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-09-19
+
+Expired folder mail goes to Trash; Trash can be kept forever or purged after a number of days.
+
+### Changed
+
+- **Settings → Retention…**: folder days (`0` = keep forever) now **move** older messages to Trash after Get Messages, instead of deleting them permanently. The Trash row uses the same days field: `0` keeps Trash forever, a number of days **permanently deletes** old Trash. The grid shows the action per row.
+- Delete (toolbar, **Del**, empty folder, delete rules) moves messages to Trash. If Trash is missing, it is created. Deleting from Trash is still permanent. Local stores honor Trash when emptying a folder.
+
+### Fixed
+
+- Local folder stores no longer skip Trash when emptying a folder (messages go to **Deleted Items**).
+
 ## [0.3.1] - 2026-09-19
 
 ### Fixed

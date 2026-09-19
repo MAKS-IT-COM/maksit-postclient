@@ -145,7 +145,7 @@ public sealed class LocalMailImport {
       if (!MailRuleEngine.Matches(rule, from, to, subject, text, hasAttachment))
         continue;
       if (rule.Action == MailRuleAction.Delete)
-        folder = MailRuleEngine.ResolveFolder("Trash", catalog) ?? "Trash";
+        folder = MailRetention.ResolveTrash(catalog);
       else if (rule.Action == MailRuleAction.Move)
         folder = MailRuleEngine.ExactFolder(rule.Folder, catalog) ?? folder;
       if (rule.Action == MailRuleAction.MarkRead)

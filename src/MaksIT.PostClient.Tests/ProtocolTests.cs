@@ -430,6 +430,53 @@ public class PstMailSessionTests {
 }
 
 
+public class LocalStoreSessionTests {
+  [Fact]
+  public async Task EmptyFolder_MovesToTrash() {
+    var dir = Path.Combine(Path.GetTempPath(), "postclient-store-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    try {
+      var box = new MailboxAccount {
+        IncomingProtocol = MailProtocol.Store,
+        Provider = MailProvider.Store,
+        StorePath = dir
+      };
+      LocalStoreSidecar.Write(dir, box.Id, "Mail");
+      MailArchiveLayout.EnsureSystemFolders(dir);
+      await using var session = new LocalStoreSession();
+      var token = TestContext.Current.CancellationToken;
+      var connected = await session.ConnectAsync(box, "", token);
+      Assert.True(connected.IsSuccess, string.Join(" ", connected.Messages));
+      var appended = await session.AppendAsync("Inbox", StoreEml("keep"), token);
+      Assert.True(appended.IsSuccess, string.Join(" ", appended.Messages));
+      var listed = await session.ListMessagesAsync("Inbox", null, token);
+      Assert.True(listed.IsSuccess, string.Join(" ", listed.Messages));
+      Assert.Single(listed.Value!.Present!);
+      var emptied = await session.EmptyFolderAsync("Inbox", MailRetention.TrashFolder, token);
+      Assert.True(emptied.IsSuccess, string.Join(" ", emptied.Messages));
+      var inbox = await session.ListMessagesAsync("Inbox", null, token);
+      Assert.True(inbox.IsSuccess, string.Join(" ", inbox.Messages));
+      Assert.Empty(inbox.Value!.Present ?? []);
+      var trash = await session.ListMessagesAsync(MailRetention.TrashFolder, null, token);
+      Assert.True(trash.IsSuccess, string.Join(" ", trash.Messages));
+      Assert.Single(trash.Value!.Present ?? []);
+    }
+    finally {
+      if (Directory.Exists(dir))
+        Directory.Delete(dir, recursive: true);
+    }
+  }
+
+  private static byte[] StoreEml(string subject) =>
+    System.Text.Encoding.ASCII.GetBytes(
+      "From: test@example.com\r\nTo: you@example.com\r\nSubject: "
+      + subject
+      + "\r\nDate: Mon, 14 Sep 2026 08:00:00 +0000\r\nMessage-ID: <"
+      + subject
+      + "@example.com>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nbody\r\n");
+}
+
+
 public class MailSessionGateTests {
   [Fact]
   public async Task RunAsync_DoesNotUseCallerSynchronizationContext() {

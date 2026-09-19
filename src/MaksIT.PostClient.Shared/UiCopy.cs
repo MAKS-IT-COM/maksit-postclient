@@ -118,6 +118,12 @@ public sealed partial class UiCopy {
 
   public string RetentionDays { get; init; } = "";
 
+  public string RetentionAction { get; init; } = "";
+
+  public string RetentionToTrash { get; init; } = "";
+
+  public string RetentionPurge { get; init; } = "";
+
   public string RetentionRun { get; init; } = "";
 
   public string LocalStore { get; init; } = "";
@@ -616,8 +622,11 @@ public sealed partial class UiCopy {
       DetachStoreDone = "Detached {0}. The folder is still on disk.",
       MoveStoreDone = "Moved store {0}.",
       Retention = "_Retention…",
-      RetentionHint = "Per folder. 0 keeps mail forever. A number of days permanently deletes older messages (not Trash).",
+      RetentionHint = "Per folder. 0 keeps mail forever. Folder days move older messages to Trash. Trash days permanently delete, or 0 to keep Trash forever.",
       RetentionDays = "Days",
+      RetentionAction = "When expired",
+      RetentionToTrash = "Move to Trash",
+      RetentionPurge = "Delete permanently",
       RetentionRun = "Run now",
       LocalStore = "Local store",
       LocalStoreAppData = "App data (default)",
@@ -880,8 +889,11 @@ public sealed partial class UiCopy {
       DetachStoreDone = "Sganciato {0}. La cartella resta sul disco.",
       MoveStoreDone = "Spostato l’archivio {0}.",
       Retention = "_Conservazione…",
-      RetentionHint = "Per cartella. 0 conserva per sempre. Un numero di giorni elimina in modo permanente i messaggi più vecchi (non nel Cestino).",
+      RetentionHint = "Per cartella. 0 conserva per sempre. I giorni della cartella spostano i messaggi più vecchi nel Cestino. I giorni del Cestino eliminano in modo permanente, oppure 0 per tenere il Cestino per sempre.",
       RetentionDays = "Giorni",
+      RetentionAction = "Alla scadenza",
+      RetentionToTrash = "Sposta nel Cestino",
+      RetentionPurge = "Elimina in modo permanente",
       RetentionRun = "Esegui ora",
       LocalStore = "Archivio locale",
       LocalStoreAppData = "Dati app (predefinito)",

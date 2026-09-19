@@ -167,7 +167,7 @@ IMAP **QUOTA** from the gestore (when the server supports it) is a thin bar on t
 | New store | File menu: empty bucket (`Inbox`, `Drafts`, `Sent Items`, `Deleted Items`) with `postclient.store.json` and `mail.db`. |
 | Attach store | File menu: pick a folder that already has `postclient.store.json`. Recovers mail + search after an AppData wipe. |
 | Move / Detach store | Copy the whole directory (or unregister it). The folder stays on disk when detached. |
-| Retention | **Settings → Retention…**: days per folder (`0` = forever). Older messages are deleted permanently after Get Messages. |
+| Retention | **Settings → Retention…**: days per folder (`0` = forever). Expired folder mail is moved to Trash after Get Messages. On Trash, `0` keeps it forever and a number of days permanently deletes older Trash. |
 | Rules | **Settings → Rules**: **Import rules…** reads this app’s JSON export or a legacy `.rwz` file. **Export rules…** writes JSON. Each rule is bound to an **account**; a move folder can live on another mailbox (including a store). They run on Get Messages, on import, and from **Run all rules**. |
 | Print | Readable HTML of the (optionally unwrapped) message |
 | Save PDF | Same content as a PDF |
