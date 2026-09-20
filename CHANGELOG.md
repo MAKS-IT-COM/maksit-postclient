@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-09-20
+
+Status bar index lines no longer flash between batches.
+
+### Fixed
+
+- Status bar **Indexing** / **Indexing meaning** lines stay put between batches instead of collapsing and flashing.
+
 ## [0.3.3] - 2026-09-20
 
 First sync paints mail as it arrives, meaning search can use a discrete GPU, and trash, retention, and logs follow typical desktop mail apps.

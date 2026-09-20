@@ -39,6 +39,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private const int IndexCatalogChunk = 2_000;
   private const int IndexUiChunk = 250;
   private int _indexBodyTotal;
+  private readonly StatusLineHold _indexHold;
+  private readonly StatusLineHold _semanticHold;
   private bool _uiReady;
   private MailMessageBody? _reading;
   private MessageRowViewModel? _pendingWindow;
@@ -455,6 +457,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     _worker = worker;
     _semantic = semantic;
     _updates = updates;
+    _indexHold = new StatusLineHold(line => IndexLine = line);
+    _semanticHold = new StatusLineHold(line => SemanticLine = line);
     files.Current.EnsureDefaults();
     PstStoreMigrator.Migrate(files, archive);
     MailArchiveCatalog.MigrateLegacy(files.Current.Mailboxes);
@@ -512,6 +516,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     _semantic.Changed -= OnSemanticChanged;
     _semantic.Faulted -= OnSemanticFaulted;
     _semantic.Dispose();
+    _indexHold.Dispose();
+    _semanticHold.Dispose();
     List<IMailSession> sessions;
     lock (_connections) {
       sessions = [.. _connections.Values];
@@ -533,8 +539,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       var line = _semantic.StatusLine;
       if (line.Contains("ready", StringComparison.OrdinalIgnoreCase))
         line = "";
-      if (SemanticLine != line)
-        SemanticLine = line;
+      _semanticHold.Set(line);
     });
 
   [RelayCommand]
@@ -1862,7 +1867,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         ? _archive.RemoveFolder(mailboxId, folder)
         : _archive.RemoveUids(mailboxId, folder, uids));
     if (IsInitialSyncComplete(mailboxId))
-      _semantic.NotifySettingsChanged();
+      _semantic.Wake();
   }
 
   private static void DeleteEmlFiles(IEnumerable<string> paths) {
@@ -3172,7 +3177,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     }
 
     if (ready)
-      _semantic.NotifySettingsChanged();
+      _semantic.Wake();
   }
 
   private async Task LoadMessagesAsync(string folder, CancellationToken token, bool resumeBodies = false) {
@@ -3684,7 +3689,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         MailArchiveMap.BodyText(body, UnwrapEnvelope),
         MailArchiveMap.AttachmentIndex(body, UnwrapEnvelope));
       if (IsInitialSyncComplete(mailboxId))
-        _semantic.NotifySettingsChanged();
+        _semantic.Wake();
     }
     catch {
     }
@@ -3747,7 +3752,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     _backfill?.Cancel();
     _backfill?.Dispose();
     _backfill = null;
-    IndexLine = "";
+    _indexHold.ClearNow();
   }
 
   private void EnsureIndexing(string mailboxId) {
@@ -3777,7 +3782,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     _backfill?.Cancel();
     _backfill?.Dispose();
     _backfill = null;
-    IndexLine = "";
+    _indexHold.ClearNow();
   }
 
   private void StartIndexing() {
@@ -3858,7 +3863,6 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         if (pending.Count == 0) {
           if (!cataloged)
             break;
-          await SetIndexLineAsync("", token).ConfigureAwait(false);
           continue;
         }
 
@@ -3887,8 +3891,10 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
           }
         }
 
-        if (fetched == 0 && !cataloged)
-          break;
+        if (fetched == 0 && !cataloged) {
+          await Task.Delay(500, token).ConfigureAwait(false);
+          continue;
+        }
       }
     }
     catch (OperationCanceledException) {
@@ -3907,10 +3913,14 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
             _indexMailboxes.Remove(id);
         }
 
-        IndexLine = "";
-        _indexBodyTotal = 0;
-        if (_indexMailboxes.Any(id => SessionFor(MailboxById(id)) is { IsConnected: true }))
-          StartIndexing();
+        var again = _indexMailboxes.Any(id => SessionFor(MailboxById(id)) is { IsConnected: true });
+        if (!again) {
+          _indexHold.Set("");
+          _indexBodyTotal = 0;
+          return;
+        }
+
+        StartIndexing();
       });
     }
   }
@@ -3949,7 +3959,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private async Task SetIndexLineAsync(string line, CancellationToken token) =>
     await UiAsync(() => {
       if (!token.IsCancellationRequested)
-        IndexLine = line;
+        _indexHold.Set(line);
     }).ConfigureAwait(false);
 
   private MailboxAccount? MailboxById(string mailboxId) =>

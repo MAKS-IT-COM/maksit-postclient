@@ -30,6 +30,11 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.4" date="2026-09-20">
+      <description>
+        <p>Status bar indexing and meaning-index lines stay visible between batches instead of flashing.</p>
+      </description>
+    </release>
     <release version="0.3.3" date="2026-09-20">
       <description>
         <p>First sync paints mail as it arrives. Meaning search DirectML prefers a discrete GPU. Trash retention, logs, and folder menus match typical desktop mail apps.</p>

@@ -17,6 +17,7 @@ public sealed class SemanticSearchService : ISemanticSearchService {
   private bool _gpuFailed;
   private string _status = "";
   private bool _ready;
+  private long _statusTick;
 
   public SemanticSearchService(ConfigurationFileService files, MailArchiveCatalog archive) {
     _files = files;
@@ -51,6 +52,10 @@ public sealed class SemanticSearchService : ISemanticSearchService {
 
   public void NotifySettingsChanged() {
     _step?.Cancel();
+    Wake();
+  }
+
+  public void Wake() {
     try {
       _wake.Release();
     }
@@ -189,6 +194,9 @@ public sealed class SemanticSearchService : ISemanticSearchService {
 
       var pending = _archive.PendingEmbeddings(EmbeddingModelSpec.Id, 8, ready);
       if (pending.Count == 0) {
+        await DelayAsync(TimeSpan.FromMilliseconds(800), token).ConfigureAwait(false);
+        if (_archive.PendingEmbeddings(EmbeddingModelSpec.Id, 1, ready).Count > 0)
+          continue;
         SetStatus("", ready: true);
         await WaitAsync(token).ConfigureAwait(false);
         return;
@@ -307,11 +315,20 @@ public sealed class SemanticSearchService : ISemanticSearchService {
 
   private void SetStatus(string line, bool ready) {
     var nextReady = ready && _embedder is not null;
+    var now = Environment.TickCount64;
     lock (_gate) {
       if (_status == line && _ready == nextReady)
         return;
+      var hide = string.IsNullOrWhiteSpace(line);
+      if (!hide && !string.IsNullOrWhiteSpace(_status) && now - _statusTick < 250) {
+        _status = line;
+        _ready = nextReady;
+        return;
+      }
+
       _status = line;
       _ready = nextReady;
+      _statusTick = now;
     }
 
     Changed?.Invoke();

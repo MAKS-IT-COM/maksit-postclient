@@ -19,6 +19,8 @@ public interface ISemanticSearchService : IDisposable {
 
   void NotifySettingsChanged();
 
+  void Wake();
+
   float[]? EmbedQuery(string query);
 
   ArchiveIndexStats IndexStats();
