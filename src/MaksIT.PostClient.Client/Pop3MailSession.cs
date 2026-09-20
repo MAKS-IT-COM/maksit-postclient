@@ -168,7 +168,7 @@ public sealed class Pop3MailSession : IMailSession {
     string folder,
     uint id,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => GetMessageCoreAsync(folder, id, cancellationToken), cancellationToken);
+    _io.RunAsync(() => GetMessageCoreAsync(folder, id, cancellationToken), cancellationToken, interactive: true);
 
   private async Task<Result<MailMessageBody>> GetMessageCoreAsync(
     string folder,

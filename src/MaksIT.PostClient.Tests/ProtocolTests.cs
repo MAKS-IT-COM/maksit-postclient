@@ -496,6 +496,44 @@ public class MailSessionGateTests {
       SynchronizationContext.SetSynchronizationContext(previous);
     }
   }
+
+  [Fact]
+  public async Task Interactive_RunsBeforeQueuedBackground() {
+    using var gate = new MailSessionGate();
+    var token = TestContext.Current.CancellationToken;
+    var firstHold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var firstRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    var order = new List<string>();
+
+    var first = gate.RunAsync(async () => {
+      lock (order)
+        order.Add("first");
+      firstHold.SetResult();
+      await firstRelease.Task.WaitAsync(token);
+      return 0;
+    }, token);
+
+    await firstHold.Task.WaitAsync(token);
+
+    var queued = gate.RunAsync(() => {
+      lock (order)
+        order.Add("queued");
+      return Task.FromResult(0);
+    }, token);
+
+    await Task.Delay(50, token);
+
+    var interactive = gate.RunAsync(() => {
+      lock (order)
+        order.Add("interactive");
+      return Task.FromResult(0);
+    }, token, interactive: true);
+
+    await Task.Delay(50, token);
+    firstRelease.SetResult();
+    await Task.WhenAll(first, interactive, queued).WaitAsync(token);
+    Assert.Equal(["first", "interactive", "queued"], order);
+  }
 }
 
 

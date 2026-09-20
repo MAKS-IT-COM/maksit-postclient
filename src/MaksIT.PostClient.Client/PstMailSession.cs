@@ -123,7 +123,7 @@ public sealed class PstMailSession : IMailSession {
     string folder,
     uint id,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => GetMessageCoreAsync(folder, id, cancellationToken), cancellationToken);
+    _io.RunAsync(() => GetMessageCoreAsync(folder, id, cancellationToken), cancellationToken, interactive: true);
 
   public Task<Result<MailboxQuota?>> GetQuotaAsync(CancellationToken cancellationToken = default) {
     _ = cancellationToken;
@@ -153,20 +153,20 @@ public sealed class PstMailSession : IMailSession {
       foreach (var itemId in itemIds)
         tx.MoveItem(itemId, dest, cancellationToken);
       return Task.FromResult(Result.Ok());
-    }), cancellationToken);
+    }), cancellationToken, interactive: true);
 
   public Task<Result> SetMessageFlagsAsync(
     string folder,
     IReadOnlyList<uint> ids,
     MailFlagUpdate update,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => SetFlagsCoreAsync(folder, ids, update, cancellationToken), cancellationToken);
+    _io.RunAsync(() => SetFlagsCoreAsync(folder, ids, update, cancellationToken), cancellationToken, interactive: true);
 
   public Task<Result> CreateFolderAsync(
     string name,
     string? parentFolder,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => CreateFolderCoreAsync(name, parentFolder, cancellationToken), cancellationToken);
+    _io.RunAsync(() => CreateFolderCoreAsync(name, parentFolder, cancellationToken), cancellationToken, interactive: true);
 
   public Task<Result> RenameFolderAsync(
     string folder,
@@ -182,7 +182,7 @@ public sealed class PstMailSession : IMailSession {
     string folder,
     string? trashFolder,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => EmptyFolderCoreAsync(folder, trashFolder, cancellationToken), cancellationToken);
+    _io.RunAsync(() => EmptyFolderCoreAsync(folder, trashFolder, cancellationToken), cancellationToken, interactive: true);
 
   public Task<Result> SetFolderSeenAsync(
     string folder,

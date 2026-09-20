@@ -239,7 +239,7 @@ public sealed class ImapMailSession : IMailSession {
     string folder,
     uint id,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => GetMessageCoreAsync(folder, id, cancellationToken), cancellationToken);
+    _io.RunAsync(() => GetMessageCoreAsync(folder, id, cancellationToken), cancellationToken, interactive: true);
 
   private async Task<Result<MailMessageBody>> GetMessageCoreAsync(
     string folder,
@@ -350,7 +350,7 @@ public sealed class ImapMailSession : IMailSession {
     IReadOnlyList<uint> ids,
     string toFolder,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => MoveMessagesCoreAsync(fromFolder, ids, toFolder, cancellationToken), cancellationToken);
+    _io.RunAsync(() => MoveMessagesCoreAsync(fromFolder, ids, toFolder, cancellationToken), cancellationToken, interactive: true);
 
   private async Task<Result> MoveMessagesCoreAsync(
     string fromFolder,
@@ -407,7 +407,7 @@ public sealed class ImapMailSession : IMailSession {
     IReadOnlyList<uint> ids,
     MailFlagUpdate update,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => SetMessageFlagsCoreAsync(folder, ids, update, cancellationToken), cancellationToken);
+    _io.RunAsync(() => SetMessageFlagsCoreAsync(folder, ids, update, cancellationToken), cancellationToken, interactive: true);
 
   private async Task<Result> SetMessageFlagsCoreAsync(
     string folder,
@@ -450,7 +450,7 @@ public sealed class ImapMailSession : IMailSession {
     string name,
     string? parentFolder,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => CreateFolderCoreAsync(name, parentFolder, cancellationToken), cancellationToken);
+    _io.RunAsync(() => CreateFolderCoreAsync(name, parentFolder, cancellationToken), cancellationToken, interactive: true);
 
   private async Task<Result> CreateFolderCoreAsync(
     string name,
@@ -586,7 +586,7 @@ public sealed class ImapMailSession : IMailSession {
     string folder,
     string? trashFolder,
     CancellationToken cancellationToken = default) =>
-    _io.RunAsync(() => EmptyFolderCoreAsync(folder, trashFolder, cancellationToken), cancellationToken);
+    _io.RunAsync(() => EmptyFolderCoreAsync(folder, trashFolder, cancellationToken), cancellationToken, interactive: true);
 
   private async Task<Result> EmptyFolderCoreAsync(
     string folder,

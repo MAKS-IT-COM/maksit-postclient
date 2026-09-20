@@ -265,7 +265,6 @@
           </Border>
           <DataGrid x:Name="MessagesGrid"
                     ItemsSource="{Binding VisibleMessages}"
-                    SelectedItem="{Binding SelectedMessage, Mode=OneWayToSource}"
                     SelectionMode="Extended"
                     AutoGenerateColumns="False"
                     IsReadOnly="True"

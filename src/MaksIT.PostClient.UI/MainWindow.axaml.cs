@@ -369,7 +369,7 @@ public partial class MainWindow : Window {
   }
 
   private void OnMessagesSelectionChanged(object? sender, SelectionChangedEventArgs e) {
-    if (_syncingGridSelection)
+    if (_syncingGridSelection || DataContext is MainViewModel { IsSyncingMessageList: true })
       return;
     SyncSelectionFromGrid();
   }
@@ -399,7 +399,7 @@ public partial class MainWindow : Window {
   }
 
   private void OnMessagesPointerReleased(object? sender, PointerReleasedEventArgs e) {
-    if (_dragging || _syncingGridSelection)
+    if (_dragging || _syncingGridSelection || DataContext is MainViewModel { IsSyncingMessageList: true })
       return;
     SyncSelectionFromGrid();
   }

@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-09-20
+
+Selected mail keeps its preview while the folder list refreshes.
+
+### Fixed
+
+- Selecting a message keeps that mail and its preview when the folder list refreshes; delete and move use the row's folder, and opening mail is not stuck behind a catalog scan.
+
 ## [0.3.6] - 2026-09-20
 
 Folder unread and retention days sit in separate columns. Sign-in and Gmail trash retention survive a rebuild.

@@ -144,7 +144,7 @@ public sealed class LocalStoreSession : IMailSession, IFileMailStore {
       if (body is null)
         return Result<MailMessageBody>.NotFound(null, "Message file is missing.");
       return Result<MailMessageBody>.Ok(body);
-    }, cancellationToken);
+    }, cancellationToken, interactive: true);
 
   public Task<Result<MailboxQuota?>> GetQuotaAsync(CancellationToken cancellationToken = default) {
     _ = cancellationToken;
@@ -193,7 +193,7 @@ public sealed class LocalStoreSession : IMailSession, IFileMailStore {
       }
 
       return Task.FromResult(Result.Ok());
-    }, cancellationToken);
+    }, cancellationToken, interactive: true);
 
   public Task<Result> SetMessageFlagsAsync(
     string folder,
@@ -211,7 +211,7 @@ public sealed class LocalStoreSession : IMailSession, IFileMailStore {
       }
 
       return Task.FromResult(Result.Ok());
-    }, cancellationToken);
+    }, cancellationToken, interactive: true);
   }
 
   public Task<Result> CreateFolderAsync(
@@ -223,7 +223,7 @@ public sealed class LocalStoreSession : IMailSession, IFileMailStore {
       var full = string.IsNullOrWhiteSpace(parentFolder) ? name : parentFolder + "/" + name;
       Directory.CreateDirectory(FolderDir(full));
       return Task.FromResult(Result.Ok());
-    }, cancellationToken);
+    }, cancellationToken, interactive: true);
 
   public Task<Result> RenameFolderAsync(
     string folder,
@@ -273,7 +273,7 @@ public sealed class LocalStoreSession : IMailSession, IFileMailStore {
       }
 
       return Task.FromResult(Result.Ok());
-    }, cancellationToken);
+    }, cancellationToken, interactive: true);
 
   public Task<Result> SetFolderSeenAsync(
     string folder,

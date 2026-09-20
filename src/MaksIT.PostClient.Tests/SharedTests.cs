@@ -296,6 +296,65 @@ public class MailIdTests {
 }
 
 
+public class MailMessageKeyTests {
+  [Fact]
+  public void Of_TrimsAndIgnoresCase() {
+    var left = MailMessageKey.Of(" Box ", "INBOX", 12);
+    var right = MailMessageKey.Of("box", "inbox", 12);
+    Assert.Equal(left, right);
+    Assert.Equal(left.GetHashCode(), right.GetHashCode());
+  }
+}
+
+
+public class MailMessageListTests {
+  private sealed class Row {
+    public required uint Id { get; init; }
+
+    public string Folder { get; init; } = "INBOX";
+
+    public string MailboxId { get; init; } = "box";
+
+    public string Subject { get; set; } = "";
+
+    public MailMessageKey Key =>
+      MailMessageKey.Of(MailboxId, Folder, Id);
+  }
+
+  [Fact]
+  public void Merge_KeepsExistingUidInstance() {
+    var selected = new Row { Id = 7, Subject = "open" };
+    List<Row> messages = [selected, new() { Id = 8, Subject = "gone" }];
+    MailMessageList.Merge(
+      messages,
+      [new Row { Id = 7, Subject = "updated" }, new Row { Id = 9, Subject = "fresh" }],
+      row => row.Id,
+      (dest, src) => dest.Subject = src.Subject);
+    Assert.Equal(2, messages.Count);
+    Assert.Same(selected, messages.Single(row => row.Id == 7));
+    Assert.Equal("updated", selected.Subject);
+    Assert.Contains(messages, row => row.Id == 9);
+    Assert.DoesNotContain(messages, row => row.Id == 8);
+  }
+
+  [Fact]
+  public void Resolve_MapsKeysOntoLiveRows() {
+    var stale = new Row { Id = 1 };
+    var live = new Row { Id = 1 };
+    var resolved = MailMessageList.Resolve([stale.Key], [live], row => row.Key);
+    Assert.Same(live, Assert.Single(resolved));
+  }
+
+  [Fact]
+  public void CoversAll_RequiresMatchingKeys() {
+    Row[] visible = [new() { Id = 1 }, new() { Id = 2 }];
+    Row[] selected = [new() { Id = 1 }, new() { Id = 9 }];
+    Assert.False(MailMessageList.CoversAll(selected, visible, row => row.Key));
+    Assert.True(MailMessageList.CoversAll(visible, visible, row => row.Key));
+  }
+}
+
+
 public class MailChainTests {
   [Fact]
   public void Order_IndentsRepliesAndSortsByLatest() {

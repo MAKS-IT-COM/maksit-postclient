@@ -314,9 +314,27 @@ public sealed class MessageRowViewModel : ObservableObject {
   public FontWeight Weight =>
     Header.IsSeen ? FontWeight.Normal : FontWeight.SemiBold;
 
+  public MailMessageKey Key =>
+    MailMessageKey.Of(MailboxId, Header.Folder, Header.Id);
+
+  public void ApplyHeader(MailMessageHeader header) {
+    ArgumentNullException.ThrowIfNull(header);
+    Header = header;
+    RefreshMarks();
+  }
+
   public void RefreshMarks() {
     OnPropertyChanged(nameof(Subject));
     OnPropertyChanged(nameof(ChainSubject));
+    OnPropertyChanged(nameof(From));
+    OnPropertyChanged(nameof(When));
+    OnPropertyChanged(nameof(SortDate));
+    OnPropertyChanged(nameof(UnreadSort));
+    OnPropertyChanged(nameof(FlagSort));
+    OnPropertyChanged(nameof(PrioritySort));
+    OnPropertyChanged(nameof(AttachmentSort));
+    OnPropertyChanged(nameof(DeliverySort));
+    OnPropertyChanged(nameof(Badge));
     OnPropertyChanged(nameof(UnreadMark));
     OnPropertyChanged(nameof(UnreadTip));
     OnPropertyChanged(nameof(FlagMark));
@@ -328,6 +346,7 @@ public sealed class MessageRowViewModel : ObservableObject {
     OnPropertyChanged(nameof(DeliveryMark));
     OnPropertyChanged(nameof(DeliveryLabel));
     OnPropertyChanged(nameof(DeliveryTip));
+    OnPropertyChanged(nameof(BadgeTip));
     OnPropertyChanged(nameof(Labels));
     OnPropertyChanged(nameof(Weight));
   }
