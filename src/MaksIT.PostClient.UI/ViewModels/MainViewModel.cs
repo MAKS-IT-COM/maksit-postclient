@@ -38,7 +38,6 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private readonly HashSet<string> _catalogFolders = new(StringComparer.OrdinalIgnoreCase);
   private const int IndexCatalogChunk = 2_000;
   private const int IndexUiChunk = 250;
-  private int _indexBodyTotal;
   private readonly StatusLineHold _indexHold;
   private readonly StatusLineHold _semanticHold;
   private bool _uiReady;
@@ -3756,10 +3755,10 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   }
 
   private void EnsureIndexing(string mailboxId) {
-    if (string.IsNullOrWhiteSpace(mailboxId))
-      return;
-    _indexMailboxes.Add(mailboxId);
-    if (_backfill is not null)
+    if (!string.IsNullOrWhiteSpace(mailboxId))
+      _indexMailboxes.Add(mailboxId);
+    TrackConnectedMailboxes();
+    if (_backfill is not null || _indexMailboxes.Count == 0)
       return;
     StartIndexing();
   }
@@ -3799,7 +3798,10 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     try {
       while (!token.IsCancellationRequested) {
         await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-        var snapshot = await Dispatcher.UIThread.InvokeAsync(CaptureIndexSnapshot);
+        var (snapshot, readyIds) = await Dispatcher.UIThread.InvokeAsync(() => {
+          TrackConnectedMailboxes();
+          return (CaptureIndexSnapshot(), ReadyMailboxIds());
+        });
         await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         if (snapshot.Count == 0)
           break;
@@ -3824,11 +3826,6 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
             pendingFolders = true;
             cataloged = true;
             await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-            var folderDone = box.CatalogedFolders.Count;
-            await SetIndexLineAsync(
-                MailIndexProgress.Line(folderDone, Math.Max(box.Folders.Count, 1), folder.Name),
-                token)
-              .ConfigureAwait(false);
             var known = _archive.Uids(box.Id, folder.FullName);
             var listed = await box.Session
               .ListMessagesAsync(folder.FullName, known, token, IndexCatalogChunk)
@@ -3837,6 +3834,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
               continue;
             var sync = listed.Value ?? new MailFolderSync();
             ApplyFolderSync(box.Id, folder.FullName, sync);
+            await SetIndexLineAsync(GlobalIndexLine(), token)
+              .ConfigureAwait(false);
             var counts = _archive.FolderCounts(box.Id, folder.FullName);
             await UiAsync(() => RefreshIndexedFolderCounts(box.Id, folder.FullName, counts))
               .ConfigureAwait(false);
@@ -3855,10 +3854,6 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         }
 
         await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-        var readyIds = snapshot
-          .Where(s => IsInitialSyncComplete(s.Id))
-          .Select(s => s.Id)
-          .ToList();
         var pending = readyIds.Count == 0 ? [] : _archive.MissingBodies(readyIds, 16);
         if (pending.Count == 0) {
           if (!cataloged)
@@ -3866,11 +3861,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
           continue;
         }
 
-        var left = _archive.MissingBodyCount(readyIds);
-        if (_indexBodyTotal < left)
-          _indexBodyTotal = left;
-        var done = Math.Max(0, _indexBodyTotal - left);
-        await SetIndexLineAsync(MailIndexProgress.Line(done, _indexBodyTotal), token)
+        await SetIndexLineAsync(GlobalIndexLine(), token)
           .ConfigureAwait(false);
         var fetched = 0;
         foreach (var item in pending) {
@@ -3916,7 +3907,6 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         var again = _indexMailboxes.Any(id => SessionFor(MailboxById(id)) is { IsConnected: true });
         if (!again) {
           _indexHold.Set("");
-          _indexBodyTotal = 0;
           return;
         }
 
@@ -3961,6 +3951,29 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       if (!token.IsCancellationRequested)
         _indexHold.Set(line);
     }).ConfigureAwait(false);
+
+  private void TrackConnectedMailboxes() {
+    foreach (var box in Mailboxes) {
+      if (SessionFor(box) is { IsConnected: true })
+        _indexMailboxes.Add(box.Id);
+    }
+  }
+
+  private List<string> ReadyMailboxIds() {
+    var ids = new List<string>();
+    foreach (var box in Mailboxes) {
+      if (IsInitialSyncComplete(box.Id))
+        ids.Add(box.Id);
+    }
+
+    return ids;
+  }
+
+  private string GlobalIndexLine() {
+    var total = _archive.TotalMessageCount();
+    var missing = _archive.MissingBodyCount();
+    return MailIndexProgress.Line(Math.Max(0, total - missing), total);
+  }
 
   private MailboxAccount? MailboxById(string mailboxId) =>
     Mailboxes.FirstOrDefault(m => m.Id.Equals(mailboxId, StringComparison.OrdinalIgnoreCase))

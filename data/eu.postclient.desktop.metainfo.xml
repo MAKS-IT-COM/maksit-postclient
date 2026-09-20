@@ -30,6 +30,11 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.5" date="2026-09-20">
+      <description>
+        <p>Keyword and meaning index status shows one done / total across all mailboxes, not the current folder or a single account.</p>
+      </description>
+    </release>
     <release version="0.3.4" date="2026-09-20">
       <description>
         <p>Status bar indexing and meaning-index lines stay visible between batches instead of flashing.</p>

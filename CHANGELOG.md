@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-09-20
+
+Index status covers every mailbox, not one folder or one account.
+
+### Changed
+
+- Status bar keyword and meaning index lines show one done / total across all mailboxes, not the folder or mailbox currently being scanned.
+
 ## [0.3.4] - 2026-09-20
 
 Status bar index lines no longer flash between batches.

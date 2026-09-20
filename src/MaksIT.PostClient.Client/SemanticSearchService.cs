@@ -197,13 +197,21 @@ public sealed class SemanticSearchService : ISemanticSearchService {
         await DelayAsync(TimeSpan.FromMilliseconds(800), token).ConfigureAwait(false);
         if (_archive.PendingEmbeddings(EmbeddingModelSpec.Id, 1, ready).Count > 0)
           continue;
+        var leftAll = _archive.EmbeddingPendingCount(EmbeddingModelSpec.Id);
+        var doneAll = _archive.EmbeddingCount(EmbeddingModelSpec.Id);
+        if (leftAll > 0) {
+          SetStatus(MailIndexProgress.MeaningLine(doneAll, doneAll + leftAll), ready: true);
+          await WaitAsync(token).ConfigureAwait(false);
+          return;
+        }
+
         SetStatus("", ready: true);
         await WaitAsync(token).ConfigureAwait(false);
         return;
       }
 
-      var left = _archive.EmbeddingPendingCount(EmbeddingModelSpec.Id, ready);
-      var done = _archive.EmbeddingCount(EmbeddingModelSpec.Id, ready);
+      var left = _archive.EmbeddingPendingCount(EmbeddingModelSpec.Id);
+      var done = _archive.EmbeddingCount(EmbeddingModelSpec.Id);
       SetStatus(MailIndexProgress.MeaningLine(done, done + left), ready: true);
       foreach (var item in pending) {
         token.ThrowIfCancellationRequested();

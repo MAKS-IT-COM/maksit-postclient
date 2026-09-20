@@ -105,6 +105,14 @@ public sealed class MailArchiveCatalog : IDisposable {
   public int MessageCount(string mailboxId) =>
     OffUi(() => TryGet(mailboxId)?.MessageCount(mailboxId) ?? 0);
 
+  public int TotalMessageCount() =>
+    OffUi(() => {
+      var count = 0;
+      foreach (var pair in _stores)
+        count += pair.Value.MessageCount(pair.Key);
+      return count;
+    });
+
   public int RebuildKeywordIndex(string mailboxId) =>
     OffUi(() => TryGet(mailboxId)?.RebuildKeywordIndex() ?? 0);
 
