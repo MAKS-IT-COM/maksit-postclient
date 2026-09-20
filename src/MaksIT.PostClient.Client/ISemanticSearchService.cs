@@ -13,6 +13,8 @@ public interface ISemanticSearchService : IDisposable {
 
   event Action? Changed;
 
+  event Action<Exception>? Faulted;
+
   void Start();
 
   void NotifySettingsChanged();

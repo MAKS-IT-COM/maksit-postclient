@@ -41,6 +41,8 @@ public sealed class MailboxAccount {
 
   public string AuthKind { get; set; } = MailAuthKind.Password;
 
+  public bool InitialSyncCompleted { get; set; }
+
   [JsonIgnore]
   public bool TracksCertifiedReceipts =>
     MailCertifiedKind.TracksReceipts(CertifiedKind);

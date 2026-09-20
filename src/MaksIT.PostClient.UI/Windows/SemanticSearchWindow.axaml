@@ -3,7 +3,7 @@
         xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
         x:Class="MaksIT.PostClient.UI.Windows.SemanticSearchWindow"
         x:DataType="vm:SemanticSearchViewModel"
-        Title="{Binding Copy.SemanticSearch}"
+        Title="{Binding Copy.SemanticSearchTitle}"
         Icon="/Assets/icon.ico"
         Width="580"
         SizeToContent="Height"

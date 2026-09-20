@@ -16,8 +16,12 @@
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Text="{Binding Status}" Classes="hint" TextTrimming="CharacterEllipsis" />
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16">
-          <TextBlock Text="{Binding SemanticLine}" Classes="hint" />
-          <TextBlock Text="{Binding IndexLine}" Classes="hint" />
+          <TextBlock Text="{Binding SemanticLine}"
+                     Classes="hint"
+                     IsVisible="{Binding ShowSemanticLine}" />
+          <TextBlock Text="{Binding IndexLine}"
+                     Classes="hint"
+                     IsVisible="{Binding ShowIndexLine}" />
           <TextBlock Text="{Binding FolderStats}" Classes="hint" />
         </StackPanel>
       </Grid>
@@ -130,6 +134,7 @@
       </MenuItem>
       <MenuItem Header="{Binding Copy.Help}">
         <MenuItem Header="{Binding Copy.CheckUpdates}" Command="{Binding CheckForUpdatesCommand}" />
+        <MenuItem Header="{Binding Copy.Logs}" Command="{Binding ShowLogsCommand}" />
         <MenuItem Header="{Binding Copy.About}" Command="{Binding ShowAboutCommand}" />
       </MenuItem>
     </Menu>
@@ -171,7 +176,7 @@
               <MenuItem Header="{Binding Copy.NewFolder}"
                         Command="{Binding CreateFolderCommand}"
                         IsVisible="{Binding ShowFolderContext}" />
-              <MenuItem Header="{Binding Copy.EmptyFolder}"
+              <MenuItem Header="{Binding EmptyFolderLabel}"
                         Command="{Binding EmptyFolderCommand}"
                         IsVisible="{Binding ShowFolderContext}" />
               <MenuItem Header="{Binding Copy.MarkFolderRead}"
@@ -194,7 +199,7 @@
           </TreeView.ContextFlyout>
           <TreeView.ItemTemplate>
             <TreeDataTemplate ItemsSource="{Binding Children}">
-              <Grid ColumnDefinitions="20,*,Auto" Margin="0,1" HorizontalAlignment="Stretch">
+              <Grid ColumnDefinitions="20,*,Auto,Auto" Margin="0,1" HorizontalAlignment="Stretch">
                 <TextBlock Text="{Binding Glyph}"
                            FontSize="12"
                            VerticalAlignment="Center" />
@@ -215,6 +220,12 @@
                            Margin="8,0,4,0"
                            VerticalAlignment="Center"
                            IsVisible="{Binding HasUnread}" />
+                <TextBlock Grid.Column="3"
+                           Text="{Binding RetentionLabel}"
+                           Classes="hint"
+                           Margin="0,0,4,0"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding HasRetention}" />
               </Grid>
             </TreeDataTemplate>
           </TreeView.ItemTemplate>
@@ -472,8 +483,7 @@
                           Classes.selected="{Binding IsFatturaKind}"
                           Command="{Binding SetReadingKindCommand}"
                           CommandParameter="fattura"
-                          IsVisible="{Binding UseFatturaPa}"
-                          IsEnabled="{Binding ShowFatturaPaTools}" />
+                          IsVisible="{Binding UseFatturaPa}" />
                 </StackPanel>
                 <ItemsControl ItemsSource="{Binding ReadingFiles}" IsVisible="{Binding HasReadingFiles}">
                   <ItemsControl.ItemsPanel>
@@ -524,7 +534,9 @@
                        Text="{Binding ReadingSource, Mode=OneWay}"
                        IsReadOnly="True"
                        AcceptsReturn="True"
-                       TextWrapping="Wrap" />
+                       TextWrapping="NoWrap"
+                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                       ScrollViewer.VerticalScrollBarVisibility="Auto" />
               <TextBox Classes="reading-text"
                        IsVisible="{Binding ShowFatturaBody}"
                        Text="{Binding ReadingFattura, Mode=OneWay}"

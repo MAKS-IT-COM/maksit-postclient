@@ -3,7 +3,7 @@
         xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
         x:Class="MaksIT.PostClient.UI.Windows.AccountSettingsWindow"
         x:DataType="vm:MainViewModel"
-        Title="{Binding Copy.AccountSettings}"
+        Title="{Binding Copy.AccountSettingsTitle}"
         Icon="/Assets/icon.ico"
         Width="560"
         Height="740"

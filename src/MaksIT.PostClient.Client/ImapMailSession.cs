@@ -16,6 +16,8 @@ public sealed class ImapMailSession : IMailSession {
   private ImapClient? _imap;
   private MailboxAccount? _account;
   private MailAuthMaterial? _material;
+  private readonly Dictionary<string, int> _listOffset = new(StringComparer.OrdinalIgnoreCase);
+  private readonly Dictionary<string, HashSet<uint>> _listedUids = new(StringComparer.OrdinalIgnoreCase);
 
   private const MessageSummaryItems FlagItems =
     MessageSummaryItems.UniqueId | MessageSummaryItems.Flags;
@@ -107,15 +109,14 @@ public sealed class ImapMailSession : IMailSession {
     string folder,
     IReadOnlySet<uint>? knownIds = null,
     CancellationToken cancellationToken = default,
-    int itemBudget = 0) {
-    _ = itemBudget;
-    return _io.RunAsync(() => ListMessagesCoreAsync(folder, knownIds, cancellationToken), cancellationToken);
-  }
+    int itemBudget = 0) =>
+    _io.RunAsync(() => ListMessagesCoreAsync(folder, knownIds, cancellationToken, itemBudget), cancellationToken);
 
   private async Task<Result<MailFolderSync>> ListMessagesCoreAsync(
     string folder,
     IReadOnlySet<uint>? knownIds,
-    CancellationToken cancellationToken) {
+    CancellationToken cancellationToken,
+    int itemBudget) {
     var client = RequireImap();
     if (client is null)
       return Result<MailFolderSync>.UnprocessableEntity(null, "Not connected.");
@@ -130,6 +131,9 @@ public sealed class ImapMailSession : IMailSession {
 
       var extraHeaders = ImapFetchPolicy.ExtraHeaders(AccountProvider());
       var known = knownIds ?? (IReadOnlySet<uint>)new HashSet<uint>();
+      var chunk = itemBudget > 0;
+      if (!chunk)
+        ClearListCursor(folder);
       if (known.Count > 0 && known.Count >= imapFolder.Count / 2) {
         var flagRows = await FetchSummariesAsync(
           imapFolder,
@@ -141,37 +145,93 @@ public sealed class ImapMailSession : IMailSession {
           var flags = FlagsOf(flagRows);
           var unknown = flagRows
             .Where(s => s.UniqueId.IsValid && !known.Contains(s.UniqueId.Id))
+            .OrderByDescending(s => s.UniqueId.Id)
             .Select(s => s.UniqueId)
             .ToList();
           if (unknown.Count == 0)
             return Result<MailFolderSync>.Ok(new MailFolderSync { Flags = flags, Present = present });
 
-          var added = await FetchByUidsAsync(imapFolder, unknown, extraHeaders, cancellationToken)
+          var take = unknown;
+          var incomplete = false;
+          if (chunk && unknown.Count > itemBudget) {
+            take = unknown.Take(itemBudget).ToList();
+            incomplete = true;
+          }
+
+          var added = await FetchByUidsAsync(imapFolder, take, extraHeaders, cancellationToken)
             .ConfigureAwait(false);
           return Result<MailFolderSync>.Ok(new MailFolderSync {
             Headers = HeadersOf(folder, added),
             Flags = flags,
-            Present = present
+            Present = incomplete ? null : present,
+            Incomplete = incomplete
           });
         }
       }
 
-      var summaries = await FetchSummariesAsync(
+      if (!chunk) {
+        var summaries = await FetchSummariesAsync(
+          imapFolder,
+          ListItems,
+          extraHeaders,
+          cancellationToken).ConfigureAwait(false);
+        var headers = HeadersOf(folder, summaries);
+        var ids = IdsOf(summaries);
+        if (ids.Count == 0 && imapFolder.Count > 0)
+          return Result<MailFolderSync>.Ok(new MailFolderSync { Headers = headers, Present = null });
+        return Result<MailFolderSync>.Ok(new MailFolderSync {
+          Headers = headers,
+          Present = ids
+        });
+      }
+
+      int offset;
+      HashSet<uint> listed;
+      lock (_gate) {
+        _listOffset.TryGetValue(folder, out offset);
+        if (!_listedUids.TryGetValue(folder, out listed!)) {
+          listed = [];
+          _listedUids[folder] = listed;
+        }
+      }
+
+      var range = MailListBudget.NewestRange(imapFolder.Count, offset, itemBudget);
+      if (range.Take <= 0) {
+        ClearListCursor(folder);
+        return Result<MailFolderSync>.Ok(new MailFolderSync { Present = listed.ToList() });
+      }
+
+      var chunkRows = await FetchRangeAsync(
         imapFolder,
+        range.Start,
+        range.End,
         ListItems,
         extraHeaders,
         cancellationToken).ConfigureAwait(false);
-      var headers = HeadersOf(folder, summaries);
-      var ids = IdsOf(summaries);
-      if (ids.Count == 0 && imapFolder.Count > 0)
-        return Result<MailFolderSync>.Ok(new MailFolderSync { Headers = headers, Present = null });
+      foreach (var id in IdsOf(chunkRows))
+        listed.Add(id);
+      lock (_gate) {
+        if (range.Incomplete)
+          _listOffset[folder] = range.NextOffset;
+        else
+          ClearListCursor(folder);
+      }
+
       return Result<MailFolderSync>.Ok(new MailFolderSync {
-        Headers = headers,
-        Present = ids
+        Headers = HeadersOf(folder, chunkRows),
+        Present = range.Incomplete ? null : listed.ToList(),
+        Incomplete = range.Incomplete
       });
     }
     catch (Exception ex) {
       return Result<MailFolderSync>.UnprocessableEntity(null, ex.Message);
+    }
+  }
+
+  private void ClearListCursor(string folder) {
+    lock (_gate) {
+      _listOffset.Remove(folder);
+      _listedUids.Remove(folder);
     }
   }
 

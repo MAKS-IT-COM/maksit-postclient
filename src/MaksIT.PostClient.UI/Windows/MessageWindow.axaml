@@ -74,8 +74,7 @@
                     Classes.selected="{Binding IsFatturaKind}"
                     Command="{Binding SetReadingKindCommand}"
                     CommandParameter="fattura"
-                    IsVisible="{Binding UseFatturaPa}"
-                    IsEnabled="{Binding ShowFatturaPaTools}" />
+                    IsVisible="{Binding UseFatturaPa}" />
           </StackPanel>
           <ItemsControl ItemsSource="{Binding ReadingFiles}" IsVisible="{Binding HasReadingFiles}">
             <ItemsControl.ItemsPanel>
@@ -126,7 +125,9 @@
                  Text="{Binding ReadingSource, Mode=OneWay}"
                  IsReadOnly="True"
                  AcceptsReturn="True"
-                 TextWrapping="Wrap" />
+                 TextWrapping="NoWrap"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
         <TextBox Classes="reading-text"
                  IsVisible="{Binding ShowFatturaBody}"
                  Text="{Binding ReadingFattura, Mode=OneWay}"

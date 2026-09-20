@@ -161,8 +161,15 @@ public class EnvelopeUnwrapperTests {
   public void Inspect_SavedPostclientObjects_IfPresent() {
     var dir = Path.Combine(
       Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+      "MaksIT",
       "Postclient",
       "objects");
+    if (!Directory.Exists(dir)) {
+      dir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Postclient",
+        "objects");
+    }
     if (!Directory.Exists(dir))
       return;
     var files = Directory.GetFiles(dir, "*.eml");

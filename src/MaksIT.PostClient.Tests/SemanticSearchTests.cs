@@ -1,3 +1,4 @@
+using MaksIT.PostClient.Client;
 using MaksIT.PostClient.Shared;
 
 
@@ -50,6 +51,37 @@ public class SemanticDeviceTests {
     Assert.Equal(SemanticDevice.Auto, SemanticDevice.Normalize(""));
     Assert.Equal(SemanticDevice.Cpu, SemanticDevice.Normalize("CPU-only"));
     Assert.Equal(SemanticDevice.Gpu, SemanticDevice.Normalize("DirectML"));
+  }
+}
+
+
+public class GpuProbeTests {
+  [Fact]
+  public void PreferForDirectMl_PicksNvidiaOverIntelAndSkipsWarp() {
+    GpuAdapter[] adapters = [
+      new(0, "Intel UHD Graphics", 0x8086, 128_000_000, false),
+      new(1, "NVIDIA GeForce GTX 1660 Ti", 0x10DE, 6_000_000_000, false),
+      new(2, "NVIDIA GeForce GTX 1660 Ti", 0x10DE, 6_000_000_000, false),
+      new(3, "Microsoft Basic Render Driver", 0x1414, 0, true)
+    ];
+    var picked = GpuProbe.PreferForDirectMl(adapters);
+    Assert.Equal(new[] { 1, 0 }, picked.Select(static adapter => adapter.DeviceId).ToArray());
+  }
+
+  [Fact]
+  public void IsSoftwareAdapter_DetectsWarp() {
+    Assert.True(GpuProbe.IsSoftwareAdapter("Microsoft Basic Render Driver", 0, 0x1414));
+    Assert.True(GpuProbe.IsSoftwareAdapter("NVIDIA", 2, 0x10DE));
+    Assert.False(GpuProbe.IsSoftwareAdapter("NVIDIA GeForce GTX 1660 Ti", 0, 0x10DE));
+  }
+
+  [Fact]
+  public void DirectMlAdapters_OnWindowsSkipsSoftware() {
+    if (!OperatingSystem.IsWindows())
+      return;
+    var adapters = GpuProbe.DirectMlAdapters();
+    Assert.NotEmpty(adapters);
+    Assert.DoesNotContain(adapters, static adapter => adapter.Software);
   }
 }
 

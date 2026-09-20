@@ -81,10 +81,11 @@ public class ErrorReportTests {
 
 public class AppPathsTests {
   [Fact]
-  public void ProductFolderIsPlaceholderBrandNotMaksIt() {
+  public void ProductFolderUsesMaksItBrand() {
     Assert.Equal("Postclient", AppPaths.ProductName);
     Assert.Equal("postclient", AppPaths.ProductId);
-    Assert.DoesNotContain("MaksIT", AppPaths.ConfigDirectory(), StringComparison.OrdinalIgnoreCase);
+    Assert.Contains("MaksIT", AppPaths.ConfigDirectory(), StringComparison.OrdinalIgnoreCase);
+    Assert.Contains("Postclient", AppPaths.ConfigDirectory(), StringComparison.OrdinalIgnoreCase);
     Assert.EndsWith("webview", AppPaths.WebViewDirectory(), StringComparison.OrdinalIgnoreCase);
     Assert.EndsWith("models", AppPaths.ModelsDirectory(), StringComparison.OrdinalIgnoreCase);
   }
@@ -358,6 +359,37 @@ public class MailIndexProgressTests {
     Assert.Equal("Indexing meaning 12 left", MailIndexProgress.MeaningLeft(12));
     Assert.Equal("Meaning index ready (CPU)", MailIndexProgress.MeaningReady("CPU", 0));
     Assert.Equal("Meaning index ready (GPU, 40)", MailIndexProgress.MeaningReady("GPU", 40));
+    Assert.Equal("", MailIndexProgress.MeaningLine(0, 0));
+    Assert.Equal("Indexing meaning 3 / 10", MailIndexProgress.MeaningLine(3, 10));
+  }
+}
+
+
+public class MailListBudgetTests {
+  [Fact]
+  public void NewestRange_TakesFromTheEnd() {
+    var first = MailListBudget.NewestRange(1000, 0, 200);
+    Assert.Equal(800, first.Start);
+    Assert.Equal(999, first.End);
+    Assert.Equal(200, first.Take);
+    Assert.True(first.Incomplete);
+    var last = MailListBudget.NewestRange(1000, 800, 200);
+    Assert.Equal(0, last.Start);
+    Assert.Equal(199, last.End);
+    Assert.False(last.Incomplete);
+  }
+}
+
+
+public class UiCopyPlainTests {
+  [Fact]
+  public void Plain_StripsMnemonicAndEllipsis() {
+    Assert.Equal("Rules", UiCopy.Plain("_Rules…"));
+    Assert.Equal("Indices", UiCopy.Plain("_Indices…"));
+    Assert.Equal("Account Settings", UiCopy.Plain("Account Settings…"));
+    Assert.Equal("Help", UiCopy.Plain("_Help"));
+    Assert.Equal("Rules", UiCopy.For("en").RulesTitle);
+    Assert.Equal("About Postclient", UiCopy.For("en").AboutTitle);
   }
 }
 

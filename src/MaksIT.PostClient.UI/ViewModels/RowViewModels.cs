@@ -152,6 +152,14 @@ public sealed partial class FolderNodeViewModel : ObservableObject {
   public bool HasUnread =>
     Unread > 0;
 
+  public int RetentionDays { get; set; }
+
+  public string RetentionLabel =>
+    UiLocale.Copy.RetentionBadge(RetentionDays);
+
+  public bool HasRetention =>
+    RetentionDays > 0;
+
   public MailboxQuota? Quota { get; set; }
 
   public bool ShowQuota =>
@@ -172,6 +180,8 @@ public sealed partial class FolderNodeViewModel : ObservableObject {
     OnPropertyChanged(nameof(UnreadLabel));
     OnPropertyChanged(nameof(HasUnread));
     OnPropertyChanged(nameof(Weight));
+    OnPropertyChanged(nameof(RetentionLabel));
+    OnPropertyChanged(nameof(HasRetention));
   }
 
   public void NotifyQuota() {

@@ -3,7 +3,7 @@
         xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
         x:Class="MaksIT.PostClient.UI.Windows.FeatureSettingsWindow"
         x:DataType="vm:FeatureMatrixViewModel"
-        Title="{Binding Copy.Features}"
+        Title="{Binding Copy.FeaturesTitle}"
         Icon="/Assets/icon.ico"
         Width="940"
         Height="560"

@@ -8,6 +8,8 @@ public sealed class MailArchiveStore : IDisposable {
   private readonly SqliteConnection _db;
   private readonly Lock _gate = new();
 
+  public bool KeywordIndexEnabled { get; set; } = true;
+
   public MailArchiveStore(string? path = null) {
     var file = string.IsNullOrWhiteSpace(path) ? AppPaths.ArchiveDatabase() : path;
     var dir = Path.GetDirectoryName(file);
@@ -186,6 +188,7 @@ public sealed class MailArchiveStore : IDisposable {
   }
 
   public int RebuildKeywordIndex() {
+    KeywordIndexEnabled = true;
     lock (_gate) {
       using var tx = _db.BeginTransaction();
       using (var del = _db.CreateCommand()) {
@@ -757,13 +760,22 @@ public sealed class MailArchiveStore : IDisposable {
   }
 
   public IReadOnlyList<uint> UidsOlderThan(string mailboxId, string folder, DateTimeOffset cutoff) {
+    var trash = MailRetention.IsTrash(folder);
     lock (_gate) {
       using var cmd = _db.CreateCommand();
-      cmd.CommandText = """
-        SELECT uid FROM messages
-        WHERE mailbox_id = $m AND folder = $f AND date_utc <> '' AND date_utc < $cut
-        ORDER BY date_utc;
-        """;
+      cmd.CommandText = trash
+        ? """
+          SELECT uid FROM messages
+          WHERE mailbox_id = $m AND folder = $f
+            AND COALESCE(NULLIF(trashed_utc, ''), date_utc) <> ''
+            AND COALESCE(NULLIF(trashed_utc, ''), date_utc) < $cut
+          ORDER BY COALESCE(NULLIF(trashed_utc, ''), date_utc);
+          """
+        : """
+          SELECT uid FROM messages
+          WHERE mailbox_id = $m AND folder = $f AND date_utc <> '' AND date_utc < $cut
+          ORDER BY date_utc;
+          """;
       cmd.Parameters.AddWithValue("$m", mailboxId);
       cmd.Parameters.AddWithValue("$f", folder);
       cmd.Parameters.AddWithValue("$cut", cutoff.ToString("O"));
@@ -772,6 +784,15 @@ public sealed class MailArchiveStore : IDisposable {
       while (reader.Read())
         ids.Add((uint)reader.GetInt64(0));
       return ids;
+    }
+  }
+
+  public int MessageCount(string mailboxId) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = "SELECT COUNT(*) FROM messages WHERE mailbox_id = $m;";
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      return (int)(long)(cmd.ExecuteScalar() ?? 0L);
     }
   }
 
@@ -860,8 +881,8 @@ public sealed class MailArchiveStore : IDisposable {
     cmd.CommandText = $"""
       INSERT INTO messages (
         mailbox_id, folder, uid, message_id, subject, from_addr, date_utc, envelope_kind, envelope_badge,
-        envelope_tipo, in_reply_to, is_seen, is_flagged, has_attachments, priority)
-      VALUES ($m, $f, $u, $mid, $sub, $from, $date, $kind, $badge, $tipo, $reply, $seen, $flag, $att, $pri)
+        envelope_tipo, in_reply_to, is_seen, is_flagged, has_attachments, priority, trashed_utc)
+      VALUES ($m, $f, $u, $mid, $sub, $from, $date, $kind, $badge, $tipo, $reply, $seen, $flag, $att, $pri, $trashed)
       ON CONFLICT(mailbox_id, folder, uid) DO UPDATE SET
         message_id = excluded.message_id,
         subject = excluded.subject,
@@ -873,8 +894,15 @@ public sealed class MailArchiveStore : IDisposable {
         in_reply_to = excluded.in_reply_to,
         {flagAssign}
         has_attachments = excluded.has_attachments,
-        priority = excluded.priority;
+        priority = excluded.priority,
+        trashed_utc = CASE
+          WHEN messages.trashed_utc <> '' THEN messages.trashed_utc
+          WHEN $trash = 1 THEN excluded.trashed_utc
+          ELSE messages.trashed_utc
+        END;
       """;
+    var trash = MailRetention.IsTrash(header.Folder);
+    var trashed = trash ? DateTimeOffset.UtcNow.ToString("O") : "";
     cmd.Parameters.AddWithValue("$m", mailboxId);
     cmd.Parameters.AddWithValue("$f", header.Folder);
     cmd.Parameters.AddWithValue("$u", header.Uid);
@@ -890,6 +918,8 @@ public sealed class MailArchiveStore : IDisposable {
     cmd.Parameters.AddWithValue("$flag", header.IsFlagged ? 1 : 0);
     cmd.Parameters.AddWithValue("$att", header.HasAttachments ? 1 : 0);
     cmd.Parameters.AddWithValue("$pri", header.Priority);
+    cmd.Parameters.AddWithValue("$trashed", trashed);
+    cmd.Parameters.AddWithValue("$trash", trash ? 1 : 0);
     cmd.ExecuteNonQuery();
     using var idCmd = _db.CreateCommand();
     idCmd.Transaction = tx;
@@ -908,6 +938,8 @@ public sealed class MailArchiveStore : IDisposable {
     MailArchiveHeader header,
     string? bodyText,
     string? attachmentText) {
+    if (!KeywordIndexEnabled)
+      return;
     using (var del = _db.CreateCommand()) {
       del.Transaction = tx;
       del.CommandText = "DELETE FROM messages_fts WHERE rowid = $id;";
@@ -1163,6 +1195,7 @@ public sealed class MailArchiveStore : IDisposable {
         eml_path TEXT NOT NULL DEFAULT '',
         body_text TEXT NOT NULL DEFAULT '',
         attachment_text TEXT NOT NULL DEFAULT '',
+        trashed_utc TEXT NOT NULL DEFAULT '',
         UNIQUE(mailbox_id, folder, uid)
       );
       CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
@@ -1183,6 +1216,22 @@ public sealed class MailArchiveStore : IDisposable {
       );
       """;
     cmd.ExecuteNonQuery();
+    EnsureColumn("messages", "trashed_utc", "TEXT NOT NULL DEFAULT ''");
+  }
+
+  private void EnsureColumn(string table, string column, string definition) {
+    using var info = _db.CreateCommand();
+    info.CommandText = "PRAGMA table_info(" + table + ");";
+    using var reader = info.ExecuteReader();
+    while (reader.Read()) {
+      if (reader.GetString(1).Equals(column, StringComparison.OrdinalIgnoreCase))
+        return;
+    }
+
+    reader.Dispose();
+    using var alter = _db.CreateCommand();
+    alter.CommandText = "ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition + ";";
+    alter.ExecuteNonQuery();
   }
 }
 

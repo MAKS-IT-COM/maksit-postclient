@@ -6,6 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-20
+
+First sync paints mail as it arrives, meaning search can use a discrete GPU, and trash, retention, and logs follow typical desktop mail apps.
+
+### Added
+
+- **Help → Logs** opens a copyable window over the app log folder.
+
+### Changed
+
+- First mailbox sync paints the message list as header batches arrive (newest first). Keyword and meaning indexes wait until the first full folder catalog finishes.
+- Default user data is `%LocalAppData%\MaksIT\Postclient`. Existing `%AppData%\Postclient` / `%LocalAppData%\Postclient` trees are moved on first launch.
+- Status bar index lines show scanned / total and hide when idle. GPU init failures open the copyable error window and fall back to CPU in Auto.
+- Meaning search DirectML prefers a discrete GPU (NVIDIA GTX 1660 Ti and similar) instead of always DXGI adapter 0, and uses sequential DirectML session options.
+- Trash retention counts from the move-to-trash time. Folder tree shows retention days next to unread when days are greater than zero.
+- Window titles drop menu mnemonics and trailing ellipses.
+
+### Fixed
+
+- Select-all delete in Trash, folder context commands while a huge first sync is painting, and Empty on Trash labeled **Delete all items**.
+- Retention list no longer keeps Gmail labels that were deleted on the server.
+- FatturaPA toolbar kind button matches the View menu. Source view selection no longer wraps the full raw EML.
+
 ## [0.3.2] - 2026-09-19
 
 Expired folder mail goes to Trash; Trash can be kept forever or purged after a number of days.

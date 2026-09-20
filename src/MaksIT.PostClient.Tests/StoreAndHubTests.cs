@@ -515,7 +515,7 @@ public class LocalStoreTests {
       files.Save(files.Current);
       using var purgeHost = new MailWorkerHost(catalog, files);
       purgeHost.Retention(new WorkerRequest { Op = "retention" });
-      Assert.Empty(catalog.Search("box", MailRetention.TrashFolder, "IMU"));
+      Assert.Single(catalog.Search("box", MailRetention.TrashFolder, "IMU"));
     }
     finally {
       Directory.Delete(root, recursive: true);

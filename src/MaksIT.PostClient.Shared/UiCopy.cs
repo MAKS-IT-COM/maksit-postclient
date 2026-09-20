@@ -96,6 +96,8 @@ public sealed partial class UiCopy {
 
   public string Help { get; init; } = "";
 
+  public string Logs { get; init; } = "";
+
   public string CreateStore { get; init; } = "";
 
   public string AttachStore { get; init; } = "";
@@ -117,6 +119,8 @@ public sealed partial class UiCopy {
   public string RetentionHint { get; init; } = "";
 
   public string RetentionDays { get; init; } = "";
+
+  public string RetentionDaysBadge { get; init; } = "";
 
   public string RetentionAction { get; init; } = "";
 
@@ -402,6 +406,8 @@ public sealed partial class UiCopy {
 
   public string IndexingLeft { get; init; } = "";
 
+  public string IndexingMeaning { get; init; } = "";
+
   public string IndexingMeaningLeft { get; init; } = "";
 
   public string IndexingMeaningReady { get; init; } = "";
@@ -439,6 +445,8 @@ public sealed partial class UiCopy {
   public string NewFolder { get; init; } = "";
 
   public string EmptyFolder { get; init; } = "";
+
+  public string DeleteAllItems { get; init; } = "";
 
   public string MarkFolderRead { get; init; } = "";
 
@@ -528,6 +536,41 @@ public sealed partial class UiCopy {
 
   public string CertifiedRem { get; init; } = "";
 
+  public string RulesTitle =>
+    Plain(Rules);
+
+  public string FeaturesTitle =>
+    Plain(Features);
+
+  public string RetentionTitle =>
+    Plain(Retention);
+
+  public string SemanticSearchTitle =>
+    Plain(SemanticSearch);
+
+  public string AccountSettingsTitle =>
+    Plain(AccountSettings);
+
+  public string AboutTitle =>
+    Plain(About);
+
+  public string LogsTitle =>
+    Plain(Logs);
+
+  public string RetentionBadge(int days) =>
+    days <= 0 ? "" : string.Format(RetentionDaysBadge, days);
+
+  public static string Plain(string? value) {
+    if (string.IsNullOrWhiteSpace(value))
+      return "";
+    var text = value.Replace("_", "", StringComparison.Ordinal).Trim();
+    if (text.EndsWith("…", StringComparison.Ordinal))
+      return text[..^1].TrimEnd();
+    if (text.EndsWith("...", StringComparison.Ordinal))
+      return text[..^3].TrimEnd();
+    return text;
+  }
+
   public static UiCopy For(string? language) =>
     UiLanguage.Normalize(language) switch {
       UiLanguage.It => Italian(),
@@ -571,6 +614,7 @@ public sealed partial class UiCopy {
       Message = "_Message",
       Settings = "_Settings",
       Help = "_Help",
+      Logs = "_Logs",
       Features = "_Features…",
       FeaturesHint = "Certified-mail packs only. Ordinary mail (IMAP/POP3, search, labels, imports) stays on. Header checkboxes turn a whole country on or off. Italy is PEC and FatturaPA; Europe is eIDAS REM. France, Germany, Spain, and Switzerland add operator evidence labels — those networks are usually not IMAP.",
       Feature = "Feature",
@@ -624,6 +668,7 @@ public sealed partial class UiCopy {
       Retention = "_Retention…",
       RetentionHint = "Per folder. 0 keeps mail forever. Folder days move older messages to Trash. Trash days permanently delete, or 0 to keep Trash forever.",
       RetentionDays = "Days",
+      RetentionDaysBadge = "{0}d",
       RetentionAction = "When expired",
       RetentionToTrash = "Move to Trash",
       RetentionPurge = "Delete permanently",
@@ -766,6 +811,7 @@ public sealed partial class UiCopy {
       IndexingWithFolder = "Indexing {0} · {1} / {2}",
       IndexingBusy = "Indexing…",
       IndexingLeft = "Indexing {0} left",
+      IndexingMeaning = "Indexing meaning {0} / {1}",
       IndexingMeaningLeft = "Indexing meaning {0} left",
       IndexingMeaningReady = "Meaning index ready ({0})",
       IndexingMeaningReadyCount = "Meaning index ready ({0}, {1})",
@@ -785,6 +831,7 @@ public sealed partial class UiCopy {
       DeletingFolder = "Deleting folder…",
       NewFolder = "New folder…",
       EmptyFolder = "Empty folder",
+      DeleteAllItems = "Delete all items",
       MarkFolderRead = "Mark all as read",
       MarkFolderUnread = "Mark all as unread",
       DeleteFolder = "Delete folder",
@@ -838,6 +885,7 @@ public sealed partial class UiCopy {
       Message = "_Messaggio",
       Settings = "_Impostazioni",
       Help = "_Aiuto",
+      Logs = "_Registro",
       Features = "_Funzionalità…",
       FeaturesHint = "Solo posta certificata. La posta ordinaria (IMAP/POP3, ricerca, etichette, import) resta sempre disponibile. Le caselle in intestazione accendono o spengono un intero Paese. Italia è PEC e FatturaPA; Europa è REM eIDAS. Francia, Germania, Spagna e Svizzera aggiungono etichette di evidenza — quelle reti di solito non sono IMAP.",
       Feature = "Funzione",
@@ -891,6 +939,7 @@ public sealed partial class UiCopy {
       Retention = "_Conservazione…",
       RetentionHint = "Per cartella. 0 conserva per sempre. I giorni della cartella spostano i messaggi più vecchi nel Cestino. I giorni del Cestino eliminano in modo permanente, oppure 0 per tenere il Cestino per sempre.",
       RetentionDays = "Giorni",
+      RetentionDaysBadge = "{0}g",
       RetentionAction = "Alla scadenza",
       RetentionToTrash = "Sposta nel Cestino",
       RetentionPurge = "Elimina in modo permanente",
@@ -1033,6 +1082,7 @@ public sealed partial class UiCopy {
       IndexingWithFolder = "Indicizzazione {0} · {1} / {2}",
       IndexingBusy = "Indicizzazione…",
       IndexingLeft = "Indicizzazione {0} rimanenti",
+      IndexingMeaning = "Indicizzazione significato {0} / {1}",
       IndexingMeaningLeft = "Indicizzazione significato {0} rimanenti",
       IndexingMeaningReady = "Indice significato pronto ({0})",
       IndexingMeaningReadyCount = "Indice significato pronto ({0}, {1})",
@@ -1052,6 +1102,7 @@ public sealed partial class UiCopy {
       DeletingFolder = "Eliminazione cartella…",
       NewFolder = "Nuova cartella…",
       EmptyFolder = "Svuota cartella",
+      DeleteAllItems = "Elimina tutti gli elementi",
       MarkFolderRead = "Segna tutte come lette",
       MarkFolderUnread = "Segna tutte come non lette",
       DeleteFolder = "Elimina cartella",

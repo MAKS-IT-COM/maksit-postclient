@@ -4,7 +4,7 @@
         x:Class="MaksIT.PostClient.UI.Windows.RetentionWindow"
         x:Name="Root"
         x:DataType="vm:RetentionViewModel"
-        Title="{Binding Copy.Retention}"
+        Title="{Binding Copy.RetentionTitle}"
         Icon="/Assets/icon.ico"
         Width="720"
         Height="560"

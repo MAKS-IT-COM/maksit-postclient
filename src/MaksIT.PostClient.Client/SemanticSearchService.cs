@@ -14,6 +14,7 @@ public sealed class SemanticSearchService : ISemanticSearchService {
   private CancellationTokenSource? _step;
   private ITextEmbedder? _embedder;
   private bool _gpu;
+  private bool _gpuFailed;
   private string _status = "";
   private bool _ready;
 
@@ -45,6 +46,8 @@ public sealed class SemanticSearchService : ISemanticSearchService {
   }
 
   public event Action? Changed;
+
+  public event Action<Exception>? Faulted;
 
   public void NotifySettingsChanged() {
     _step?.Cancel();
@@ -128,7 +131,8 @@ public sealed class SemanticSearchService : ISemanticSearchService {
           break;
       }
       catch (Exception ex) {
-        SetStatus(ex.Message, ready: false);
+        AppLog.Write(ex);
+        SetStatus("", ready: false);
       }
     }
   }
@@ -165,7 +169,8 @@ public sealed class SemanticSearchService : ISemanticSearchService {
 
     var wantGpu = GpuProbe.UseGpu(settings.Device);
     if (!EnsureEmbedder(wantGpu, out var error)) {
-      SetStatus(error, ready: false);
+      AppLog.Write(error);
+      SetStatus("", ready: false);
       await DelayAsync(TimeSpan.FromSeconds(30), token).ConfigureAwait(false);
       return;
     }
@@ -175,15 +180,23 @@ public sealed class SemanticSearchService : ISemanticSearchService {
       settings = _files.Current.Semantic ?? settings;
       if (!settings.Enabled)
         return;
-      var pending = _archive.PendingEmbeddings(EmbeddingModelSpec.Id, 8);
+      var ready = ReadyMailboxIds();
+      if (ready.Count == 0) {
+        SetStatus("", ready: true);
+        await WaitAsync(token).ConfigureAwait(false);
+        return;
+      }
+
+      var pending = _archive.PendingEmbeddings(EmbeddingModelSpec.Id, 8, ready);
       if (pending.Count == 0) {
         SetStatus("", ready: true);
         await WaitAsync(token).ConfigureAwait(false);
         return;
       }
 
-      var left = _archive.EmbeddingPendingCount(EmbeddingModelSpec.Id);
-      SetStatus(MailIndexProgress.MeaningLeft(left), ready: true);
+      var left = _archive.EmbeddingPendingCount(EmbeddingModelSpec.Id, ready);
+      var done = _archive.EmbeddingCount(EmbeddingModelSpec.Id, ready);
+      SetStatus(MailIndexProgress.MeaningLine(done, done + left), ready: true);
       foreach (var item in pending) {
         token.ThrowIfCancellationRequested();
         ITextEmbedder embedder;
@@ -195,7 +208,9 @@ public sealed class SemanticSearchService : ISemanticSearchService {
           vector = embedder.Embed(text);
         }
         catch (Exception ex) {
-          SetStatus(ex.Message, ready: false);
+          AppLog.Write(ex);
+          Faulted?.Invoke(ex);
+          SetStatus("", ready: false);
           await DelayAsync(TimeSpan.FromSeconds(15), token).ConfigureAwait(false);
           return;
         }
@@ -207,6 +222,8 @@ public sealed class SemanticSearchService : ISemanticSearchService {
 
   private bool EnsureEmbedder(bool wantGpu, out string error) {
     error = "";
+    if (wantGpu && _gpuFailed)
+      wantGpu = false;
     lock (_gate) {
       if (_embedder is not null && _gpu == wantGpu) {
         _ready = true;
@@ -220,16 +237,10 @@ public sealed class SemanticSearchService : ISemanticSearchService {
     }
 
     try {
-      var created = new OnnxGemmaEmbedder(
-        EmbeddingModelSpec.OnnxPath(),
-        EmbeddingModelSpec.TokenizerPath(),
-        wantGpu);
-      if (wantGpu && !created.UsesGpu && SemanticDevice.IsGpu(_files.Current.Semantic?.Device)) {
+      var created = CreateEmbedder(wantGpu);
+      if (wantGpu && !created.UsesGpu) {
         created.Dispose();
-        created = new OnnxGemmaEmbedder(
-          EmbeddingModelSpec.OnnxPath(),
-          EmbeddingModelSpec.TokenizerPath(),
-          useGpu: false);
+        created = CreateEmbedder(false);
       }
 
       lock (_gate) {
@@ -240,10 +251,49 @@ public sealed class SemanticSearchService : ISemanticSearchService {
 
       return true;
     }
+    catch (Exception ex) when (wantGpu) {
+      _gpuFailed = true;
+      AppLog.Write(ex);
+      Faulted?.Invoke(ex);
+      try {
+        var created = CreateEmbedder(false);
+        lock (_gate) {
+          _embedder = created;
+          _gpu = created.UsesGpu;
+          _ready = true;
+        }
+
+        return true;
+      }
+      catch (Exception cpu) {
+        error = cpu.Message;
+        AppLog.Write(cpu);
+        Faulted?.Invoke(cpu);
+        return false;
+      }
+    }
     catch (Exception ex) {
       error = ex.Message;
+      AppLog.Write(ex);
+      Faulted?.Invoke(ex);
       return false;
     }
+  }
+
+  private static OnnxGemmaEmbedder CreateEmbedder(bool useGpu) =>
+    new(
+      EmbeddingModelSpec.OnnxPath(),
+      EmbeddingModelSpec.TokenizerPath(),
+      useGpu);
+
+  private HashSet<string> ReadyMailboxIds() {
+    var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    foreach (var box in _files.Current.Mailboxes) {
+      if (box.InitialSyncCompleted)
+        ids.Add(box.Id);
+    }
+
+    return ids;
   }
 
   private void CloseEmbedder() {

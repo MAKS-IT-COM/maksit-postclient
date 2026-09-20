@@ -16,6 +16,8 @@ public sealed class Pop3MailSession : IMailSession {
   private Pop3Client? _pop;
   private MailboxAccount? _account;
   private MailAuthMaterial? _material;
+  private int _listOffset;
+  private readonly HashSet<uint> _listedIds = [];
 
   public Pop3MailSession(IMailAuthService auth) {
     _auth = auth;
@@ -84,36 +86,77 @@ public sealed class Pop3MailSession : IMailSession {
     string folder,
     IReadOnlySet<uint>? knownIds = null,
     CancellationToken cancellationToken = default,
-    int itemBudget = 0) {
-    _ = itemBudget;
-    return _io.RunAsync(() => ListMessagesCoreAsync(folder, knownIds, cancellationToken), cancellationToken);
-  }
+    int itemBudget = 0) =>
+    _io.RunAsync(() => ListMessagesCoreAsync(folder, knownIds, cancellationToken, itemBudget), cancellationToken);
 
   private async Task<Result<MailFolderSync>> ListMessagesCoreAsync(
     string folder,
     IReadOnlySet<uint>? knownIds,
-    CancellationToken cancellationToken) {
+    CancellationToken cancellationToken,
+    int itemBudget) {
     var client = RequirePop();
     if (client is null)
       return Result<MailFolderSync>.UnprocessableEntity(null, "Not connected.");
     _ = folder;
-    _ = knownIds;
+    var known = knownIds ?? (IReadOnlySet<uint>)new HashSet<uint>();
+    var chunk = itemBudget > 0;
+    if (!chunk) {
+      _listOffset = 0;
+      _listedIds.Clear();
+    }
 
     try {
       var count = client.Count;
       if (count == 0)
         return Result<MailFolderSync>.Ok(new MailFolderSync { Present = [] });
 
-      var indexes = Enumerable.Range(0, count).ToList();
-      var headers = await client.GetMessageHeadersAsync(indexes, cancellationToken).ConfigureAwait(false);
-      var rows = indexes
-        .Select((index, i) => ToHeader(index, i < headers.Count ? headers[i] : new HeaderList()))
-        .OrderByDescending(h => h.Date)
-        .ThenByDescending(h => h.Id)
-        .ToList();
+      if (!chunk) {
+        var indexes = Enumerable.Range(0, count).ToList();
+        var headers = await client.GetMessageHeadersAsync(indexes, cancellationToken).ConfigureAwait(false);
+        var rows = indexes
+          .Select((index, i) => ToHeader(index, i < headers.Count ? headers[i] : new HeaderList()))
+          .OrderByDescending(h => h.Date)
+          .ThenByDescending(h => h.Id)
+          .ToList();
+        return Result<MailFolderSync>.Ok(new MailFolderSync {
+          Headers = rows,
+          Present = rows.Select(h => h.Id).ToList()
+        });
+      }
+
+      var range = MailListBudget.NewestRange(count, _listOffset, itemBudget);
+      if (range.Take <= 0) {
+        var present = _listedIds.ToList();
+        _listOffset = 0;
+        _listedIds.Clear();
+        return Result<MailFolderSync>.Ok(new MailFolderSync { Present = present });
+      }
+
+      var slice = Enumerable.Range(range.Start, range.Take).ToList();
+      var chunkHeaders = await client.GetMessageHeadersAsync(slice, cancellationToken).ConfigureAwait(false);
+      var added = new List<MailMessageHeader>();
+      for (var i = 0; i < slice.Count; i++) {
+        var id = (uint)slice[i];
+        _listedIds.Add(id);
+        if (known.Contains(id))
+          continue;
+        added.Add(ToHeader(slice[i], i < chunkHeaders.Count ? chunkHeaders[i] : new HeaderList()));
+      }
+
+      _listOffset = range.NextOffset;
+      if (!range.Incomplete) {
+        var present = _listedIds.ToList();
+        _listOffset = 0;
+        _listedIds.Clear();
+        return Result<MailFolderSync>.Ok(new MailFolderSync {
+          Headers = added,
+          Present = present
+        });
+      }
+
       return Result<MailFolderSync>.Ok(new MailFolderSync {
-        Headers = rows,
-        Present = rows.Select(h => h.Id).ToList()
+        Headers = added,
+        Incomplete = true
       });
     }
     catch (Exception ex) {

@@ -1,6 +1,8 @@
+using System.Reflection;
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.ML.Tokenizers;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using Microsoft.ML.Tokenizers;
 using MaksIT.PostClient.Shared;
 
 
@@ -22,17 +24,14 @@ public sealed class OnnxGemmaEmbedder : ITextEmbedder {
     ArgumentException.ThrowIfNullOrWhiteSpace(tokenizerPath);
     using var stream = File.OpenRead(tokenizerPath);
     _tokenizer = LlamaTokenizer.Create(stream, addBeginOfSentence: true, addEndOfSentence: true);
-    var options = new SessionOptions();
     UsesGpu = false;
-    if (useGpu)
-      UsesGpu = TryDirectMl(options);
-    try {
-      options.AppendExecutionProvider_CPU();
+    if (useGpu && TryCreateGpuSession(onnxPath, out var gpu)) {
+      _session = gpu;
+      UsesGpu = true;
     }
-    catch {
+    else {
+      _session = CreateCpuSession(onnxPath);
     }
-
-    _session = new InferenceSession(onnxPath, options);
     _inputIds = PickInput(_session, "input_ids", "input");
     _attentionMask = PickInput(_session, "attention_mask", "mask");
     _tokenTypeIds = FindInput(_session, "token_type_ids");
@@ -84,18 +83,58 @@ public sealed class OnnxGemmaEmbedder : ITextEmbedder {
   public void Dispose() =>
     _session.Dispose();
 
-  private static bool TryDirectMl(SessionOptions options) {
+  private static bool TryCreateGpuSession(string onnxPath, [NotNullWhen(true)] out InferenceSession? session) {
+    session = null;
     var method = typeof(SessionOptions).GetMethod("AppendExecutionProvider_DML", [typeof(int)]);
     if (method is null)
       return false;
+
+    Exception? last = null;
+    foreach (var adapter in GpuProbe.DirectMlAdapters()) {
+      var options = DmlSessionOptions();
+      try {
+        method.Invoke(options, [adapter.DeviceId]);
+        TryAppendCpu(options);
+        session = new InferenceSession(onnxPath, options);
+        AppLog.Write($"Meaning index DirectML: {adapter.Name} (device {adapter.DeviceId})");
+        return true;
+      }
+      catch (Exception ex) {
+        options.Dispose();
+        last = Unwrap(ex);
+        AppLog.Write($"Meaning index DirectML skipped {adapter.Name} (device {adapter.DeviceId}): {last.Message}");
+      }
+    }
+
+    if (last is not null)
+      throw last;
+    return false;
+  }
+
+  private static InferenceSession CreateCpuSession(string onnxPath) {
+    var options = new SessionOptions();
+    TryAppendCpu(options);
+    return new InferenceSession(onnxPath, options);
+  }
+
+  private static SessionOptions DmlSessionOptions() =>
+    new() {
+      GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+      ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
+      EnableMemoryPattern = false,
+      EnableCpuMemArena = false
+    };
+
+  private static void TryAppendCpu(SessionOptions options) {
     try {
-      method.Invoke(options, [0]);
-      return true;
+      options.AppendExecutionProvider_CPU();
     }
     catch {
-      return false;
     }
   }
+
+  private static Exception Unwrap(Exception exception) =>
+    exception is TargetInvocationException { InnerException: { } inner } ? inner : exception;
 
   private static string PickInput(InferenceSession session, params string[] names) {
     foreach (var name in names) {

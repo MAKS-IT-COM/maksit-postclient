@@ -261,6 +261,50 @@ public class MailArchiveStoreTests {
   }
 
   [Fact]
+  public void KeywordIndexDisabled_SkipsFtsUntilRebuild() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.KeywordIndexEnabled = false;
+      store.UpsertHeaders(
+        "box",
+        [new MailArchiveHeader { Uid = 1, Folder = "INBOX", Subject = "IMU avviso", From = "comune@pec.it" }]);
+      Assert.Equal(0, store.IndexStats(EmbeddingModelSpec.Id).KeywordRows);
+      Assert.Equal(1, store.RebuildKeywordIndex());
+      Assert.Equal(1, store.IndexStats(EmbeddingModelSpec.Id).KeywordRows);
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
+  public void TrashRetention_UsesTrashedUtcNotReceivedDate() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertHeaders(
+        "box",
+        [
+          new MailArchiveHeader {
+            Uid = 1,
+            Folder = MailRetention.TrashFolder,
+            Subject = "Old",
+            From = "a@b.c",
+            Date = DateTimeOffset.UtcNow.AddDays(-40)
+          }
+        ]);
+      var yesterday = DateTimeOffset.UtcNow.AddDays(-1);
+      Assert.Empty(store.UidsOlderThan("box", MailRetention.TrashFolder, yesterday));
+      var tomorrow = DateTimeOffset.UtcNow.AddDays(1);
+      Assert.Equal([1u], store.UidsOlderThan("box", MailRetention.TrashFolder, tomorrow));
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
   public void ClearEmbeddings_LeavesKeywordAndPending() {
     var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
     try {

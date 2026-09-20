@@ -2,13 +2,13 @@ namespace MaksIT.PostClient.Shared;
 
 
 /// <summary>
-/// Placeholder product folder until the public sign is chosen.
-/// Windows: <c>%AppData%\Postclient</c> / <c>%LocalAppData%\Postclient</c>.
-/// Linux: XDG. macOS: Application Support. Not a MAKS-IT subfolder.
+/// Windows: <c>%LocalAppData%\MaksIT\Postclient</c> for config and data.
+/// Linux: XDG under a MaksIT parent. macOS: Application Support under MaksIT.
 /// </summary>
 public static class AppPaths {
   public const string ProductName = "Postclient";
   public const string ProductId = "postclient";
+  public const string BrandFolder = "MaksIT";
   public const string ConfigEnv = "POSTCLIENT_CONFIG";
   public const string DataEnv = "POSTCLIENT_DATA_DIR";
 
@@ -22,20 +22,21 @@ public static class AppPaths {
       return portable;
 
     if (OperatingSystem.IsWindows())
-      return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ProductName);
+      return WindowsProductDirectory();
 
     if (OperatingSystem.IsMacOS()) {
       return Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "Library",
         "Application Support",
+        BrandFolder,
         ProductName);
     }
 
     var xdg = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
     if (string.IsNullOrWhiteSpace(xdg))
       xdg = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
-    return Path.Combine(xdg, ProductId);
+    return Path.Combine(xdg, BrandFolder, ProductId);
   }
 
   public static string DataDirectory() {
@@ -48,7 +49,7 @@ public static class AppPaths {
       return Path.Combine(portable, "data");
 
     if (OperatingSystem.IsWindows())
-      return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), ProductName);
+      return WindowsProductDirectory();
 
     if (OperatingSystem.IsMacOS())
       return ConfigDirectory();
@@ -56,7 +57,7 @@ public static class AppPaths {
     var xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
     if (string.IsNullOrWhiteSpace(xdg))
       xdg = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
-    return Path.Combine(xdg, ProductId);
+    return Path.Combine(xdg, BrandFolder, ProductId);
   }
 
   public static string SettingsFile() =>
@@ -127,6 +128,7 @@ public static class AppPaths {
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "Library",
         "Logs",
+        BrandFolder,
         ProductName);
     }
 
@@ -134,6 +136,7 @@ public static class AppPaths {
   }
 
   public static void EnsureDirectories() {
+    MigrateLegacyLayout();
     Directory.CreateDirectory(ConfigDirectory());
     Directory.CreateDirectory(DataDirectory());
     Directory.CreateDirectory(ObjectsDirectory());
@@ -163,5 +166,56 @@ public static class AppPaths {
     catch {
       return null;
     }
+  }
+
+  private static string WindowsProductDirectory() =>
+    Path.Combine(
+      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+      BrandFolder,
+      ProductName);
+
+  private static bool UsesDefaultUserLayout() {
+    if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConfigEnv)))
+      return false;
+    if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(DataEnv)))
+      return false;
+    return PortableRoot() is null;
+  }
+
+  private static void MigrateLegacyLayout() {
+    if (!UsesDefaultUserLayout())
+      return;
+
+    try {
+      if (OperatingSystem.IsWindows())
+        MigrateWindowsLayout();
+    }
+    catch {
+    }
+  }
+
+  private static void MigrateWindowsLayout() {
+    var dest = WindowsProductDirectory();
+    var oldLocal = Path.Combine(
+      Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+      ProductName);
+    var oldRoam = Path.Combine(
+      Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+      ProductName);
+    if (!Directory.Exists(dest) && Directory.Exists(oldLocal))
+      Directory.Move(oldLocal, dest);
+    Directory.CreateDirectory(dest);
+    CopyIfMissing(Path.Combine(oldRoam, "settings.json"), Path.Combine(dest, "settings.json"));
+    CopyIfMissing(Path.Combine(oldRoam, "secrets.bin"), Path.Combine(dest, "secrets.bin"));
+    CopyIfMissing(Path.Combine(oldRoam, "receipts.json"), Path.Combine(dest, "receipts.json"));
+  }
+
+  private static void CopyIfMissing(string source, string dest) {
+    if (!File.Exists(source) || File.Exists(dest))
+      return;
+    var dir = Path.GetDirectoryName(dest);
+    if (!string.IsNullOrWhiteSpace(dir))
+      Directory.CreateDirectory(dir);
+    File.Copy(source, dest);
   }
 }

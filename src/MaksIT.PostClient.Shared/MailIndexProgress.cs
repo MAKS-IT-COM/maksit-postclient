@@ -16,6 +16,11 @@ public static class MailIndexProgress {
     return left <= 0 ? copy.IndexingBusy : string.Format(copy.IndexingLeft, left);
   }
 
+  public static string MeaningLine(int done, int total) {
+    var copy = UiLocale.Copy;
+    return total <= 0 ? "" : string.Format(copy.IndexingMeaning, Math.Clamp(done, 0, total), total);
+  }
+
   public static string MeaningLeft(int left) =>
     string.Format(UiLocale.Copy.IndexingMeaningLeft, Math.Max(0, left));
 

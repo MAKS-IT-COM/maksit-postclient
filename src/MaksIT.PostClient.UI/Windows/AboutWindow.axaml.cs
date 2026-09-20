@@ -16,7 +16,7 @@ public partial class AboutWindow : Window {
   public static Task ShowAsync(Window owner) {
     var copy = UiLocale.Copy;
     var window = new AboutWindow {
-      Title = copy.About.Replace("_", "", StringComparison.Ordinal),
+      Title = copy.AboutTitle,
       DataContext = new AboutViewModel()
     };
     return window.ShowDialog(owner);

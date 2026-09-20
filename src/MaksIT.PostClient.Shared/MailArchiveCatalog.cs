@@ -94,6 +94,20 @@ public sealed class MailArchiveCatalog : IDisposable {
       return 0;
     });
 
+  public void SetKeywordIndexEnabled(string mailboxId, bool enabled) =>
+    OffUi(() => {
+      var store = TryGet(mailboxId);
+      if (store is not null)
+        store.KeywordIndexEnabled = enabled;
+      return 0;
+    });
+
+  public int MessageCount(string mailboxId) =>
+    OffUi(() => TryGet(mailboxId)?.MessageCount(mailboxId) ?? 0);
+
+  public int RebuildKeywordIndex(string mailboxId) =>
+    OffUi(() => TryGet(mailboxId)?.RebuildKeywordIndex() ?? 0);
+
   public void UpdateFlags(
     string mailboxId,
     string folder,
@@ -114,14 +128,56 @@ public sealed class MailArchiveCatalog : IDisposable {
       return 0;
     });
 
-  public IReadOnlyList<EmbeddingWorkItem> PendingEmbeddings(string modelId, int limit) =>
-    OffUi(() => Merge(store => store.PendingEmbeddings(modelId, limit)));
+  public IReadOnlyList<EmbeddingWorkItem> PendingEmbeddings(
+    string modelId,
+    int limit,
+    IReadOnlyCollection<string>? mailboxIds = null) =>
+    OffUi(() => {
+      if (mailboxIds is { Count: 0 })
+        return (IReadOnlyList<EmbeddingWorkItem>)[];
+      var rows = new List<EmbeddingWorkItem>();
+      foreach (var pair in _stores) {
+        if (mailboxIds is { Count: > 0 }
+            && !mailboxIds.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
+          continue;
+        var take = Math.Max(0, limit - rows.Count);
+        if (take == 0)
+          break;
+        rows.AddRange(pair.Value.PendingEmbeddings(modelId, take));
+      }
 
-  public int EmbeddingCount(string modelId) =>
-    OffUi(() => Sum(store => store.EmbeddingCount(modelId)));
+      return rows;
+    });
 
-  public int EmbeddingPendingCount(string modelId) =>
-    OffUi(() => Sum(store => store.EmbeddingPendingCount(modelId)));
+  public int EmbeddingCount(string modelId, IReadOnlyCollection<string>? mailboxIds = null) =>
+    OffUi(() => {
+      var count = 0;
+      foreach (var pair in _stores) {
+        if (mailboxIds is { Count: > 0 }
+            && !mailboxIds.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
+          continue;
+        if (mailboxIds is { Count: 0 })
+          return 0;
+        count += pair.Value.EmbeddingCount(modelId);
+      }
+
+      return count;
+    });
+
+  public int EmbeddingPendingCount(string modelId, IReadOnlyCollection<string>? mailboxIds = null) =>
+    OffUi(() => {
+      var count = 0;
+      foreach (var pair in _stores) {
+        if (mailboxIds is { Count: > 0 }
+            && !mailboxIds.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
+          continue;
+        if (mailboxIds is { Count: 0 })
+          return 0;
+        count += pair.Value.EmbeddingPendingCount(modelId);
+      }
+
+      return count;
+    });
 
   public void UpsertEmbedding(string mailboxId, long messageId, string modelId, float[] vector) =>
     OffUi(() => {

@@ -79,6 +79,7 @@ public partial class MainWindow : Window {
     viewModel.FolderTreeSelectionRestoreRequested += RestoreFolderTreeSelection;
     viewModel.RulesRequested += OnRulesRequested;
     viewModel.AboutRequested += OnAboutRequested;
+    viewModel.LogsRequested += OnLogsRequested;
     viewModel.AccountSaved += OnAccountSaved;
     viewModel.ExportArchiveRequested += OnExportArchive;
     viewModel.ExportFascicoloRequested += OnExportFascicolo;
@@ -688,6 +689,8 @@ public partial class MainWindow : Window {
   private async void OnRetentionRequested() {
     if (_files is null || DataContext is not MainViewModel vm)
       return;
+    foreach (var box in vm.Mailboxes)
+      await vm.EnsureFoldersForRulesAsync(box.Id);
     var window = new RetentionWindow {
       DataContext = new RetentionViewModel(
         _files,
@@ -697,6 +700,7 @@ public partial class MainWindow : Window {
       WindowStartupLocation = WindowStartupLocation.CenterOwner
     };
     await window.ShowDialog(this);
+    vm.RefreshRetentionBadges();
   }
 
   private async void OnIdentityHubSignIn(string kind) {
@@ -775,6 +779,9 @@ public partial class MainWindow : Window {
 
   private void OnAboutRequested() =>
     _ = AboutWindow.ShowAsync(this);
+
+  private void OnLogsRequested() =>
+    _ = LogWindow.ShowAsync(this);
 
   private async Task<string?> PickFolder(string title, string? suggested = null) {
     IStorageFolder? start = null;

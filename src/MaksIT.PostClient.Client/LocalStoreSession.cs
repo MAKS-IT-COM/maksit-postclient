@@ -200,11 +200,18 @@ public sealed class LocalStoreSession : IMailSession, IFileMailStore {
     IReadOnlyList<uint> ids,
     MailFlagUpdate update,
     CancellationToken cancellationToken = default) {
-    _ = folder;
-    _ = ids;
-    _ = update;
-    _ = cancellationToken;
-    return Task.FromResult(Result.Ok());
+    if (update.Deleted is not true)
+      return Task.FromResult(Result.Ok());
+    return _io.RunAsync(() => {
+      foreach (var id in ids) {
+        cancellationToken.ThrowIfCancellationRequested();
+        var path = MessagePath(folder, id);
+        if (File.Exists(path))
+          File.Delete(path);
+      }
+
+      return Task.FromResult(Result.Ok());
+    }, cancellationToken);
   }
 
   public Task<Result> CreateFolderAsync(
