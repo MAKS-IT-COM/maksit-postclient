@@ -46,42 +46,71 @@ public sealed class MailAuthService : IMailAuthService {
         "Sign in with Google or Microsoft in Account Settings (Identity Hub).");
 
     var tokens = loaded.Value;
-    if (!HasHubSession(tokens))
-      return Result<MailAuthMaterial>.UnprocessableEntity(
-        null,
-        "Sign in again through Identity Hub.");
-
-    try {
-      if (!string.IsNullOrWhiteSpace(tokens.HubRefreshToken)) {
-        var refreshed = await _hub.RefreshTokenAsync(
-          new RefreshTokenRequest { RefreshToken = tokens.HubRefreshToken },
-          cancellationToken).ConfigureAwait(false);
-        tokens.HubToken = refreshed.Token;
-        if (!string.IsNullOrWhiteSpace(refreshed.RefreshToken))
-          tokens.HubRefreshToken = refreshed.RefreshToken;
-        tokens.HubExpires = AsUtc(refreshed.ExpiresAt);
-        if (!string.IsNullOrWhiteSpace(refreshed.Username))
-          tokens.Email = refreshed.Username;
-        SaveTokens(account.Id, tokens);
+    if (HasHubSession(tokens)) {
+      try {
+        return await RefreshHubMailboxAsync(account.Id, tokens, cancellationToken).ConfigureAwait(false);
       }
-      else if (tokens.HubExpires <= DateTimeOffset.UtcNow.AddMinutes(2))
-        return Result<MailAuthMaterial>.UnprocessableEntity(null, "Sign in again. The Hub session expired.");
+      catch (IdentityHubApiException ex) {
+        var cached = CachedMailbox(tokens);
+        if (cached is not null)
+          return cached;
+        return Result<MailAuthMaterial>.UnprocessableEntity(null, ex.Message);
+      }
+    }
 
-      _hub.AccessToken = tokens.HubToken;
-      var mailbox = await _hub.GetMailboxAccessTokenAsync(cancellationToken).ConfigureAwait(false);
-      if (string.IsNullOrWhiteSpace(mailbox.AccessToken))
-        return Result<MailAuthMaterial>.UnprocessableEntity(null, "Identity Hub did not return a mailbox token.");
-      tokens.AccessToken = mailbox.AccessToken;
-      tokens.AccessExpires = DateTimeOffset.UtcNow.AddMinutes(50);
-      SaveTokens(account.Id, tokens);
-      return Result<MailAuthMaterial>.Ok(new MailAuthMaterial {
-        UseOAuth = true,
-        AccessToken = mailbox.AccessToken
-      });
+    var leftover = CachedMailbox(tokens);
+    if (leftover is not null)
+      return leftover;
+    return Result<MailAuthMaterial>.UnprocessableEntity(
+      null,
+      "Sign in again through Identity Hub.");
+  }
+
+  private async Task<Result<MailAuthMaterial>> RefreshHubMailboxAsync(
+    string mailboxId,
+    OAuthTokenSet tokens,
+    CancellationToken cancellationToken) {
+    if (!string.IsNullOrWhiteSpace(tokens.HubRefreshToken)) {
+      var refreshed = await _hub.RefreshTokenAsync(
+        new RefreshTokenRequest { RefreshToken = tokens.HubRefreshToken },
+        cancellationToken).ConfigureAwait(false);
+      tokens.HubToken = refreshed.Token;
+      if (!string.IsNullOrWhiteSpace(refreshed.RefreshToken))
+        tokens.HubRefreshToken = refreshed.RefreshToken;
+      tokens.HubExpires = AsUtc(refreshed.ExpiresAt);
+      if (!string.IsNullOrWhiteSpace(refreshed.Username))
+        tokens.Email = refreshed.Username;
+      SaveTokens(mailboxId, tokens);
     }
-    catch (IdentityHubApiException ex) {
-      return Result<MailAuthMaterial>.UnprocessableEntity(null, ex.Message);
+    else if (tokens.HubExpires <= DateTimeOffset.UtcNow.AddMinutes(2)) {
+      var cached = CachedMailbox(tokens);
+      if (cached is not null)
+        return cached;
+      return Result<MailAuthMaterial>.UnprocessableEntity(null, "Sign in again. The Hub session expired.");
     }
+
+    _hub.AccessToken = tokens.HubToken;
+    var mailbox = await _hub.GetMailboxAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+    if (string.IsNullOrWhiteSpace(mailbox.AccessToken))
+      return Result<MailAuthMaterial>.UnprocessableEntity(null, "Identity Hub did not return a mailbox token.");
+    tokens.AccessToken = mailbox.AccessToken;
+    tokens.AccessExpires = DateTimeOffset.UtcNow.AddMinutes(50);
+    SaveTokens(mailboxId, tokens);
+    return Result<MailAuthMaterial>.Ok(new MailAuthMaterial {
+      UseOAuth = true,
+      AccessToken = mailbox.AccessToken
+    });
+  }
+
+  private static Result<MailAuthMaterial>? CachedMailbox(OAuthTokenSet tokens) {
+    if (string.IsNullOrWhiteSpace(tokens.AccessToken))
+      return null;
+    if (tokens.AccessExpires <= DateTimeOffset.UtcNow.AddMinutes(2))
+      return null;
+    return Result<MailAuthMaterial>.Ok(new MailAuthMaterial {
+      UseOAuth = true,
+      AccessToken = tokens.AccessToken
+    });
   }
 
   public Task<Result<OAuthTokenSet>> SignInAsync(

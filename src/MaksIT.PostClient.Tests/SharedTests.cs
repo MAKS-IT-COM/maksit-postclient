@@ -102,6 +102,40 @@ public class AppPathsTests {
       Environment.SetEnvironmentVariable(AppPaths.ConfigEnv, previous);
     }
   }
+
+  [Fact]
+  public void AdoptSettingsIfEmpty_ReplacesSeedWithoutMailboxes() {
+    var dir = Path.Combine(Path.GetTempPath(), "postclient-mig-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    var source = Path.Combine(dir, "old.json");
+    var dest = Path.Combine(dir, "new.json");
+    try {
+      File.WriteAllText(source, """{"Configuration":{"Mailboxes":[{"Id":"keep"}]}}""");
+      File.WriteAllText(dest, """{"Configuration":{"Mailboxes":[]}}""");
+      AppPaths.AdoptSettingsIfEmpty(source, dest);
+      Assert.Equal(1, AppPaths.MailboxCount(dest));
+    }
+    finally {
+      Directory.Delete(dir, true);
+    }
+  }
+
+  [Fact]
+  public void MergeMissingDirectory_CopiesHubProfile() {
+    var dir = Path.Combine(Path.GetTempPath(), "postclient-wv-" + Guid.NewGuid().ToString("N"));
+    var source = Path.Combine(dir, "old", "webview", "hub");
+    var dest = Path.Combine(dir, "new", "webview");
+    Directory.CreateDirectory(source);
+    Directory.CreateDirectory(dest);
+    try {
+      File.WriteAllText(Path.Combine(source, "session"), "hub");
+      AppPaths.MergeMissingDirectory(Path.Combine(dir, "old", "webview"), dest);
+      Assert.True(File.Exists(Path.Combine(dest, "hub", "session")));
+    }
+    finally {
+      Directory.Delete(dir, true);
+    }
+  }
 }
 
 
@@ -492,6 +526,21 @@ public class MailFolderRoleTests {
   }
 
   [Fact]
+  public void CanEmpty_AllowsImapFoldersWithMail() {
+    Assert.True(MailFolderRole.CanEmpty("INBOX", "INBOX", MailProtocol.Imap));
+    Assert.True(MailFolderRole.CanEmpty("Clients", "INBOX.Clients", MailProtocol.Imap));
+    Assert.True(MailFolderRole.CanEmpty("Trash", "[Gmail]/Trash", MailProtocol.Imap));
+    Assert.True(MailFolderRole.CanEmpty("Inbox", "Inbox", MailProtocol.Store));
+  }
+
+  [Fact]
+  public void CanEmpty_RejectsNamespaceAndPop3() {
+    Assert.False(MailFolderRole.CanEmpty("[Gmail]", "[Gmail]", MailProtocol.Imap));
+    Assert.False(MailFolderRole.CanEmpty("INBOX", "INBOX", MailProtocol.Pop3));
+    Assert.False(MailFolderRole.CanEmpty(null, null, MailProtocol.Imap));
+  }
+
+  [Fact]
   public void GmailTrash_IsTrash() {
     Assert.Equal("trash", MailFolderRole.Kind("Trash", "[Gmail]/Trash"));
     Assert.Equal("trash", MailFolderRole.Kind("Cestino", "[Gmail]/Cestino"));
@@ -677,6 +726,28 @@ public class FileSecretStoreTests {
         File.Delete(path);
     }
   }
+
+  [Fact]
+  public void MergeMissingKeys_KeepsDestAndFillsGaps() {
+    var dest = Path.Combine(Path.GetTempPath(), "postclient-secrets-d-" + Guid.NewGuid().ToString("N") + ".bin");
+    var source = Path.Combine(Path.GetTempPath(), "postclient-secrets-s-" + Guid.NewGuid().ToString("N") + ".bin");
+    try {
+      var destStore = new FileSecretStore(dest);
+      destStore.Put("oauth:keep", "new");
+      var sourceStore = new FileSecretStore(source);
+      sourceStore.Put("oauth:keep", "old");
+      sourceStore.Put("oauth:missing", "legacy");
+      Assert.Equal(1, FileSecretStore.MergeMissingKeys(source, dest));
+      Assert.Equal("new", destStore.Get("oauth:keep").Value);
+      Assert.Equal("legacy", destStore.Get("oauth:missing").Value);
+    }
+    finally {
+      if (File.Exists(dest))
+        File.Delete(dest);
+      if (File.Exists(source))
+        File.Delete(source);
+    }
+  }
 }
 
 
@@ -765,8 +836,35 @@ public class ConfigurationFileServiceTests {
       var reloaded = new ConfigurationFileService(path).Current;
       Assert.Single(reloaded.Mailboxes);
       Assert.Equal("a@b.it", reloaded.Mailboxes[0].Address);
+      Assert.Equal(configuration.Mailboxes[0].Id, reloaded.Mailboxes[0].Id);
       Assert.Equal("imap.example.it", reloaded.Mailboxes[0].ImapHost);
       Assert.Equal(MailCertifiedKind.Pec, reloaded.Mailboxes[0].CertifiedKind);
+    }
+    finally {
+      Directory.Delete(dir, true);
+    }
+  }
+
+  [Fact]
+  public void Load_KeepsCamelCaseMailboxId() {
+    var dir = Path.Combine(Path.GetTempPath(), "postclient-cfg-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(dir);
+    var path = Path.Combine(dir, "settings.json");
+    try {
+      File.WriteAllText(
+        path,
+        """
+        {
+          "Configuration": {
+            "Mailboxes": [
+              { "id": "abc123", "Address": "a@b.it", "AuthKind": "google" }
+            ]
+          }
+        }
+        """);
+      var loaded = new ConfigurationFileService(path).Current;
+      Assert.Equal("abc123", loaded.Mailboxes[0].Id);
+      Assert.Equal(MailAuthKind.Google, loaded.Mailboxes[0].AuthKind);
     }
     finally {
       Directory.Delete(dir, true);

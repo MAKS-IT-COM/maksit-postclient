@@ -250,6 +250,9 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
+  <Style Selector="TextBlock.folder-meta">
+    <Setter Property="MinHeight" Value="16" />
+  </Style>
   <Style Selector="TreeView">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -258,6 +261,10 @@
     <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
     <Setter Property="Padding" Value="2,2" />
     <Setter Property="MinHeight" Value="24" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="TreeViewItem /template/ ContentPresenter#PART_HeaderPresenter">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
   </Style>
   <Style Selector="TreeViewItem:selected /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="#006199" />

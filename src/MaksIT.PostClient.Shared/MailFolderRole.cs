@@ -123,6 +123,14 @@ public static class MailFolderRole {
   public static bool CanHoldFolders(string? name, string? fullName) =>
     IsNamespace(name, fullName) || IsCustom(name, fullName);
 
+  public static bool CanEmpty(string? name, string? fullName, string? incomingProtocol) {
+    if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(fullName))
+      return false;
+    if (IsNamespace(name, fullName))
+      return false;
+    return !MailProtocol.IsPop3(incomingProtocol);
+  }
+
   public static string? DisplayParent(
     string? name,
     string? fullName,

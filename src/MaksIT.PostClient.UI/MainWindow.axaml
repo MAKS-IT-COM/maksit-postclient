@@ -199,11 +199,27 @@
           </TreeView.ContextFlyout>
           <TreeView.ItemTemplate>
             <TreeDataTemplate ItemsSource="{Binding Children}">
-              <Grid ColumnDefinitions="20,*,Auto,Auto" Margin="0,1" HorizontalAlignment="Stretch">
+              <DockPanel LastChildFill="True" Margin="0,1" HorizontalAlignment="Stretch">
+                <TextBlock DockPanel.Dock="Right"
+                           Width="44"
+                           Text="{Binding RetentionLabel}"
+                           Classes="hint folder-meta"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Margin="0,0,4,0" />
+                <TextBlock DockPanel.Dock="Right"
+                           Width="40"
+                           Text="{Binding UnreadLabel}"
+                           Classes="unread-count folder-meta"
+                           TextAlignment="Right"
+                           VerticalAlignment="Center"
+                           Margin="8,0,4,0" />
                 <TextBlock Text="{Binding Glyph}"
+                           Width="20"
                            FontSize="12"
-                           VerticalAlignment="Center" />
-                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                           VerticalAlignment="Center"
+                           DockPanel.Dock="Left" />
+                <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,4,0">
                   <TextBlock Text="{Binding Title}"
                              FontWeight="{Binding Weight}"
                              TextTrimming="CharacterEllipsis"
@@ -214,19 +230,7 @@
                                Value="{Binding QuotaPercent}"
                                IsVisible="{Binding ShowQuota}" />
                 </StackPanel>
-                <TextBlock Grid.Column="2"
-                           Text="{Binding UnreadLabel}"
-                           Classes="unread-count"
-                           Margin="8,0,4,0"
-                           VerticalAlignment="Center"
-                           IsVisible="{Binding HasUnread}" />
-                <TextBlock Grid.Column="3"
-                           Text="{Binding RetentionLabel}"
-                           Classes="hint"
-                           Margin="0,0,4,0"
-                           VerticalAlignment="Center"
-                           IsVisible="{Binding HasRetention}" />
-              </Grid>
+              </DockPanel>
             </TreeDataTemplate>
           </TreeView.ItemTemplate>
         </TreeView>

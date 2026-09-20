@@ -193,6 +193,28 @@ public class MailRetentionTests {
     Assert.Equal("Cestino", MailRetention.ResolveTrash(["INBOX", "Cestino"]));
     Assert.Equal(MailRetention.TrashFolder, MailRetention.ResolveTrash(["INBOX"]));
     Assert.True(MailRetention.IsTrash("Deleted Items"));
+    Assert.True(MailRetention.IsTrash("Trash", "[Gmail]/Trash"));
+  }
+
+  [Fact]
+  public void DaysFor_MatchesGmailTrashPath() {
+    var rows = new[] {
+      new FolderRetention { MailboxId = "gmail", Folder = "[Gmail]/Trash", Days = 7 }
+    };
+    Assert.Equal(7, MailRetention.DaysFor("gmail", "[Gmail]/Trash", rows));
+    Assert.Equal(7, MailRetention.DaysFor("gmail", "Trash", rows));
+    Assert.Equal(0, MailRetention.DaysFor("gmail", "INBOX", rows));
+    Assert.Equal(0, MailRetention.DaysFor("other", "[Gmail]/Trash", rows));
+  }
+
+  [Fact]
+  public void BindFolder_ResolvesGmailTrash() {
+    Assert.Equal(
+      "[Gmail]/Trash",
+      MailRetention.BindFolder("[Gmail]/Trash", ["INBOX", "[Gmail]/Trash", "[Gmail]/Spam"]));
+    Assert.Equal(
+      "[Gmail]/Trash",
+      MailRetention.BindFolder("Trash", ["INBOX", "[Gmail]/Trash"]));
   }
 }
 

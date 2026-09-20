@@ -288,16 +288,79 @@ public class MailArchiveStoreTests {
         [
           new MailArchiveHeader {
             Uid = 1,
+            Folder = "INBOX",
+            Subject = "Old",
+            From = "a@b.c",
+            MessageId = "old@mail",
+            Date = DateTimeOffset.UtcNow.AddDays(-40)
+          }
+        ]);
+      store.UpsertHeaders(
+        "box",
+        [
+          new MailArchiveHeader {
+            Uid = 2,
             Folder = MailRetention.TrashFolder,
             Subject = "Old",
             From = "a@b.c",
+            MessageId = "old@mail",
             Date = DateTimeOffset.UtcNow.AddDays(-40)
           }
         ]);
       var yesterday = DateTimeOffset.UtcNow.AddDays(-1);
       Assert.Empty(store.UidsOlderThan("box", MailRetention.TrashFolder, yesterday));
       var tomorrow = DateTimeOffset.UtcNow.AddDays(1);
-      Assert.Equal([1u], store.UidsOlderThan("box", MailRetention.TrashFolder, tomorrow));
+      Assert.Equal([2u], store.UidsOlderThan("box", MailRetention.TrashFolder, tomorrow));
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
+  public void GmailTrashRetention_UsesReceivedDate() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertHeaders(
+        "gmail",
+        [
+          new MailArchiveHeader {
+            Uid = 1,
+            Folder = "INBOX",
+            Subject = "Old trash",
+            From = "a@b.c",
+            MessageId = "old-trash@mail",
+            Date = DateTimeOffset.UtcNow.AddDays(-40)
+          }
+        ]);
+      store.UpsertHeaders(
+        "gmail",
+        [
+          new MailArchiveHeader {
+            Uid = 9,
+            Folder = "[Gmail]/Trash",
+            Subject = "Old trash",
+            From = "a@b.c",
+            MessageId = "old-trash@mail",
+            Date = DateTimeOffset.UtcNow.AddDays(-40)
+          }
+        ]);
+      var yesterday = DateTimeOffset.UtcNow.AddDays(-1);
+      Assert.Empty(store.UidsOlderThan("gmail", "[Gmail]/Trash", yesterday));
+      Assert.Equal([9u], store.UidsOlderThan("gmail", "[Gmail]/Trash", yesterday, useReceivedDate: true));
+      store.UpsertHeaders(
+        "gmail",
+        [
+          new MailArchiveHeader {
+            Uid = 3,
+            Folder = "[Gmail]/Trash",
+            Subject = "Already in trash",
+            From = "a@b.c",
+            Date = DateTimeOffset.UtcNow.AddDays(-40)
+          }
+        ]);
+      Assert.Equal([3u], store.UidsOlderThan("gmail", "[Gmail]/Trash", yesterday));
     }
     finally {
       DeleteArchive(path);

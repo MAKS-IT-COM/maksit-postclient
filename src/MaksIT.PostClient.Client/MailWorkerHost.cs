@@ -113,15 +113,23 @@ public sealed class MailWorkerHost : IDisposable {
     var configuration = _files.Current;
     configuration.EnsureDefaults();
     foreach (var job in MailRetention.Jobs(configuration.Retention)) {
+      var box = configuration.FindMailbox(job.MailboxId);
+      var remote = box is { IsLocalStore: false };
       var known = _archive.ListFolders(job.MailboxId);
       var folder = MailRetention.BindFolder(job.Folder, known);
       if (string.IsNullOrWhiteSpace(folder))
         continue;
       var cutoff = DateTimeOffset.UtcNow.AddDays(-job.Days);
-      var ids = _archive.UidsOlderThan(job.MailboxId, folder, cutoff);
+      var ids = _archive.UidsOlderThan(
+        job.MailboxId,
+        folder,
+        cutoff,
+        useReceivedDate: remote && MailRetention.IsTrash(folder));
       if (ids.Count == 0)
         continue;
       if (MailRetention.IsTrash(folder)) {
+        if (remote)
+          continue;
         DeleteFiles(_archive.RemoveUids(job.MailboxId, folder, ids));
         count += ids.Count;
         continue;

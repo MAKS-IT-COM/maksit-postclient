@@ -1036,14 +1036,20 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       if (string.IsNullOrWhiteSpace(folder))
         continue;
       var cutoff = DateTimeOffset.UtcNow.AddDays(-job.Days);
-      var ids = _archive.UidsOlderThan(box.Id, folder, cutoff);
+      var ids = _archive.UidsOlderThan(
+        box.Id,
+        folder,
+        cutoff,
+        useReceivedDate: MailRetention.IsTrash(folder));
       if (ids.Count == 0)
         continue;
       var session = SessionFor(box);
       if (session is not { IsConnected: true })
         continue;
       if (MailRetention.IsTrash(folder)) {
-        await session.SetMessageFlagsAsync(folder, ids, new MailFlagUpdate { Deleted = true });
+        var purged = await session.SetMessageFlagsAsync(folder, ids, new MailFlagUpdate { Deleted = true });
+        if (purged.IsSuccess)
+          DropArchived(box.Id, folder, ids);
         continue;
       }
 
@@ -1052,7 +1058,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       var trash = MailRetention.ResolveTrash(
         FoldersFor(box).Select(f => (f.Name, f.FullName)).ToList());
       if (folder.Equals(trash, StringComparison.OrdinalIgnoreCase)) {
-        await session.SetMessageFlagsAsync(folder, ids, new MailFlagUpdate { Deleted = true });
+        var purged = await session.SetMessageFlagsAsync(folder, ids, new MailFlagUpdate { Deleted = true });
+        if (purged.IsSuccess)
+          DropArchived(box.Id, folder, ids);
         continue;
       }
 
@@ -1421,9 +1429,11 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     else if (SelectedFolderNodes.Count > 0
         && (SelectedFolderNode is null || !SelectedFolderNodes.Contains(SelectedFolderNode)))
       SelectedFolderNode = SelectedFolderNodes[0];
-    NotifyFolderCommands();
-    OnPropertyChanged(nameof(EmptyFolderLabel));
+    RefreshFolderMenu();
   }
+
+  public void RefreshFolderMenu() =>
+    NotifyFolderCommands();
 
   public IReadOnlyList<uint> DragMessageIds(MessageRowViewModel source) {
     if (SelectedMessages.Contains(source))
@@ -1708,22 +1718,26 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
 
   [RelayCommand(CanExecute = nameof(CanEmptyFolder))]
   private async Task EmptyFolderAsync() {
-    var session = ActiveSession;
-    var box = SelectedMailbox;
-    var folder = TargetFolderNodes().FirstOrDefault()?.Folder ?? SelectedFolder;
-    if (session is not { IsConnected: true, SupportsFolders: true } || box is null || folder is null)
+    var node = TargetFolderNodes().FirstOrDefault();
+    var folder = node?.Folder ?? SelectedFolder;
+    var box = node?.Mailbox ?? SelectedMailbox;
+    if (folder is null
+        || box is null
+        || !MailFolderRole.CanEmpty(folder.Name, folder.FullName, box.IncomingProtocol))
       return;
-    var trash = await EnsureTrashFolderAsync(box, CancellationToken.None);
-    var purge = string.IsNullOrWhiteSpace(trash)
-      || trash.Equals(folder.FullName, StringComparison.OrdinalIgnoreCase);
+    var purge = MailRetention.IsTrash(folder.Name, folder.FullName);
     var confirm = string.Format(purge ? Copy.EmptyTrashConfirm : Copy.EmptyFolderConfirm, folder.Name);
     if (!await ConfirmAsync(purge ? Copy.DeleteAllItems : Copy.EmptyFolder, confirm))
       return;
     await RunAsync(Copy.EmptyingFolder, async token => {
-      var result = await session.EmptyFolderAsync(
-        folder.FullName,
-        purge ? null : trash,
-        token);
+      var session = await EnsureMailboxReadyAsync(box, token);
+      if (session is not { IsConnected: true, SupportsFolders: true }) {
+        Status = ArchiveFiles.Hint();
+        return;
+      }
+
+      var trash = purge ? null : await EnsureTrashFolderAsync(box, token);
+      var result = await session.EmptyFolderAsync(folder.FullName, trash, token);
       if (!result.IsSuccess) {
         Status = string.Join(" ", result.Messages);
         return;
@@ -1732,7 +1746,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       ForgetLocalFolder(box.Id, folder.FullName);
       folder.Total = 0;
       folder.Unread = 0;
-      if (SelectedFolder?.FullName.Equals(folder.FullName, StringComparison.OrdinalIgnoreCase) == true) {
+      if (SelectedMailbox?.Id.Equals(box.Id, StringComparison.OrdinalIgnoreCase) == true
+          && SelectedFolder?.FullName.Equals(folder.FullName, StringComparison.OrdinalIgnoreCase) == true) {
         Messages.Clear();
         VisibleMessages.Clear();
         SelectedMessage = null;
@@ -2010,12 +2025,12 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     CanManageFolders();
 
   private bool CanEmptyFolder() {
-    var folder = TargetFolderNodes().FirstOrDefault()?.Folder ?? SelectedFolder;
-    if (folder is null || MailFolderRole.IsNamespace(folder.Name, folder.FullName))
+    var node = TargetFolderNodes().FirstOrDefault();
+    var folder = node?.Folder ?? SelectedFolder;
+    var box = node?.Mailbox ?? SelectedMailbox;
+    if (folder is null || box is null)
       return false;
-    if (SelectedMailbox is { IsLocalStore: true } && !IsBusy)
-      return ActiveSession is { IsConnected: true, SupportsFolders: true };
-    return CanManageFolders();
+    return MailFolderRole.CanEmpty(folder.Name, folder.FullName, box.IncomingProtocol);
   }
 
   private bool CanDeleteCustomFolder() =>
@@ -2222,6 +2237,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   partial void OnIsBusyChanged(bool value) {
     OnPropertyChanged(nameof(ShowDetachPst));
     DetachPstCommand.NotifyCanExecuteChanged();
+    NotifyFolderCommands();
   }
 
   partial void OnSelectedFolderChanged(FolderRowViewModel? value) {
@@ -2602,7 +2618,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       var expanded = previous.TryGetValue(folder.FullName, out var keep)
         ? keep
         : SavedFolderExpanded(box, folder.FullName);
-      map[folder.FullName] = FolderNodeViewModel.ForFolder(box, folder, expanded);
+      var childNode = FolderNodeViewModel.ForFolder(box, folder, expanded);
+      childNode.RetentionDays = MailRetention.DaysFor(box.Id, folder.FullName, _files.Current.Retention);
+      map[folder.FullName] = childNode;
     }
     foreach (var folder in rows
       .OrderBy(f => MailFolderRole.SortKey(f.Name, f.FullName))
@@ -4389,12 +4407,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       f.FullName.Equals(fullName, StringComparison.OrdinalIgnoreCase));
 
   private void NotifyFolderCounts() {
-    foreach (var account in FolderTree) {
+    foreach (var account in FolderTree)
       ApplyRetentionBadge(account);
-      foreach (var child in account.Children)
-        child.NotifyCounts();
-      account.NotifyCounts();
-    }
   }
 
   public void RefreshRetentionBadges() =>
@@ -4402,21 +4416,12 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
 
   private void ApplyRetentionBadge(FolderNodeViewModel node) {
     if (node.Mailbox is { } box && node.Folder is { } folder)
-      node.RetentionDays = RetentionDaysFor(box.Id, folder.FullName);
+      node.RetentionDays = MailRetention.DaysFor(box.Id, folder.FullName, _files.Current.Retention);
     else
       node.RetentionDays = 0;
+    node.NotifyCounts();
     foreach (var child in node.Children)
       ApplyRetentionBadge(child);
-  }
-
-  private int RetentionDaysFor(string mailboxId, string folder) {
-    foreach (var row in _files.Current.Retention ?? []) {
-      if (row.MailboxId.Equals(mailboxId, StringComparison.OrdinalIgnoreCase)
-          && row.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase))
-        return row.Days;
-    }
-
-    return 0;
   }
 
   private void RefreshFolderStats() {

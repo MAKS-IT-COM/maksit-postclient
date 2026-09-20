@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-09-20
+
+Folder unread and retention days sit in separate columns. Sign-in and Gmail trash retention survive a rebuild.
+
+### Changed
+
+- Folder tree keeps unread count and retention days in two fixed columns on the right, instead of collapsing them next to the folder name.
+
+### Fixed
+
+- **Empty folder** stays enabled on folders that have mail, including while Get Messages is still running.
+- Installing a new build keeps Gmail and Outlook sign-in: leftover secrets and the Identity Hub profile are merged from the previous data folder, and a still-valid mailbox token is used if Hub refresh fails.
+- Gmail **[Gmail]/Trash** retention days show on the nested folder and permanently delete mail by received date after Get Messages or **Run now**.
+
 ## [0.3.5] - 2026-09-20
 
 Index status covers every mailbox, not one folder or one account.

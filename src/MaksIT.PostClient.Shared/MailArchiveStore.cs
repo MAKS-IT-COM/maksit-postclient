@@ -638,6 +638,26 @@ public sealed class MailArchiveStore : IDisposable {
     }
   }
 
+  private bool HasMessageElsewhere(
+    SqliteTransaction tx,
+    string mailboxId,
+    string folder,
+    string? messageId) {
+    if (string.IsNullOrWhiteSpace(messageId))
+      return false;
+    using var cmd = _db.CreateCommand();
+    cmd.Transaction = tx;
+    cmd.CommandText = """
+      SELECT 1 FROM messages
+      WHERE mailbox_id = $m AND message_id = $mid AND folder <> $f
+      LIMIT 1;
+      """;
+    cmd.Parameters.AddWithValue("$m", mailboxId);
+    cmd.Parameters.AddWithValue("$mid", messageId.Trim());
+    cmd.Parameters.AddWithValue("$f", folder);
+    return cmd.ExecuteScalar() is not null;
+  }
+
   public MailArchiveCopy? ReadCopy(string mailboxId, string folder, uint uid) {
     lock (_gate) {
       using var cmd = _db.CreateCommand();
@@ -703,7 +723,12 @@ public sealed class MailArchiveStore : IDisposable {
         EmlPath = copy.Header.EmlPath,
         Labels = copy.Header.Labels
       };
-      var id = UpsertHeader(tx, mailboxId, header, updateFlags: true);
+      var id = UpsertHeader(
+        tx,
+        mailboxId,
+        header,
+        updateFlags: true,
+        stampTrashTime: MailRetention.IsTrash(folder));
       using (var body = _db.CreateCommand()) {
         body.Transaction = tx;
         body.CommandText = """
@@ -759,11 +784,15 @@ public sealed class MailArchiveStore : IDisposable {
     }
   }
 
-  public IReadOnlyList<uint> UidsOlderThan(string mailboxId, string folder, DateTimeOffset cutoff) {
-    var trash = MailRetention.IsTrash(folder);
+  public IReadOnlyList<uint> UidsOlderThan(
+    string mailboxId,
+    string folder,
+    DateTimeOffset cutoff,
+    bool useReceivedDate = false) {
+    var trashStamp = MailRetention.IsTrash(folder) && !useReceivedDate;
     lock (_gate) {
       using var cmd = _db.CreateCommand();
-      cmd.CommandText = trash
+      cmd.CommandText = trashStamp
         ? """
           SELECT uid FROM messages
           WHERE mailbox_id = $m AND folder = $f
@@ -869,7 +898,8 @@ public sealed class MailArchiveStore : IDisposable {
     SqliteTransaction tx,
     string mailboxId,
     MailArchiveHeader header,
-    bool updateFlags) {
+    bool updateFlags,
+    bool stampTrashTime = false) {
     using var cmd = _db.CreateCommand();
     cmd.Transaction = tx;
     var flagAssign = updateFlags
@@ -894,15 +924,11 @@ public sealed class MailArchiveStore : IDisposable {
         in_reply_to = excluded.in_reply_to,
         {flagAssign}
         has_attachments = excluded.has_attachments,
-        priority = excluded.priority,
-        trashed_utc = CASE
-          WHEN messages.trashed_utc <> '' THEN messages.trashed_utc
-          WHEN $trash = 1 THEN excluded.trashed_utc
-          ELSE messages.trashed_utc
-        END;
+        priority = excluded.priority;
       """;
     var trash = MailRetention.IsTrash(header.Folder);
-    var trashed = trash ? DateTimeOffset.UtcNow.ToString("O") : "";
+    var stampTrash = trash && (stampTrashTime || HasMessageElsewhere(tx, mailboxId, header.Folder, header.MessageId));
+    var trashed = stampTrash ? DateTimeOffset.UtcNow.ToString("O") : "";
     cmd.Parameters.AddWithValue("$m", mailboxId);
     cmd.Parameters.AddWithValue("$f", header.Folder);
     cmd.Parameters.AddWithValue("$u", header.Uid);
@@ -919,7 +945,6 @@ public sealed class MailArchiveStore : IDisposable {
     cmd.Parameters.AddWithValue("$att", header.HasAttachments ? 1 : 0);
     cmd.Parameters.AddWithValue("$pri", header.Priority);
     cmd.Parameters.AddWithValue("$trashed", trashed);
-    cmd.Parameters.AddWithValue("$trash", trash ? 1 : 0);
     cmd.ExecuteNonQuery();
     using var idCmd = _db.CreateCommand();
     idCmd.Transaction = tx;

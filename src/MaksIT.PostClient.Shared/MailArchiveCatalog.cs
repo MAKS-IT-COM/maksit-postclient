@@ -387,8 +387,12 @@ public sealed class MailArchiveCatalog : IDisposable {
       return dest.InsertCopy(destMailboxId, destFolder, copy);
     });
 
-  public IReadOnlyList<uint> UidsOlderThan(string mailboxId, string folder, DateTimeOffset cutoff) =>
-    OffUi(() => TryGet(mailboxId)?.UidsOlderThan(mailboxId, folder, cutoff) ?? []);
+  public IReadOnlyList<uint> UidsOlderThan(
+    string mailboxId,
+    string folder,
+    DateTimeOffset cutoff,
+    bool useReceivedDate = false) =>
+    OffUi(() => TryGet(mailboxId)?.UidsOlderThan(mailboxId, folder, cutoff, useReceivedDate) ?? []);
 
   public int CopyDirectory(string source, string dest) =>
     OffUi(() => {

@@ -358,6 +358,8 @@ public partial class MainWindow : Window {
       if (current is Control { DataContext: FolderNodeViewModel node }) {
         if (!vm.SelectedFolderNodes.Contains(node))
           vm.SetSelectedFolders([node], node);
+        else
+          vm.RefreshFolderMenu();
         RestoreFolderTreeSelection();
         return;
       }

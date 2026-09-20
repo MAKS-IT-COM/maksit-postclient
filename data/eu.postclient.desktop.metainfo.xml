@@ -30,6 +30,11 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.6" date="2026-09-20">
+      <description>
+        <p>Folder unread and retention days stay in separate columns. A new install keeps Gmail and Outlook sign-in. Gmail Trash retention shows on the nested folder and permanently deletes old trash.</p>
+      </description>
+    </release>
     <release version="0.3.5" date="2026-09-20">
       <description>
         <p>Keyword and meaning index status shows one done / total across all mailboxes, not the current folder or a single account.</p>

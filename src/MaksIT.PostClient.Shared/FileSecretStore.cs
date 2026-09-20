@@ -64,11 +64,35 @@ public sealed class FileSecretStore : ISecretStore {
   public static string OAuthClientSecretKey(string? authKind) =>
     "oauth-client-secret:" + MailAuthKind.Normalize(authKind);
 
-  private Dictionary<string, string> Load() {
-    if (!File.Exists(_path))
+  public static int MergeMissingKeys(string sourcePath, string destPath) {
+    var source = ReadMap(sourcePath);
+    if (source.Count == 0)
+      return 0;
+    var dest = ReadMap(destPath);
+    var added = 0;
+    foreach (var pair in source) {
+      if (dest.ContainsKey(pair.Key))
+        continue;
+      dest[pair.Key] = pair.Value;
+      added++;
+    }
+
+    if (added > 0)
+      WriteMap(destPath, dest);
+    return added;
+  }
+
+  private Dictionary<string, string> Load() =>
+    ReadMap(_path);
+
+  private void Save(Dictionary<string, string> map) =>
+    WriteMap(_path, map);
+
+  private static Dictionary<string, string> ReadMap(string path) {
+    if (!File.Exists(path))
       return new Dictionary<string, string>(StringComparer.Ordinal);
     try {
-      var json = File.ReadAllText(_path);
+      var json = File.ReadAllText(path);
       return JsonSerializer.Deserialize<Dictionary<string, string>>(json)
         ?? new Dictionary<string, string>(StringComparer.Ordinal);
     }
@@ -77,13 +101,13 @@ public sealed class FileSecretStore : ISecretStore {
     }
   }
 
-  private void Save(Dictionary<string, string> map) {
-    var dir = Path.GetDirectoryName(_path);
+  private static void WriteMap(string path, Dictionary<string, string> map) {
+    var dir = Path.GetDirectoryName(path);
     if (!string.IsNullOrEmpty(dir))
       Directory.CreateDirectory(dir);
-    File.WriteAllText(_path, JsonSerializer.Serialize(map));
+    File.WriteAllText(path, JsonSerializer.Serialize(map));
     if (!OperatingSystem.IsWindows())
-      File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+      File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
   }
 
   private static string Protect(string secret) {

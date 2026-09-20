@@ -147,6 +147,26 @@ public class MailAuthServiceHubTests {
     Assert.Equal("imap-mailbox-token", result.Value?.AccessToken);
     Assert.Equal("user@outlook.com", result.Value?.Email);
   }
+
+  [Fact]
+  public async Task ResolveAsync_UsesCachedMailboxTokenWhenHubRefreshFails() {
+    var secrets = new FileSecretStore(Path.Combine(Path.GetTempPath(), "postclient-hub-" + Guid.NewGuid().ToString("N") + ".bin"));
+    var hub = new FakeIdentityHub { FailRefresh = true };
+    var auth = new MailAuthService(secrets, hub);
+    var box = new MailboxAccount { AuthKind = MailAuthKind.Google };
+    auth.SaveTokens(box.Id, new OAuthTokenSet {
+      HubToken = "hub-jwt",
+      HubRefreshToken = "hub-refresh",
+      HubExpires = DateTimeOffset.UtcNow.AddHours(1),
+      AccessToken = "cached-imap",
+      AccessExpires = DateTimeOffset.UtcNow.AddMinutes(30),
+      Email = "user@gmail.com"
+    });
+    var material = await auth.ResolveAsync(box, password: null, TestContext.Current.CancellationToken);
+    Assert.True(material.IsSuccess);
+    Assert.Equal("cached-imap", material.Value?.AccessToken);
+    Assert.Equal(1, hub.RefreshCalls);
+  }
 }
 
 
@@ -179,6 +199,8 @@ file sealed class FakeIdentityHub : IIdentityHubClient {
   public string? AccessToken { get; set; }
 
   public int RefreshCalls { get; private set; }
+
+  public bool FailRefresh { get; set; }
 
   public Task CheckHealthLiveAsync(CancellationToken cancellationToken = default) =>
     Task.CompletedTask;
@@ -214,6 +236,8 @@ file sealed class FakeIdentityHub : IIdentityHubClient {
 
   public Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default) {
     RefreshCalls++;
+    if (FailRefresh)
+      throw new IdentityHubApiException(401, "refresh failed", "", null);
     return Task.FromResult(new LoginResponse(
       "Bearer",
       "hub-jwt-refreshed",

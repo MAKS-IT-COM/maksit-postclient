@@ -34,7 +34,24 @@ public static class MailRetention {
       .Where(folder => !string.IsNullOrWhiteSpace(folder))
       .Select(folder => (folder, folder))
       .ToList();
-    return MailRuleEngine.ExactFolder(wanted, list) ?? (wanted ?? "").Trim();
+    return MailRuleEngine.ExactFolder(wanted, list)
+      ?? MailRuleEngine.ResolveFolder(wanted, list)
+      ?? (wanted ?? "").Trim();
+  }
+
+  public static int DaysFor(string mailboxId, string folder, IEnumerable<FolderRetention>? retention) {
+    if (string.IsNullOrWhiteSpace(mailboxId) || string.IsNullOrWhiteSpace(folder))
+      return 0;
+    foreach (var row in Jobs(retention)) {
+      if (!row.MailboxId.Equals(mailboxId, StringComparison.OrdinalIgnoreCase))
+        continue;
+      if (row.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase))
+        return row.Days;
+      if (IsTrash(folder) && IsTrash(row.Folder))
+        return row.Days;
+    }
+
+    return 0;
   }
 
   public static IReadOnlyList<FolderRetention> Jobs(IEnumerable<FolderRetention>? retention) {

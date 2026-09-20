@@ -10,7 +10,8 @@ public sealed class ConfigurationFileService {
 
   private static readonly JsonSerializerOptions SerializerOptions = new() {
     WriteIndented = true,
-    PropertyNamingPolicy = null
+    PropertyNamingPolicy = null,
+    PropertyNameCaseInsensitive = true
   };
 
   private readonly string? _seedPath;

@@ -152,7 +152,10 @@ public sealed partial class FolderNodeViewModel : ObservableObject {
   public bool HasUnread =>
     Unread > 0;
 
-  public int RetentionDays { get; set; }
+  [ObservableProperty]
+  [NotifyPropertyChangedFor(nameof(RetentionLabel))]
+  [NotifyPropertyChangedFor(nameof(HasRetention))]
+  private int retentionDays;
 
   public string RetentionLabel =>
     UiLocale.Copy.RetentionBadge(RetentionDays);
