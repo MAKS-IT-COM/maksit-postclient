@@ -1,8 +1,6 @@
 using Avalonia;
 using Avalonia.Logging;
 using Avalonia.Threading;
-using MaksIT.PostClient.Client;
-using MaksIT.PostClient.Shared;
 
 
 namespace MaksIT.PostClient.UI;
@@ -42,8 +40,12 @@ internal static class Program {
 
   private static void OnDispatcherUnhandled(object? sender, DispatcherUnhandledExceptionEventArgs e) {
     e.Handled = true;
-    if (IsWebViewFailure(e.Exception))
+    if (IsWebViewFailure(e.Exception)) {
+      ErrorReport.Capture(e.Exception);
       WebViewFailed?.Invoke(e.Exception);
+      return;
+    }
+
     ErrorDialog.Report(e.Exception);
   }
 
@@ -69,6 +71,8 @@ internal static class Program {
     var text = ex.ToString();
     return text.Contains("WebView", StringComparison.OrdinalIgnoreCase)
       || text.Contains("webkit", StringComparison.OrdinalIgnoreCase)
-      || (uint)ex.HResult == 0x80070005;
+      || (uint)ex.HResult == 0x80070005
+      || ((uint)ex.HResult == 0x80070057
+        && text.Contains("NavigateToString", StringComparison.OrdinalIgnoreCase));
   }
 }

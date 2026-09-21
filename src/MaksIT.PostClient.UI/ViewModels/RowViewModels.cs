@@ -2,8 +2,6 @@ using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
-using MaksIT.PostClient.Client;
-using MaksIT.PostClient.Shared;
 
 
 namespace MaksIT.PostClient.UI.ViewModels;
@@ -253,6 +251,12 @@ public sealed class MessageRowViewModel : ObservableObject {
 
   public DateTimeOffset SortDate =>
     Header.Date;
+
+  public long Size =>
+    Header.Size;
+
+  public string SizeLine =>
+    MailSize.Line(Header.Size);
 
   public int UnreadSort =>
     Header.IsSeen ? 1 : 0;

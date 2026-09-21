@@ -30,6 +30,11 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.8" date="2026-09-21">
+      <description>
+        <p>HTML mail no longer crashes WebView2 on Windows. Large messages with inline images load from a local file, and WebView failures fall back to text. The message list shows each item's size so heavy mail is easy to sort and delete, and the paperclip stays on mail whose files are not marked as attachments. Search results keep the message context menu after you select mail.</p>
+      </description>
+    </release>
     <release version="0.3.7" date="2026-09-20">
       <description>
         <p>Selected mail keeps its preview while the folder list refreshes. Delete and move use the row's folder, and opening a message is not stuck behind a catalog scan.</p>

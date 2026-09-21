@@ -1,8 +1,6 @@
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
-using MaksIT.PostClient.Client;
-using MaksIT.PostClient.Shared;
 
 
 namespace MaksIT.PostClient.UI.ViewModels;

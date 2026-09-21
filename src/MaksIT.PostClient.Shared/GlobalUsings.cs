@@ -1,0 +1,9 @@
+global using MaksIT.PostClient.Shared.App;
+global using MaksIT.PostClient.Shared.Archive;
+global using MaksIT.PostClient.Shared.Auth;
+global using MaksIT.PostClient.Shared.Config;
+global using MaksIT.PostClient.Shared.Content;
+global using MaksIT.PostClient.Shared.Envelope;
+global using MaksIT.PostClient.Shared.Localization;
+global using MaksIT.PostClient.Shared.Mail;
+global using MaksIT.PostClient.Shared.Search;

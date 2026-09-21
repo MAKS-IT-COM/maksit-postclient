@@ -276,6 +276,7 @@
                     HorizontalScrollBarVisibility="Auto"
                     VerticalScrollBarVisibility="Auto"
                     SelectionChanged="OnMessagesSelectionChanged"
+                    ContextRequested="OnMessagesContextRequested"
                     DoubleTapped="OnMessagesDoubleTapped">
             <DataGrid.ContextFlyout>
               <MenuFlyout Opening="OnMessageMenuOpening">
@@ -396,6 +397,16 @@
                 </DataGridTemplateColumn.CellTemplate>
               </DataGridTemplateColumn>
               <DataGridTextColumn Header="Date" Tag="Date" Binding="{Binding When}" Width="132" MinWidth="110" SortMemberPath="SortDate" />
+              <DataGridTemplateColumn Header="Size" Tag="Size" Width="80" MinWidth="64" CanUserSort="True" SortMemberPath="Size">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding SizeLine}"
+                               HorizontalAlignment="Right"
+                               Margin="6,0"
+                               VerticalAlignment="Center" />
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
             </DataGrid.Columns>
           </DataGrid>
         </DockPanel>

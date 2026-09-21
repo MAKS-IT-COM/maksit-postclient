@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.Input;
-using MaksIT.PostClient.Shared;
 
 
 namespace MaksIT.PostClient.UI.ViewModels;

@@ -4,8 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.Markup.Xaml;
 using Avalonia.Controls.ApplicationLifetimes;
-using MaksIT.PostClient.Client;
-using MaksIT.PostClient.Shared;
 using MaksIT.PostClient.UI.ViewModels;
 
 

@@ -4,8 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using MaksIT.PostClient.Client;
-using MaksIT.PostClient.Shared;
 using MaksIT.PostClient.UI.ViewModels;
 
 

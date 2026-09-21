@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Threading;
-using MaksIT.PostClient.Shared;
 
 
 namespace MaksIT.PostClient.UI.Windows;

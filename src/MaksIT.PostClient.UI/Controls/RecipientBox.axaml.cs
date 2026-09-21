@@ -6,7 +6,6 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
-using MaksIT.PostClient.Client;
 using MaksIT.PostClient.UI.ViewModels;
 
 

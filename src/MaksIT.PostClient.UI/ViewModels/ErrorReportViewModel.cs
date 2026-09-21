@@ -1,5 +1,4 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using MaksIT.PostClient.Shared;
 
 
 namespace MaksIT.PostClient.UI.ViewModels;

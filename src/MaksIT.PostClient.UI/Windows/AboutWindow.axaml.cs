@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using MaksIT.PostClient.Shared;
 using MaksIT.PostClient.UI.ViewModels;
 
 

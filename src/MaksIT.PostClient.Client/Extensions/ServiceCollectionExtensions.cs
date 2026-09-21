@@ -1,9 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using MaksIT.IdentityHub.Client;
-using MaksIT.PostClient.Shared;
 
 
-namespace MaksIT.PostClient.Client;
+namespace MaksIT.PostClient.Client.Extensions;
 
 
 public static class ServiceCollectionExtensions {

@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-09-21
+
+HTML mail opens without a WebView2 crash dialog. The message list shows each item's size.
+
+### Added
+
+- Message list **Size** column (sortable) so heavy mail is easy to find and delete. IMAP uses RFC822.SIZE, POP3 uses LIST sizes, and downloaded `.eml` files fill in the rest.
+
+### Changed
+
+- Client, Shared, UI, and Tests types live in feature folders with matching namespaces (`Mail`, `Auth`, `Archive`, and the rest).
+
+### Fixed
+
+- Opening HTML mail no longer crashes WebView2 with `NavigateToString` (large inlined images, or the engine still starting). The reading pane loads from a local file, and WebView failures fall back to text without a crash window.
+- Message list paperclip shows for mail whose attachments are not `Content-Disposition: attachment` (Outlook inline files, named parts, nested `.eml`). IMAP now reads BODYSTRUCTURE, opening or indexing a message keeps the flag, and a later folder refresh no longer clears it.
+- Body indexing no longer stalls on a few messages that fail or take too long: those are skipped (or dropped if they are gone from the server) so the rest of the archive can finish. Hung IMAP/POP3 downloads are aborted after 25 seconds and the socket is dropped so the next message can start. Messages larger than 8 MB wait until you open them. When every body is done, the indexing line hides like the meaning index.
+- Search results keep Reply / Move / Delete on the context menu: right-click selects the mail under the pointer, and a folder refresh no longer treats hits from other folders as an empty selection. After delete, the next selection is tracked instead of a leftover or already-removed row.
+
 ## [0.3.7] - 2026-09-20
 
 Selected mail keeps its preview while the folder list refreshes.

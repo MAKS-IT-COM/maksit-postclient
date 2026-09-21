@@ -9,8 +9,6 @@ using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Controls.ApplicationLifetimes;
-using MaksIT.PostClient.Client;
-using MaksIT.PostClient.Shared;
 using MaksIT.PostClient.UI.Windows;
 using MaksIT.PostClient.UI.ViewModels;
 
@@ -141,6 +139,7 @@ public partial class MainWindow : Window {
         "Label" => copy.Label,
         "Subject" => copy.Subject,
         "Date" => copy.Date,
+        "Size" => copy.Size,
         _ => column.Header
       };
       column.IsVisible = (column.Tag as string) switch {
@@ -368,6 +367,20 @@ public partial class MainWindow : Window {
     }
   }
 
+  private void OnMessagesContextRequested(object? sender, ContextRequestedEventArgs e) {
+    if (DataContext is not MainViewModel vm)
+      return;
+    var row = RowAt(e.Source);
+    if (row is null)
+      return;
+    var live = LiveGridRows();
+    if (live.Any(item => item.Key == row.Key))
+      vm.SetSelectedMessages(live);
+    else
+      vm.SetSelectedMessages([row]);
+    RestoreMessageGridSelection();
+  }
+
   private void OnMessagesSelectionChanged(object? sender, SelectionChangedEventArgs e) {
     if (_syncingGridSelection || DataContext is MainViewModel { IsSyncingMessageList: true })
       return;
@@ -380,12 +393,8 @@ public partial class MainWindow : Window {
     _syncingGridSelection = true;
     try {
       MessagesGrid.SelectedItems.Clear();
-      if (vm.SelectedMessage is not null)
-        MessagesGrid.SelectedItems.Add(vm.SelectedMessage);
-      foreach (var row in vm.SelectedMessages) {
-        if (!MessagesGrid.SelectedItems.Contains(row))
-          MessagesGrid.SelectedItems.Add(row);
-      }
+      foreach (var row in vm.VisibleSelectedMessages())
+        MessagesGrid.SelectedItems.Add(row);
     }
     finally {
       _syncingGridSelection = false;
@@ -395,7 +404,14 @@ public partial class MainWindow : Window {
   private void SyncSelectionFromGrid() {
     if (DataContext is not MainViewModel vm)
       return;
-    vm.SetSelectedMessages(MessagesGrid.SelectedItems.OfType<MessageRowViewModel>());
+    vm.SetSelectedMessages(LiveGridRows());
+  }
+
+  private List<MessageRowViewModel> LiveGridRows() {
+    if (DataContext is not MainViewModel vm)
+      return [];
+    var keys = MessagesGrid.SelectedItems.OfType<MessageRowViewModel>().Select(row => row.Key);
+    return MailMessageList.Resolve(keys, vm.VisibleMessages, row => row.Key).ToList();
   }
 
   private void OnMessagesPointerReleased(object? sender, PointerReleasedEventArgs e) {
@@ -606,7 +622,15 @@ public partial class MainWindow : Window {
   private void OnMessageMenuOpening(object? sender, EventArgs e) {
     if (sender is not MenuFlyout flyout || DataContext is not MainViewModel vm)
       return;
-    SyncSelectionFromGrid();
+    var live = LiveGridRows();
+    if (live.Count > 0)
+      vm.SetSelectedMessages(live);
+    else {
+      vm.SetSelectedMessages(vm.VisibleSelectedMessages());
+      RestoreMessageGridSelection();
+    }
+
+    vm.RefreshMessageMenu();
     MenuItem? move = null;
     foreach (var item in flyout.Items) {
       if (item is MenuItem menu && string.Equals(menu.Header as string, vm.Copy.MoveTo, StringComparison.Ordinal))
@@ -905,8 +929,8 @@ public partial class MainWindow : Window {
     || modifiers.HasFlag(KeyModifiers.Shift);
 
   private static MessageRowViewModel? RowAt(object? source) {
-    for (var current = source as Control; current is not null; current = current.Parent as Control) {
-      if (current.DataContext is MessageRowViewModel row)
+    for (var current = source as Visual; current is not null; current = current.GetVisualParent()) {
+      if (current is Control { DataContext: MessageRowViewModel row })
         return row;
     }
 

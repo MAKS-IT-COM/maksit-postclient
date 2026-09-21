@@ -4,8 +4,6 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MaksIT.Results;
-using MaksIT.PostClient.Client;
-using MaksIT.PostClient.Shared;
 using MaksIT.PostClient.UI;
 
 
@@ -37,8 +35,11 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private readonly HashSet<string> _indexMailboxes = new(StringComparer.OrdinalIgnoreCase);
   private readonly HashSet<string> _catalogDone = new(StringComparer.OrdinalIgnoreCase);
   private readonly HashSet<string> _catalogFolders = new(StringComparer.OrdinalIgnoreCase);
+  private readonly HashSet<MailMessageKey> _indexSkip = [];
   private const int IndexCatalogChunk = 250;
   private const int IndexUiChunk = 250;
+  private const int IndexBodyChunk = 16;
+  private const int IndexBodyLookahead = 512;
   private readonly StatusLineHold _indexHold;
   private readonly StatusLineHold _semanticHold;
   private bool _uiReady;
@@ -1408,17 +1409,31 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     await SignInProviderAsync(MailAuthKind.Microsoft);
 
   public void SetSelectedMessages(IEnumerable<MessageRowViewModel> rows) {
+    var current = SelectedMessage;
+    var live = MailMessageList.Resolve(
+      rows.Select(row => row.Key),
+      VisibleMessages,
+      row => row.Key);
     SelectedMessages.Clear();
     _selectedKeys.Clear();
-    foreach (var row in rows) {
+    foreach (var row in live) {
       SelectedMessages.Add(row);
       _selectedKeys.Add(row.Key);
     }
 
-    if (SelectedMessages.Count > 0 && (SelectedMessage is null || !SelectedMessages.Contains(SelectedMessage)))
-      SelectedMessage = SelectedMessages[0];
+    SelectedMessage = MailMessageList.Live(SelectedMessages, current, row => row.Key);
     NotifyMessageCommands();
   }
+
+  public bool IsMessageSelected(MessageRowViewModel row) =>
+    VisibleMessages.Any(item => item.Key == row.Key)
+    && (_selectedKeys.Contains(row.Key) || SelectedMessage?.Key == row.Key);
+
+  public IReadOnlyList<MessageRowViewModel> VisibleSelectedMessages() =>
+    MailMessageList.Resolve(
+      _selectedKeys.Count > 0 ? _selectedKeys : SelectedMessage is { } one ? [one.Key] : [],
+      VisibleMessages,
+      row => row.Key);
 
   public void RestoreMessageGridSelection() =>
     MessageListSelectionRestoreRequested?.Invoke();
@@ -1443,10 +1458,16 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   public void RefreshFolderMenu() =>
     NotifyFolderCommands();
 
+  public void RefreshMessageMenu() =>
+    NotifyMessageCommands();
+
   public IReadOnlyList<uint> DragMessageIds(MessageRowViewModel source) {
-    if (SelectedMessages.Contains(source))
-      return SelectedMessages.Select(row => row.Header.Id).ToList();
-    return [source.Header.Id];
+    if (!IsMessageSelected(source))
+      return [source.Header.Id];
+    var rows = TargetRows();
+    if (rows.Count == 0)
+      return [source.Header.Id];
+    return rows.Select(row => row.Header.Id).ToList();
   }
 
   public IReadOnlyList<string> DragFolderNames(FolderNodeViewModel source) {
@@ -2291,7 +2312,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   partial void OnSelectedMessageChanged(MessageRowViewModel? value) {
     NotifyMessageCommands();
     if (value is null) {
-      if (!_syncingList)
+      if (!_syncingList && SelectedMessages.Count == 0)
         _selectedKeys.Clear();
       return;
     }
@@ -3479,12 +3500,17 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       }
 
       var keep = MailMessageList.Resolve(keepKeys, VisibleMessages, row => row.Key);
+      if (keepOneKey is { } key && keep.All(row => row.Key != key)) {
+        var primary = VisibleMessages.FirstOrDefault(row => row.Key == key);
+        if (primary is not null)
+          keep = [primary, .. keep];
+      }
+
       SetSelectedMessages(keep);
-      SelectedMessage = keepOneKey is { } key
-        ? VisibleMessages.FirstOrDefault(r => r.Key == key)
-        : keep.FirstOrDefault();
-      if (SelectedMessage is { } selected && !IsLoadedBody(selected.Header))
-        _ = OpenMessageAsync(selected);
+      if (SelectedMessage is { } selected && !VisibleMessages.Any(row => row.Key == selected.Key))
+        SelectedMessage = null;
+      if (SelectedMessage is { } open && !IsLoadedBody(open.Header))
+        _ = OpenMessageAsync(open);
     }
     finally {
       try {
@@ -3521,6 +3547,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       "From" => string.Compare(a.From, b.From, StringComparison.OrdinalIgnoreCase),
       "Label" => string.Compare(a.Labels, b.Labels, StringComparison.OrdinalIgnoreCase),
       "Subject" => string.Compare(a.Subject, b.Subject, StringComparison.OrdinalIgnoreCase),
+      "Size" => a.Size.CompareTo(b.Size),
       _ => a.SortDate.CompareTo(b.SortDate)
     };
     if (cmp == 0)
@@ -3560,8 +3587,11 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       return;
     }
 
+    if (body.Header.HasAttachments)
+      header.HasAttachments = true;
     StoreArchivedBody(box.Id, header, body);
     await Dispatcher.UIThread.InvokeAsync(async () => {
+      MarkRowAttachments(header);
       if (SelectedMessage is null
           || SelectedMessage.Header.Id != header.Id
           || !SelectedMessage.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase))
@@ -3730,9 +3760,24 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     ReadingFiles.Clear();
   }
 
+  private void MarkRowAttachments(MailMessageHeader header) {
+    if (!header.HasAttachments)
+      return;
+    foreach (var row in Messages) {
+      if (row.Header.Id != header.Id)
+        continue;
+      if (!row.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase))
+        continue;
+      row.Header.HasAttachments = true;
+      row.RefreshMarks();
+    }
+  }
+
   private void StoreArchivedBody(string mailboxId, MailMessageHeader header, MailMessageBody body) {
     if (body.RawEml.Length == 0)
       return;
+    if (body.Header.HasAttachments)
+      header.HasAttachments = true;
     try {
       var box = Mailboxes.FirstOrDefault(m => m.Id.Equals(mailboxId, StringComparison.OrdinalIgnoreCase));
       var path = box is not null
@@ -3776,6 +3821,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
             || !Messages[0].Header.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase))) {
       Messages.Clear();
       if (SelectedMessage is not null
+          && !IsVisibleSelection(SelectedMessage)
           && (!SelectedMessage.MailboxId.Equals(mailboxId, StringComparison.OrdinalIgnoreCase)
               || !SelectedMessage.Header.Folder.Equals(folder, StringComparison.OrdinalIgnoreCase))) {
         SelectedMessage = null;
@@ -3795,8 +3841,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       incoming,
       row => row.Header.Id,
       (dest, src) => dest.ApplyHeader(src.Header));
-    if (SelectedMessage is { } selected
-        && !Messages.Any(row => row.Key == selected.Key)) {
+    if (SelectedMessage is { } selected && !IsVisibleSelection(selected)) {
       SelectedMessage = null;
       ClearReading();
     }
@@ -3826,6 +3871,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     _indexMailboxes.Clear();
     _catalogDone.Clear();
     _catalogFolders.Clear();
+    _indexSkip.Clear();
     _backfill?.Cancel();
     _backfill?.Dispose();
     _backfill = null;
@@ -3844,7 +3890,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private void EnsureBodyBackfill(string mailboxId) {
     if (string.IsNullOrWhiteSpace(mailboxId) || _backfill is not null)
       return;
-    if (_archive.MissingBodyCount([mailboxId]) == 0)
+    if (NextMissingBodies([mailboxId]).Count == 0)
       return;
     EnsureIndexing(mailboxId);
   }
@@ -3932,10 +3978,12 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         }
 
         await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-        var pending = readyIds.Count == 0 ? [] : _archive.MissingBodies(readyIds, 16);
+        var pending = NextMissingBodies(readyIds);
         if (pending.Count == 0) {
+          await SetIndexLineAsync("", token).ConfigureAwait(false);
           if (!cataloged)
             break;
+          await Task.Delay(400, token).ConfigureAwait(false);
           continue;
         }
 
@@ -3945,22 +3993,43 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         foreach (var item in pending) {
           token.ThrowIfCancellationRequested();
           await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-          if (!sessions.TryGetValue(item.MailboxId, out var session) || session is not { IsConnected: true })
+          if (!sessions.TryGetValue(item.MailboxId, out var session) || session is null)
             continue;
+          var key = MailMessageKey.Of(item.MailboxId, item.Folder, item.Uid);
           try {
-            var result = await session.GetMessageAsync(item.Folder, item.Uid, token).ConfigureAwait(false);
-            if (result.IsSuccess && result.Value is not null)
+            var result = await session
+              .GetMessageAsync(item.Folder, item.Uid, token, interactive: false)
+              .ConfigureAwait(false);
+            if (result.IsSuccess && result.Value is not null) {
               StoreArchivedBody(item.MailboxId, result.Value.Header, result.Value);
-            fetched++;
+              _indexSkip.Remove(key);
+              fetched++;
+              continue;
+            }
+
+            if (MailFetch.IsGone(result.Messages)) {
+              _archive.RemoveUids(item.MailboxId, item.Folder, [item.Uid]);
+              _indexSkip.Remove(key);
+              fetched++;
+              continue;
+            }
+
+            _indexSkip.Add(key);
           }
-          catch (OperationCanceledException) {
+          catch (OperationCanceledException) when (token.IsCancellationRequested) {
             throw;
           }
+          catch (OperationCanceledException) {
+            _indexSkip.Add(key);
+          }
           catch {
+            _indexSkip.Add(key);
           }
         }
 
         if (fetched == 0 && !cataloged) {
+          if (NextMissingBodies(readyIds).Count == 0)
+            break;
           await Task.Delay(500, token).ConfigureAwait(false);
           continue;
         }
@@ -3978,11 +4047,16 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         if (token.IsCancellationRequested)
           return;
         foreach (var id in _indexMailboxes.ToList()) {
-          if (_catalogDone.Contains(id) && _archive.MissingBodyCount([id]) == 0)
+          if (NextMissingBodies([id]).Count > 0)
+            continue;
+          var box = MailboxById(id);
+          if (_catalogDone.Contains(id) || (box is not null && AllFoldersCataloged(box)))
             _indexMailboxes.Remove(id);
         }
 
-        var again = _indexMailboxes.Any(id => SessionFor(MailboxById(id)) is { IsConnected: true });
+        var again = _indexMailboxes.Any(id =>
+          SessionFor(MailboxById(id)) is { IsConnected: true }
+          && (NextMissingBodies([id]).Count > 0 || !_catalogDone.Contains(id)));
         if (!again) {
           _indexHold.Set("");
           return;
@@ -4050,7 +4124,29 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private string GlobalIndexLine() {
     var total = _archive.TotalMessageCount();
     var missing = _archive.MissingBodyCount();
-    return MailIndexProgress.Line(Math.Max(0, total - missing), total);
+    var skip = Math.Min(_indexSkip.Count, Math.Max(0, missing));
+    return MailIndexProgress.Line(Math.Max(0, total - missing + skip), total);
+  }
+
+  private List<MailArchiveUid> NextMissingBodies(IReadOnlyCollection<string> readyIds) {
+    if (readyIds.Count == 0)
+      return [];
+    var rows = new List<MailArchiveUid>();
+    foreach (var item in _archive.MissingBodies(readyIds, IndexBodyLookahead)) {
+      var key = MailMessageKey.Of(item.MailboxId, item.Folder, item.Uid);
+      if (_indexSkip.Contains(key))
+        continue;
+      if (item.Size > MailFetch.MaxBackfillBytes) {
+        _indexSkip.Add(key);
+        continue;
+      }
+
+      rows.Add(item);
+      if (rows.Count >= IndexBodyChunk)
+        break;
+    }
+
+    return rows;
   }
 
   private MailboxAccount? MailboxById(string mailboxId) =>
@@ -4125,6 +4221,12 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       ? _selectedKeys
       : SelectedMessage is { } one ? [one.Key] : [];
     return MailMessageList.Resolve(keys, VisibleMessages.Concat(Messages), row => row.Key);
+  }
+
+  private bool IsVisibleSelection(MessageRowViewModel row) {
+    if (MessageFilter.Trim().Length > 0)
+      return VisibleMessages.Any(item => item.Key == row.Key);
+    return Messages.Any(item => item.Key == row.Key);
   }
 
   private IReadOnlyList<FolderNodeViewModel> TargetFolderNodes() {
@@ -4353,11 +4455,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   }
 
   private void RemoveDroppedRows(string mailboxId, string folder, IReadOnlyList<uint> ids) {
-    if (SelectedMailbox?.Id != mailboxId
-        || SelectedFolder is null
-        || !SelectedFolder.FullName.Equals(folder, StringComparison.OrdinalIgnoreCase))
-      return;
-    var rows = Messages.Where(row => ids.Contains(row.Header.Id)).ToList();
+    var keys = ids.Select(id => MailMessageKey.Of(mailboxId, folder, id));
+    var rows = MailMessageList.Resolve(keys, VisibleMessages.Concat(Messages), row => row.Key);
     if (rows.Count > 0)
       RemoveRows(rows);
   }
@@ -4418,15 +4517,20 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
 
   private void RemoveRows(IReadOnlyList<MessageRowViewModel> rows) {
     ApplyRemovedCounts(rows);
-    foreach (var row in rows) {
-      Messages.Remove(row);
-      VisibleMessages.Remove(row);
-      _selectedKeys.Remove(row.Key);
+    var drop = rows.Select(row => row.Key).ToHashSet();
+    for (var i = Messages.Count - 1; i >= 0; i--) {
+      if (drop.Contains(Messages[i].Key))
+        Messages.RemoveAt(i);
     }
 
-    if (SelectedMessage is not null && rows.Contains(SelectedMessage))
-      SelectedMessage = VisibleMessages.FirstOrDefault();
+    for (var i = VisibleMessages.Count - 1; i >= 0; i--) {
+      if (drop.Contains(VisibleMessages[i].Key))
+        VisibleMessages.RemoveAt(i);
+    }
+
     SelectedMessages.Clear();
+    _selectedKeys.Clear();
+    SelectedMessage = null;
     NotifyMessageCommands();
     RestoreMessageGridSelection();
     RefreshFolderStats();
