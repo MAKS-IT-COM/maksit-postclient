@@ -37,8 +37,11 @@ Desktop- und Webmail behandeln einen PEC-**Umschlag** oder einen ETSI-REM-Nachwe
 - **Mandatskennzeichen auf diesem PC** — WEG, Mandantenakte, Steuerbescheid. Kennzeichen sind lokal, keine Kanzlei-Datenbank im Netz.
 - **Lokales Archiv des ganzen Ordners** — Nachrichten abrufen speichert den **gesamten IMAP-Ordner** in `mail.db` plus `.eml` auf der Platte (kein Last-N-Fenster). FTS über Betreff, Text, PDF-/XML-/HTML-/CSV-/JSON-Anlagen und Kennzeichen.
 - **Bedeutungssuche auf dem Gerät (RAG)** — optionales EmbeddingGemma 300M unter **Einstellungen → Indizes…**. Vektoren bleiben in `mail.db`. Mail verlässt den Rechner nicht. Stichwort- und Bedeutungsindex neu aufbauen oder reparieren.
-- **Regeln über Postfächer hinweg** — verschieben, löschen, kennzeichnen, etikettieren; Zielordner kann auf einem anderen Konto liegen, auch auf einer angehängten `.pst`-/`.ost`-Datei. Import von JSON oder einer älteren `.rwz`-Datei; Export ist JSON.
-- **`.pst` / `.ost` als Postfach öffnen** — Unicode-Persönlicher Store ist schreibbar (Ordner, Flags, Verschieben, Löschen). Ein Offline-Store wird beim ersten Schreiben in ein Unicode-`.pst` kopiert. Zum Lesen der Datei ist kein weiteres Mailprogramm nötig.
+- **Regeln über Postfächer hinweg** — verschieben, löschen, kennzeichnen, etikettieren; der Zielordner kann auf einem anderen Konto liegen, auch auf einem **Ordnerspeicher**. Import von JSON oder einer älteren `.rwz`-Datei; Export ist JSON.
+- **Ordnerspeicher** — Verzeichnis mit `.eml` und eigener `mail.db` anlegen, anhängen, verschieben oder lösen. **PST/OST importieren…** kopiert die Post in einen Speicher; die `.pst` ist kein Postfach. Standardpfad: `%LocalAppData%\Postclient\stores\{Name}` (portabel: `{Installation}/data/stores/{Name}`).
+- **Easy Migration** — **Datei → Easy Migration → Bundle erstellen…** fragt die Passphrase zweimal im selben Fenster, dann Speichern. Das `.postbundle` enthält Post, Konten, Geheimnisse und den gemeinsamen Modellordner. **Bundle öffnen…** stellt es in den Postclient-Ordnern dieses PCs wieder her. Die Hintergrundsync bleibt aus.
+- **Hintergrundsync** — **Einstellungen → Hintergrundsync für dieses Konto…**: ein Dienst beim Start (Windows-Dienst, systemd-Systemunit unter Linux). Er synchronisiert jedes gespeicherte Postfach, ohne dass jemand angemeldet ist.
+- **Spam** — **Als Spam markieren** merkt sich diese Nachricht auf diesem PC und lehrt jedes Postfach, auch nachdem Nachricht oder Postfach weg sind. Ähnliche Post ist nur ein Hinweis. **Kein Spam** löscht diese Erinnerung und legt die Nachricht zurück in den Posteingang. Verschieben nach Junk lehrt den Filter nicht.
 - **Länderpakete** — **Einstellungen → Funktionen** schaltet Italien (PEC, FatturaPA, Fascicolo), Europa (eIDAS-REM), Frankreich, Deutschland, Spanien und die Schweiz ein oder aus. Gewöhnliches IMAP bleibt verfügbar.
 
 ## Zielgruppen
@@ -57,7 +60,7 @@ Das Programm ersetzt den Gestore nicht, stellt keinen qualifizierten Nachweis au
 
 ## Konten und Protokolle
 
-Eingang: **IMAP** (Ordnerbaum), **POP3** (nur Posteingang) oder eine angehängte **`.pst` / `.ost`**. Unicode-`.pst` ist schreibbar. Ausgang: **SMTP**. Verschlüsselung: Auto, SSL/TLS, STARTTLS, STARTTLS falls verfügbar, oder keine. MailKit nutzt die SASL-Verfahren, die der Server anbietet.
+Eingang: **IMAP** (Ordnerbaum), **POP3** (nur Posteingang) oder ein lokaler **Ordnerspeicher**. Eine Unicode-`.pst` lässt sich weiterhin in einen Speicher **importieren**. Ausgang: **SMTP**. Verschlüsselung: Auto, SSL/TLS, STARTTLS, STARTTLS falls verfügbar, oder keine. MailKit nutzt die SASL-Verfahren, die der Server anbietet.
 
 Mehrere Postfächer sind speicherbar. Profile füllen Hosts und Ports:
 
@@ -116,10 +119,10 @@ Systemhinweise erscheinen bei neuer PEC, neuen Ricevute und neuer REM (Windows-T
 ## Lesen, Ordner, Verfassen
 
 - Der Baum folgt dem Server (Posteingang, Ricevute, Entwürfe, Gesendet, Archiv, Junk, Papierkorb, plus eigene Ordner). Verschachtelte IMAP-Pfade erscheinen als Unterordner, auch Gmail-Labels `[Gmail]/…` unter `[Gmail]`. Entwürfe, Gesendet und Papierkorb als `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` stehen neben dem Posteingang, nicht darunter. Gmail trennt mit `/`, daher bleibt ein Label wie `P.IVA` ein Ordner. Systemordner lassen sich nicht löschen. Ordner anlegen, leeren (in den Papierkorb bzw. endgültig im Papierkorb), alles gelesen/ungelesen, eigenen Ordner löschen, Nachrichten auf einen Ordner ziehen. Welche Konten und Unterordner aufgeklappt oder zugeklappt sind, bleibt in `settings.json`.
-- Spalten: ungelesen, Kennzeichnung, Anlagen, Zustellung, Typ (PEC / RIC / REM / SIG), von, Betreff, Datum (lokal `yyyy-MM-dd HH:mm`), Mandatskennzeichen.
+- Spalten: ungelesen, Kennzeichnung, Anlagen, Zustellung, Typ (PEC / RIC / REM / SIG), von, Betreff, Datum (lokal `yyyy-MM-dd HH:mm`), Größe, Mandatskennzeichen.
 - Ansicht: HTML (Web-Engine des Systems), Text, Quelltext oder **FatturaPA**. Layout: Liste über dem Lesen, oder drei Spalten (Ordner, Liste, Lesen).
 - **Unterhaltungen gruppieren** rückt Antworten in der Liste ein (Message-ID / In-Reply-To / References, Tiefe bis 8). PEC-Nachweise zum selben Original stehen beieinander. Es gibt kein eigenes Unterhaltungsfenster.
-- Aktionen: antworten, allen antworten, weiterleiten, in neuem Fenster, gelesen/ungelesen, Kennzeichnung, Priorität, löschen.
+- Aktionen: antworten, allen antworten, weiterleiten, in neuem Fenster, gelesen/ungelesen, Kennzeichnung, Priorität, als Spam markieren, kein Spam, löschen. **Umschalt+Klick** und **Strg+Klick** wählen mehrere Nachrichten oder Ordner. Löschen (Leiste, **Entf**, Ordner leeren) verschiebt die Auswahl in den Papierkorb. Aus dem Papierkorb ist Löschen endgültig.
 - Das Verfassen ist **Klartext**. An, Cc, Bcc sind Adress-Chips. **Anlagen als ZIP senden** packt per Drag-and-Drop übergebene Dateien (optionales Passwort). Der Versand nutzt nur die SMTP-Identität des gewählten Postfachs.
 
 HTML: **WebView2** unter Windows, **WebKitGTK** unter Linux, **WKWebView** unter macOS. Fehlt die Engine, erscheint der Textkörper.
@@ -136,9 +139,9 @@ Fedora: `gtk3 webkit2gtk4.1 libsoup3`.
 
 „Nachrichten abrufen“ indiziert den **gesamten** IMAP-Ordner in SQLite (`mail.db`) plus `.eml` auf der Platte. POP3 füllt nur den Posteingang. Die Indizierung läuft im Hintergrund; die Statusleiste zeigt den Fortschritt.
 
-- **Einstellungen → Indizes…**: Stichwortindex (FTS) und optional EmbeddingGemma 300M (~300 MB) für Bedeutung. Das ONNX-Paket kommt von Hugging Face (`onnx-community/embeddinggemma-300m-ONNX`). Vektoren bleiben in `mail.db` auf diesem PC. Gerät: Auto / CPU / GPU (Windows DirectML). Index neu aufbauen oder reparieren, wenn die Suche falsch wirkt. Die Gewichte unterliegen Googles Gemma-Bedingungen.
+- **Einstellungen → Indizes…**: Stichwortindex (FTS) und optional EmbeddingGemma 300M (~300 MB) für Bedeutung. Das ONNX-Paket wird einmal in den Maschinenordner geladen (`ProgramData\MaksIT\Postclient\models`, unter Linux `/var/lib/maksit/postclient/models`) und von jedem Konto und dem Sync-Dienst geteilt. Vektoren bleiben in `mail.db` auf diesem PC. Gerät: Auto / CPU / GPU (Windows DirectML). Index neu aufbauen oder reparieren, wenn die Suche falsch wirkt. Die Gewichte unterliegen Googles Gemma-Bedingungen. **Spam-Markierungen…** listet, was der Filter gelernt hat.
 
-Die Suche (aktueller Ordner) umfasst Betreff, Text, Anlagentext (PDF sowie text/XML/HTML/CSV/JSON), Mandatskennzeichen und Bedeutung, sobald das Modell bereit ist. Kennzeichen existieren nur auf diesem PC.
+Die Suche (aktueller Ordner) umfasst Betreff, Text, Anlagentext (PDF sowie text/XML/HTML/CSV/JSON), Mandatskennzeichen und Bedeutung, sobald das Modell bereit ist. Das Suchfeld hat ein ×, das den Text löscht. Kennzeichen existieren nur auf diesem PC.
 
 Das Archiv liegt **nur auf diesem PC**. Datei → Archivordner öffnen / Archiv exportieren kopiert `mail.db` und die `.eml`. Pfade:
 
@@ -158,10 +161,17 @@ Das IMAP-**QUOTA** des Gestore (wenn der Server es anbietet) steht in der Status
 |--|--|
 | EML importieren | Originale in den aktuellen Ordner |
 | mbox importieren | Lokale mbox-Stores aus einem Desktop-Mailprofil |
-| `.pst` / `.ost` importieren | Kopiert Mail aus der Datendatei in das **gewählte** IMAP-/POP3-Konto. Verschachtelte Stores in der Datei werden mitimportiert. Schließen Sie jedes Programm, das die Datei geöffnet hält. |
-| Datendatei anhängen | Öffnet eine `.pst` / `.ost` als eigenes Postfach. Unicode-`.pst` ist schreibbar. `.ost` wird nicht am Ort beschrieben — die erste Änderung kopiert sie in ein Unicode-`.pst` neben dem Original. Dateimenü oder Kontotyp *Datendatei*. |
-| Neue Datendatei | Dateimenü: leeres Unicode-`.pst` (Posteingang, Entwürfe, Gesendet, Gelöscht) und als Postfach anhängen. |
-| Regeln | **Einstellungen → Regeln**: **Regeln importieren…** liest den JSON-Export dieser App oder eine ältere `.rwz`-Datei. **Regeln exportieren…** schreibt JSON. Jede Regel gehört zu einem **Konto**; ein Zielordner kann auf einem anderen Postfach liegen (auch einer angehängten Datendatei). Sie laufen beim Abrufen, beim Import und unter **Alle Regeln ausführen**. |
+| `.pst` / `.ost` importieren | Kopiert Outlook-Post **in einen Ordnerspeicher** (vorgeschlagener Pfad unter `stores/` in den App-Daten). Ein erneuter Import in denselben Speicher überspringt Dubletten nach Message-ID. Schließen Sie jedes Programm, das die Datei geöffnet hält. |
+| Neuer Speicher | Dateimenü: leerer Ordner (`Posteingang`, `Entwürfe`, `Gesendet`, `Gelöscht`) mit `postclient.store.json` und `mail.db`. |
+| Speicher anhängen | Dateimenü: Ordner wählen, der schon `postclient.store.json` hat. |
+| Verschieben / lösen | Kopiert das ganze Verzeichnis oder nimmt es aus der Liste. Der Ordner bleibt auf der Platte, wenn er gelöst wird. |
+| Aufbewahrung | **Einstellungen → Aufbewahrung…**: Tage je Ordner (`0` = für immer). Abgelaufene Ordnerpost geht nach dem Abruf in den Papierkorb. Beim Papierkorb behält `0` ihn für immer, eine Tageszahl löscht alten Papierkorb endgültig. |
+| Hintergrundsync | **Einstellungen → Hintergrundsync für dieses Konto…**: Dienst beim Start (Windows-Dienst, systemd-Systemunit unter Linux). Synchronisiert jedes gespeicherte Postfach ohne Anmeldung. **Dieses Konto teilen** lässt nur andere Personen auf diesem PC das Postfach öffnen. |
+| Geteiltes Konto | **Kontoeinstellungen → Dieses Konto mit anderen Benutzern dieses PCs teilen**: das Postfach zieht in den Maschinenordner (`ProgramData\MaksIT\Postclient`, oder `Public`, wenn ProgramData nicht beschreibbar ist; `/var/lib/maksit/postclient` unter Linux; `/Users/Shared/MaksIT/Postclient` unter macOS). Andere Benutzer sehen es, wenn sie Postclient öffnen. Kennwörter werden nicht kopiert. |
+| Easy Migration | **Datei → Easy Migration → Bundle erstellen…** fragt die Passphrase zweimal im selben Fenster, dann Speichern. Das `.postbundle` enthält Post, Konten, Geheimnisse und den gemeinsamen Modellordner. **Bundle öffnen…** stellt es auf diesem PC wieder her und schreibt Speicherpfade um. Die Hintergrundsync bleibt aus. |
+| Spam-Markierungen | **Als Spam markieren** merkt sich diese Nachricht auf diesem PC und lehrt jedes Postfach, auch nachdem Nachricht oder Postfach weg sind. Ähnliche Post ist nur ein Hinweis. **Kein Spam** löscht diese Erinnerung und legt die Nachricht zurück in den Posteingang. Verschieben nach Junk lehrt den Filter nicht. **Einstellungen → Indizes… → Spam-Markierungen…** listet, was gelernt wurde. |
+| Updates und Protokoll | **Hilfe → Nach Updates suchen…** fragt GitHub nach der neuesten Version und kann das Paket für dieses System laden. **Hilfe → Protokoll** öffnet ein kopierbares Fenster über den Protokollordner. **Hilfe → Über Postclient** listet Info, Privacy, Security und Support auf maks-it.com. |
+| Regeln | **Einstellungen → Regeln**: **Regeln importieren…** liest den JSON-Export dieser App oder eine ältere `.rwz`-Datei. **Regeln exportieren…** schreibt JSON. Jede Regel gehört zu einem **Konto**; ein Zielordner kann auf einem anderen Postfach liegen (auch einem Speicher). Sie laufen beim Abrufen, beim Import und unter **Alle Regeln ausführen**. |
 | Drucken | Lesbares HTML der (ggf. ausgepackten) Nachricht |
 | PDF speichern | Derselbe Inhalt als PDF |
 | Anlagen-ZIP | Alle Anlagen der geöffneten Nachricht |

@@ -30,6 +30,11 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.4.1" date="2026-09-27">
+      <description>
+        <p>Create bundle asks for the passphrase and the repeat in one window, then opens Save. About lists Info, Privacy, Security, and Support. A Windows upgrade keeps an existing desktop shortcut and removes a duplicate icon.</p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-09-27">
       <description>
         <p>Background sync starts at boot and syncs every saved mailbox with nobody signed in. Easy Migration writes a passphrase-locked bundle and restores it on another PC. Mark as spam is remembered across mailboxes. Gmail folder reads no longer fail when the mailbox is already open.</p>

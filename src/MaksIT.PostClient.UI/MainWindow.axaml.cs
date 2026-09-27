@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.Controls.ApplicationLifetimes;
 using MaksIT.PostClient.UI.Windows;
 using MaksIT.PostClient.UI.ViewModels;
@@ -661,6 +662,8 @@ public partial class MainWindow : Window {
     if (DataContext is not MainViewModel vm)
       return null;
     var kind = new FilePickerFileType(vm.Copy.EasyMigration) { Patterns = ["*.postbundle"] };
+    Activate();
+    await Dispatcher.UIThread.InvokeAsync(static () => { }, DispatcherPriority.ApplicationIdle);
     if (save) {
       var result = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions {
         Title = vm.Copy.CreateBundle,

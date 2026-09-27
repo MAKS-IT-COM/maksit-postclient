@@ -19,7 +19,13 @@ public partial class AboutViewModel {
 
   public string Credits => AppInfo.Credits;
 
-  public string Email => AppInfo.Email;
+  public AppContact InfoContact => AppInfo.Info;
+
+  public AppContact PrivacyContact => AppInfo.Privacy;
+
+  public AppContact SecurityContact => AppInfo.Security;
+
+  public AppContact SupportContact => AppInfo.Support;
 
   public string License => Copy.AboutLicense;
 
@@ -28,8 +34,11 @@ public partial class AboutViewModel {
   public string Site => AppInfo.Site;
 
   [RelayCommand]
-  private void OpenEmail() =>
-    OpenUrl(AppInfo.EmailUri);
+  private void OpenContact(string? uri) {
+    if (string.IsNullOrWhiteSpace(uri))
+      return;
+    OpenUrl(uri);
+  }
 
   [RelayCommand]
   private void OpenSite() =>

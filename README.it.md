@@ -37,8 +37,11 @@ La posta da scrivania e la webmail trattano di solito una **busta** PEC o una pa
 - **Etichette di pratica su questo PC** — condominio, fascicolo cliente, avviso IMU. Le etichette sono locali, non un database di studio in rete.
 - **Archivio locale di tutta la cartella** — Scarica messaggi memorizza **tutta** la cartella IMAP in `mail.db` più gli `.eml` su disco (non una finestra degli ultimi N). FTS su oggetto, corpo, testo degli allegati PDF/XML/HTML/CSV/JSON e etichette.
 - **Ricerca per significato sul dispositivo (RAG)** — EmbeddingGemma 300M opzionale in **Impostazioni → Indici…**. I vettori restano in `mail.db`. La posta non lascia la macchina. Si possono ricostruire o riparare gli indici per parole e per significato.
-- **Regole tra caselle** — sposta, elimina, flag, etichetta; la cartella di destinazione può stare su un altro account, compreso un file dati `.pst` / `.ost` collegato. Importa JSON o un file `.rwz` legacy; l’export è JSON.
-- **Apre `.pst` / `.ost` come casella** — lo store Unicode è scrivibile (cartelle, flag, sposta, elimina). Un file offline viene copiato in un `.pst` Unicode alla prima scrittura. Non serve un altro programma di posta per leggere il file.
+- **Regole tra caselle** — sposta, elimina, flag, etichetta; la cartella di destinazione può stare su un altro account, compreso un **archivio cartella**. Importa JSON o un file `.rwz` legacy; l’export è JSON.
+- **Archivi cartella** — crea, collega, sposta o sgancia una directory con `.eml` e il proprio `mail.db` (parole e significato). **Importa PST…** copia la posta in un archivio; il `.pst` non diventa una casella. Percorso predefinito: `%LocalAppData%\Postclient\stores\{nome}` (portatile: `{installazione}/data/stores/{nome}`).
+- **Easy Migration** — **File → Easy Migration → Crea bundle…** chiede la passphrase due volte nella stessa finestra, poi Salva. Il `.postbundle` contiene posta, account, segreti e la cartella modelli condivisa. **Apri bundle…** lo ripristina nelle cartelle Postclient di questo PC. La sincronizzazione in background resta spenta.
+- **Sincronizzazione in background** — **Impostazioni → Sincronizzazione in background per questo account…**: un servizio all’avvio (servizio Windows, unità systemd di sistema su Linux). Sincronizza ogni casella salvata senza che nessuno abbia effettuato l’accesso.
+- **Spam** — **Segna come spam** ricorda il messaggio su questo PC e insegna a ogni casella, anche dopo che il messaggio o la casella non ci sono più. La posta simile è solo un indizio. **Non spam** cancella quella memoria e riporta il messaggio in Posta in arrivo. Spostare in Indesiderata non insegna il filtro.
 - **Pacchetti per Paese** — **Impostazioni → Funzionalità** accende o spegne Italia (PEC, FatturaPA, fascicolo), Europa (REM eIDAS), Francia, Germania, Spagna e Svizzera. L’IMAP ordinario resta disponibile.
 
 ## A chi serve
@@ -57,7 +60,7 @@ Il programma non sostituisce il gestore, non emette una ricevuta qualificata e n
 
 ## Account e protocolli
 
-In ingresso: **IMAP** (albero cartelle), **POP3** (solo Posta in arrivo), o un **`.pst` / `.ost`** collegato. I `.pst` Unicode sono scrivibili. In uscita: **SMTP**. Cifratura: automatica, SSL/TLS, STARTTLS, STARTTLS se disponibile, oppure nessuna. MailKit usa i metodi SASL che il server offre.
+In ingresso: **IMAP** (albero cartelle), **POP3** (solo Posta in arrivo), o un **archivio cartella** locale. Un `.pst` Unicode si può ancora **importare** in un archivio. In uscita: **SMTP**. Cifratura: automatica, SSL/TLS, STARTTLS, STARTTLS se disponibile, oppure nessuna. MailKit usa i metodi SASL che il server offre.
 
 Si possono usare più caselle insieme. I profili compilano host e porte:
 
@@ -121,10 +124,10 @@ Le notifiche del sistema segnalano nuove PEC, ricevute e REM (toast Windows, not
 ## Lettura, cartelle, composizione
 
 - L’albero segue il server (Posta in arrivo, Ricevute, Bozze, Inviata, Archivio, Indesiderata, Cestino, più cartelle personalizzate). I percorsi IMAP nidificati sono cartelle nidificate, comprese le etichette Gmail `[Gmail]/…` sotto `[Gmail]`. Bozze, Inviata e Cestino che il server chiama `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` stanno accanto a Posta in arrivo, non sotto. Gmail usa `/` come separatore: un’etichetta come `P.IVA` resta una sola cartella. Le cartelle di sistema non si eliminano. Si può creare una cartella, svuotarla (nel Cestino, o in modo definitivo nel Cestino), segnare tutto letto/non letto, eliminare una cartella personalizzata, trascinare i messaggi su una cartella. Quali account e cartelle nidificate sono aperti o chiusi resta in `settings.json`.
-- Colonne elenco: non letto, stella, allegati, consegna, tipo (PEC / RIC / REM / SIG), da, oggetto, data (locale `yyyy-MM-dd HH:mm`), etichetta di pratica.
+- Colonne elenco: non letto, stella, allegati, consegna, tipo (PEC / RIC / REM / SIG), da, oggetto, data (locale `yyyy-MM-dd HH:mm`), dimensione, etichetta di pratica.
 - Vista: HTML (motore web del sistema), testo, sorgente, o **FatturaPA**. Disposizione: elenco sopra la lettura, oppure tre colonne (cartelle, elenco, lettura).
 - **Raggruppa conversazioni** indenta le risposte nell’elenco (Message-ID / In-Reply-To / References, profondità massima 8). Le ricevute PEC dello stesso originale stanno insieme. Non c’è un riquadro conversazioni separato.
-- Azioni: rispondi, rispondi a tutti, inoltra, apri in nuova finestra, letto/non letto, stella, priorità, elimina.
+- Azioni: rispondi, rispondi a tutti, inoltra, apri in nuova finestra, letto/non letto, stella, priorità, segna come spam, non spam, elimina. **Maiusc+clic** e **Ctrl+clic** selezionano più messaggi o cartelle. Elimina (barra, **Canc**, svuota cartella) sposta la selezione nel Cestino. Dal Cestino l’eliminazione è definitiva.
 - La composizione è **testo semplice**. A, Cc, Ccn sono chip di indirizzo. Gli allegati sono elencati nel compositore. **Invia allegati come ZIP** impacca i file trascinati (password opzionale). L’invio usa solo l’identità SMTP della casella scelta.
 
 HTML: **WebView2** su Windows (profilo sotto la cartella dati), **WebKitGTK** su Linux, **WKWebView** su macOS. Se manca il motore, si vede il corpo di testo.
@@ -141,9 +144,9 @@ Fedora: `gtk3 webkit2gtk4.1 libsoup3`.
 
 Scarica messaggi indica **tutta** la cartella IMAP in SQLite (`mail.db`) più gli `.eml` su disco. POP3 riempie solo la Posta in arrivo. L’indicizzazione gira in background; la barra di stato mostra l’avanzamento.
 
-- **Impostazioni → Indici…**: indice per parole (FTS) e, se vuoi, EmbeddingGemma 300M (~300 MB) per il significato. Il pacchetto ONNX si scarica da Hugging Face (`onnx-community/embeddinggemma-300m-ONNX`). I vettori restano in `mail.db` su questo PC. Dispositivo: Automatico / CPU / GPU (DirectML su Windows). Ricrea o ripara gli indici se la ricerca è storta. I pesi usano i termini Google Gemma.
+- **Impostazioni → Indici…**: indice per parole (FTS) e, se vuoi, EmbeddingGemma 300M (~300 MB) per il significato. Il pacchetto ONNX si scarica una volta nella cartella della macchina (`ProgramData\MaksIT\Postclient\models`, o `/var/lib/maksit/postclient/models` su Linux) ed è condiviso da ogni account e dal servizio di sincronizzazione. I vettori restano in `mail.db` su questo PC. Dispositivo: Automatico / CPU / GPU (DirectML su Windows). Ricrea o ripara gli indici se la ricerca è storta. I pesi usano i termini Google Gemma. **Segni spam…** elenca ciò che il filtro ha imparato.
 
-La ricerca (cartella corrente) copre oggetto, corpo, testo degli allegati (PDF e text/XML/HTML/CSV/JSON), etichette di pratica e il significato quando il modello è pronto. Le etichette esistono solo su questo PC.
+La ricerca (cartella corrente) copre oggetto, corpo, testo degli allegati (PDF e text/XML/HTML/CSV/JSON), etichette di pratica e il significato quando il modello è pronto. La casella di ricerca ha una × che cancella il testo. Le etichette esistono solo su questo PC.
 
 L’archivio è **solo su questo PC**. File → Apri cartella archivio / Esporta archivio copia `mail.db` e gli `.eml`. Percorsi:
 
@@ -155,7 +158,7 @@ L’archivio è **solo su questo PC**. File → Apri cartella archivio / Esporta
 
 Override: `POSTCLIENT_CONFIG` / `POSTCLIENT_DATA_DIR`. Lo zip portatile Windows con `installType: portable` in `settings.json` tiene la config accanto all’eseguibile.
 
-La **QUOTA** IMAP del gestore (se il server la espone) è in barra di stato. È lo spazio della casella presso l’operatore, non uno storage cloud di questa applicazione.
+La **QUOTA** IMAP del gestore (se il server la supporta) è una barra sottile sul nodo di quell’account nell’albero. POP3 mostra lo spazio usato da STAT quando il server non ha un limite. Gli archivi locali non hanno quota. È lo spazio della casella presso l’operatore, non uno storage cloud di questa applicazione.
 
 ## Importazione, esportazione, stampa
 
@@ -166,8 +169,14 @@ La **QUOTA** IMAP del gestore (se il server la espone) è in barra di stato. È 
 | Importa `.pst` / `.ost` | Copia la posta Outlook **in un archivio cartella** (percorso proposto sotto `stores/` nei dati app). Un secondo import nello stesso archivio salta i duplicati per Message-ID. |
 | Nuovo archivio | Menu File: cartella vuota con `postclient.store.json` e `mail.db`. |
 | Collega archivio | Menu File: cartella che ha già `postclient.store.json`. |
-| Conservazione | **Impostazioni → Conservazione…**: giorni per cartella (`0` = per sempre). I messaggi più vecchi si eliminano in modo permanente. |
-| Regole | **Impostazioni → Regole**: **Importa regole…** legge l’export JSON di questa app o un file `.rwz` legacy. **Esporta regole…** scrive JSON. Ogni regola è legata a una **casella**; la cartella di destinazione può stare su un’altra casella (anche un file dati collegato). Partono su Scarica messaggi, in import e da **Esegui tutte le regole**. |
+| Sposta / Sgancia archivio | Copia l’intera directory, oppure la toglie dall’elenco. La cartella resta sul disco quando si sgancia. |
+| Conservazione | **Impostazioni → Conservazione…**: giorni per cartella (`0` = per sempre). Alla scadenza la posta della cartella va nel Cestino dopo Scarica messaggi. Sul Cestino, `0` lo tiene per sempre e un numero di giorni elimina in modo permanente il Cestino più vecchio. |
+| Sincronizzazione in background | **Impostazioni → Sincronizzazione in background per questo account…**: servizio all’avvio (servizio Windows, unità systemd di sistema su Linux). Sincronizza ogni casella salvata senza accesso. **Condividi questo account** fa solo sì che le altre persone su questo PC aprano quella casella. |
+| Account condiviso | **Impostazioni account → Condividi questo account con gli altri utenti di questo PC**: quella casella passa nella cartella della macchina (`ProgramData\MaksIT\Postclient`, o `Public` se ProgramData non è scrivibile; `/var/lib/maksit/postclient` su Linux; `/Users/Shared/MaksIT/Postclient` su macOS). Gli altri utenti la vedono aprendo Postclient. Le password non vengono copiate. |
+| Easy Migration | **File → Easy Migration → Crea bundle…** chiede la passphrase due volte nella stessa finestra, poi Salva. Il `.postbundle` contiene posta, account, segreti e la cartella modelli condivisa. **Apri bundle…** lo ripristina su questo PC e riscrive i percorsi degli archivi. La sincronizzazione in background resta spenta. |
+| Segni spam | **Segna come spam** ricorda il messaggio su questo PC e insegna a ogni casella, anche dopo che il messaggio o la casella non ci sono più. La posta simile è solo un indizio. **Non spam** cancella quella memoria e riporta il messaggio in Posta in arrivo. Spostare in Indesiderata non insegna il filtro. **Impostazioni → Indici… → Segni spam…** elenca ciò che è stato imparato. |
+| Aggiornamenti e registro | **Aiuto → Controlla aggiornamenti…** chiede a GitHub l’ultima release e può scaricare il pacchetto per questo sistema. **Aiuto → Registro** apre una finestra copiabile sulla cartella dei log. **Aiuto → Informazioni su Postclient** elenca Info, Privacy, Security e Support su maks-it.com. |
+| Regole | **Impostazioni → Regole**: **Importa regole…** legge l’export JSON di questa app o un file `.rwz` legacy. **Esporta regole…** scrive JSON. Ogni regola è legata a una **casella**; la cartella di destinazione può stare su un’altra casella (anche un archivio). Partono su Scarica messaggi, in import e da **Esegui tutte le regole**. |
 | Stampa | HTML leggibile del messaggio (eventualmente sbustato) |
 | Salva PDF | Lo stesso contenuto in PDF |
 | Salva allegati ZIP | Tutti gli allegati del messaggio aperto |

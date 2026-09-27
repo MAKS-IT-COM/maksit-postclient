@@ -37,8 +37,11 @@ El correo de escritorio y el webmail tratan de normalmente un **sobre** PEC o un
 - **Etiquetas de expediente en este PC** — comunidad, expediente de cliente, aviso fiscal. Las etiquetas son locales, no una base de despacho en red.
 - **Archivo local de toda la carpeta** — Obtener mensajes guarda **toda la carpeta IMAP** en `mail.db` más `.eml` en disco (no una ventana de los últimos N). FTS de asunto, cuerpo, texto de adjuntos PDF/XML/HTML/CSV/JSON y etiquetas.
 - **Búsqueda por significado en el dispositivo (RAG)** — EmbeddingGemma 300M opcional en **Ajustes → Índices…**. Los vectores quedan en `mail.db`. El correo no sale de la máquina. Reconstruir o reparar índices de palabras y de significado.
-- **Reglas entre buzones** — mover, eliminar, marcar, etiquetar; la carpeta de destino puede estar en otra cuenta, incluido un archivo de datos `.pst` / `.ost` adjunto. Importar JSON o un archivo `.rwz` heredado; la exportación es JSON.
-- **Abrir `.pst` / `.ost` como buzón** — el almacén Unicode es escribible (carpetas, marcas, mover, eliminar). Un almacén sin conexión se copia a un `.pst` Unicode en la primera escritura. No hace falta otro programa de correo para leer el archivo.
+- **Reglas entre buzones** — mover, eliminar, marcar, etiquetar; la carpeta de destino puede estar en otra cuenta, incluido un **almacén de carpetas**. Importar JSON o un archivo `.rwz` heredado; la exportación es JSON.
+- **Almacenes de carpetas** — crear, adjuntar, mover o desconectar una carpeta con `.eml` y su propio `mail.db`. **Importar PST/OST…** copia el correo a un almacén; el `.pst` no es un buzón. Ruta predeterminada: `%LocalAppData%\Postclient\stores\{nombre}` (portátil: `{instalación}/data/stores/{nombre}`).
+- **Easy Migration** — **Archivo → Easy Migration → Crear bundle…** pide la contraseña dos veces en la misma ventana y luego Guardar. El `.postbundle` contiene el correo, las cuentas, los secretos y la carpeta de modelo compartida. **Abrir bundle…** lo restaura en las carpetas de Postclient de este PC. La sincronización en segundo plano sigue apagada.
+- **Sincronización en segundo plano** — **Ajustes → Sincronización en segundo plano para esta cuenta…**: un servicio al arrancar (servicio de Windows, unidad systemd de sistema en Linux). Sincroniza cada buzón guardado sin que nadie haya iniciado sesión.
+- **Spam** — **Marcar como spam** recuerda ese mensaje en este PC y lo enseña a cada buzón, aunque el mensaje o el buzón ya no estén. El correo parecido es solo una pista. **No es spam** borra ese recuerdo y devuelve el mensaje a la bandeja de entrada. Mover a No deseado no enseña el filtro.
 - **Paquetes por país** — **Ajustes → Funciones** activa o desactiva Italia (PEC, FatturaPA, fascículo), Europa (REM eIDAS), Francia, Alemania, España y Suiza. El IMAP ordinario sigue disponible.
 
 ## A quién va dirigido
@@ -57,7 +60,7 @@ El programa no sustituye al gestor, no emite un acuse cualificado y no comparte 
 
 ## Cuentas y protocolos
 
-Entrada: **IMAP** (árbol de carpetas), **POP3** (solo bandeja de entrada) o un **`.pst` / `.ost`** adjunto. El `.pst` Unicode es escribible. Salida: **SMTP**. Cifrado: automático, SSL/TLS, STARTTLS, STARTTLS si está disponible, o ninguno. MailKit usa los métodos SASL que anuncia el servidor.
+Entrada: **IMAP** (árbol de carpetas), **POP3** (solo bandeja de entrada) o un **almacén de carpetas** local. Un `.pst` Unicode todavía se puede **importar** a un almacén. Salida: **SMTP**. Cifrado: automático, SSL/TLS, STARTTLS, STARTTLS si está disponible, o ninguno. MailKit usa los métodos SASL que anuncia el servidor.
 
 Se pueden guardar varios buzones. Los perfiles rellenan hosts y puertos:
 
@@ -116,10 +119,10 @@ Las notificaciones del sistema avisan de PEC, acuses y REM nuevos (toast de Wind
 ## Lectura, carpetas, redacción
 
 - El árbol sigue al servidor (Bandeja de entrada, Ricevute, Borradores, Enviados, Archivo, No deseado, Papelera, más carpetas propias). Las rutas IMAP anidadas se muestran como carpetas anidadas, incluidas las etiquetas de Gmail `[Gmail]/…` bajo `[Gmail]`. Borradores, Enviados y Papelera que el servidor guarda como `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` quedan junto a la bandeja, no debajo. Gmail usa `/` como separador, así que una etiqueta como `P.IVA` sigue siendo una sola carpeta. Las de sistema no se pueden borrar. Se puede crear una carpeta, vaciarla (a Papelera, o de forma definitiva en Papelera), marcar todo leído/no leído, eliminar una carpeta propia y arrastrar mensajes a una carpeta. Qué cuentas y carpetas anidadas están abiertas o cerradas se guarda en `settings.json`.
-- Columnas: no leído, marca, adjuntos, entrega, tipo (PEC / RIC / REM / SIG), de, asunto, fecha (local `yyyy-MM-dd HH:mm`), etiqueta de expediente.
+- Columnas: no leído, marca, adjuntos, entrega, tipo (PEC / RIC / REM / SIG), de, asunto, fecha (local `yyyy-MM-dd HH:mm`), tamaño, etiqueta de expediente.
 - Vista: HTML (motor web del sistema), texto, fuente o **FatturaPA**. Disposición: lista encima de la lectura, o tres columnas (carpetas, lista, lectura).
 - **Agrupar conversaciones** sangra las respuestas en la lista (Message-ID / In-Reply-To / References, profundidad máxima 8). Los acuses PEC del mismo original quedan juntos. No hay un panel de conversación aparte.
-- Acciones: responder, responder a todos, reenviar, abrir en ventana nueva, leído/no leído, marca, prioridad, eliminar.
+- Acciones: responder, responder a todos, reenviar, abrir en ventana nueva, leído/no leído, marca, prioridad, marcar como spam, no es spam, eliminar. **Mayús+clic** y **Ctrl+clic** seleccionan varios mensajes o carpetas. Eliminar (barra, **Supr**, vaciar carpeta) mueve la selección a Papelera. Desde Papelera, eliminar es definitivo.
 - La redacción es **texto sin formato**. Para, Cc, Cco son chips de dirección. **Enviar adjuntos como ZIP** empaqueta los archivos soltados (contraseña opcional). El envío usa solo la identidad SMTP del buzón elegido.
 
 HTML: **WebView2** en Windows, **WebKitGTK** en Linux, **WKWebView** en macOS. Si falta el motor, se muestra el cuerpo de texto.
@@ -136,9 +139,9 @@ Fedora: `gtk3 webkit2gtk4.1 libsoup3`.
 
 «Obtener mensajes» indexa **toda** la carpeta IMAP en SQLite (`mail.db`) más los `.eml` en disco. POP3 solo llena la bandeja de entrada. La indexación corre en segundo plano; la barra de estado muestra el avance.
 
-- **Ajustes → Índices…**: índice de palabras (FTS) y, si se desea, EmbeddingGemma 300M (~300 MB) para el significado. El paquete ONNX se descarga de Hugging Face (`onnx-community/embeddinggemma-300m-ONNX`). Los vectores quedan en `mail.db` en este PC. Dispositivo: Auto / CPU / GPU (DirectML en Windows). Reconstruir o reparar si la búsqueda falla. Los pesos siguen los términos Google Gemma.
+- **Ajustes → Índices…**: índice de palabras (FTS) y, si se desea, EmbeddingGemma 300M (~300 MB) para el significado. El paquete ONNX se descarga una vez en la carpeta de la máquina (`ProgramData\MaksIT\Postclient\models`, o `/var/lib/maksit/postclient/models` en Linux) y lo comparten cada cuenta y el servicio de sincronización. Los vectores quedan en `mail.db` en este PC. Dispositivo: Auto / CPU / GPU (DirectML en Windows). Reconstruir o reparar si la búsqueda falla. Los pesos siguen los términos Google Gemma. **Marcas de spam…** lista lo que el filtro ha aprendido.
 
-La búsqueda (carpeta actual) cubre asunto, cuerpo, texto de adjuntos (PDF y text/XML/HTML/CSV/JSON), etiquetas de expediente y el significado cuando el modelo está listo. Las etiquetas existen solo en este PC.
+La búsqueda (carpeta actual) cubre asunto, cuerpo, texto de adjuntos (PDF y text/XML/HTML/CSV/JSON), etiquetas de expediente y el significado cuando el modelo está listo. El cuadro de búsqueda tiene una × que borra el texto. Las etiquetas existen solo en este PC.
 
 El archivo está **solo en este PC**. Archivo → Abrir carpeta de archivo / Exportar archivo copia `mail.db` y los `.eml`. Rutas:
 
@@ -158,10 +161,17 @@ La **CUOTA** IMAP del gestor (si el servidor la publica) aparece en la barra de 
 |--|--|
 | Importar EML | Originales en la carpeta actual |
 | Importar mbox | Almacenes mbox locales de un perfil de correo de escritorio |
-| Importar `.pst` / `.ost` | Copia el correo del archivo de datos a la cuenta IMAP/POP3 **seleccionada**. Los almacenes anidados en el archivo también se importan. Cierre cualquier programa que tenga el archivo abierto. |
-| Adjuntar archivo de datos | Abre un `.pst` / `.ost` como buzón. El `.pst` Unicode es escribible. El `.ost` no se escribe in situ: el primer cambio lo copia a un `.pst` Unicode junto al original. Menú Archivo o tipo de cuenta *archivo de datos*. |
-| Nuevo archivo de datos | Menú Archivo: crea un `.pst` Unicode vacío (Bandeja de entrada, Borradores, Enviados, Eliminados) y lo adjunta como buzón. |
-| Reglas | **Ajustes → Reglas**: **Importar reglas…** lee la exportación JSON de esta app o un archivo `.rwz` heredado. **Exportar reglas…** escribe JSON. Cada regla está ligada a una **cuenta**; la carpeta de destino puede estar en otro buzón (incluido un archivo de datos adjunto). Se ejecutan al obtener mensajes, al importar y desde **Ejecutar todas las reglas**. |
+| Importar `.pst` / `.ost` | Copia el correo de Outlook **a un almacén de carpetas** (ruta propuesta bajo `stores/` en los datos de la app). Un segundo importado al mismo almacén omite duplicados por Message-ID. Cierre cualquier programa que tenga el archivo abierto. |
+| Almacén nuevo | Menú Archivo: carpeta vacía (`Bandeja de entrada`, `Borradores`, `Enviados`, `Eliminados`) con `postclient.store.json` y `mail.db`. |
+| Adjuntar almacén | Menú Archivo: elegir una carpeta que ya tenga `postclient.store.json`. |
+| Mover / desconectar | Copia todo el directorio, o lo quita de la lista. La carpeta sigue en disco al desconectar. |
+| Retención | **Ajustes → Retención…**: días por carpeta (`0` = para siempre). Al vencer, el correo de la carpeta va a Papelera después de obtener mensajes. En Papelera, `0` la conserva para siempre y un número de días borra de forma permanente la Papelera antigua. |
+| Sincronización en segundo plano | **Ajustes → Sincronización en segundo plano para esta cuenta…**: servicio al arrancar (servicio de Windows, unidad systemd de sistema en Linux). Sincroniza cada buzón guardado sin sesión. **Compartir esta cuenta** solo deja que otras personas de este PC abran ese buzón. |
+| Cuenta compartida | **Ajustes de la cuenta → Compartir esta cuenta con los demás usuarios de este PC**: ese buzón pasa a la carpeta de la máquina (`ProgramData\MaksIT\Postclient`, o `Public` si ProgramData no se puede escribir; `/var/lib/maksit/postclient` en Linux; `/Users/Shared/MaksIT/Postclient` en macOS). Los demás usuarios lo ven al abrir Postclient. Las contraseñas no se copian. |
+| Easy Migration | **Archivo → Easy Migration → Crear bundle…** pide la contraseña dos veces en la misma ventana y luego Guardar. El `.postbundle` contiene el correo, las cuentas, los secretos y la carpeta de modelo compartida. **Abrir bundle…** lo restaura en este PC y reescribe las rutas de los almacenes. La sincronización en segundo plano sigue apagada. |
+| Marcas de spam | **Marcar como spam** recuerda ese mensaje en este PC y lo enseña a cada buzón, aunque el mensaje o el buzón ya no estén. El correo parecido es solo una pista. **No es spam** borra ese recuerdo y devuelve el mensaje a la bandeja de entrada. Mover a No deseado no enseña el filtro. **Ajustes → Índices… → Marcas de spam…** lista lo aprendido. |
+| Actualizaciones y registro | **Ayuda → Buscar actualizaciones…** pregunta a GitHub la última versión y puede descargar el paquete de este sistema. **Ayuda → Registro** abre una ventana copiable sobre la carpeta de registros. **Ayuda → Acerca de Postclient** lista Info, Privacy, Security y Support en maks-it.com. |
+| Reglas | **Ajustes → Reglas**: **Importar reglas…** lee la exportación JSON de esta app o un archivo `.rwz` heredado. **Exportar reglas…** escribe JSON. Cada regla está ligada a una **cuenta**; la carpeta de destino puede estar en otro buzón (incluido un almacén). Se ejecutan al obtener mensajes, al importar y desde **Ejecutar todas las reglas**. |
 | Imprimir | HTML legible del mensaje (opcionalmente desempaquetado) |
 | Guardar PDF | El mismo contenido en PDF |
 | ZIP de adjuntos | Todos los adjuntos del mensaje abierto |

@@ -9,7 +9,11 @@ public class AppInfoTests {
     Assert.Equal("MaksIT", AppInfo.Brand);
     Assert.Equal("Postclient", AppInfo.ProductName);
     Assert.Equal("Maksym Sadovnychyy", AppInfo.Credits);
-    Assert.Equal("maksym.sadovnychyy@gmail.com", AppInfo.Email);
+    Assert.Equal("info@maks-it.com", AppInfo.Info.Address);
+    Assert.Equal("privacy@maks-it.com", AppInfo.Privacy.Address);
+    Assert.Equal("security@maks-it.com", AppInfo.Security.Address);
+    Assert.Equal("support@maks-it.com", AppInfo.Support.Address);
+    Assert.Equal("mailto:support@maks-it.com", AppInfo.Support.Uri);
     Assert.Equal("https://maks-it.com", AppInfo.SiteUri);
     Assert.Equal("Desktop mail client for PEC, REM, and IMAP. Mail stays on this PC.", AppInfo.Summary);
     Assert.Contains(DateTime.UtcNow.Year.ToString(), AppInfo.Copyright, StringComparison.Ordinal);

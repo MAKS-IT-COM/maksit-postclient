@@ -121,10 +121,10 @@ Desktop notices fire for new PEC, ricevute, and REM (Windows toast, macOS notifi
 ## Reading, folders, compose
 
 - Folder tree follows the server (Inbox, Ricevute/Receipts, Drafts, Sent, Archive, Junk, Trash, plus custom folders). Nested IMAP paths show as nested folders, including Gmail’s `[Gmail]/…` labels under `[Gmail]`. Standard folders that the server stores as `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` sit next to Inbox, not under it. Gmail uses `/` as the separator, so a label like `P.IVA` stays one folder. System folders cannot be deleted. You can create a folder, empty one (to Trash, or permanently in Trash), mark all read/unread, delete a custom folder, and drag messages onto a folder. Which accounts and nested folders are expanded or collapsed is kept in `settings.json`.
-- List columns: unread, flag, attachments, delivery, type (PEC / RIC / REM / SIG), from, subject, date (local `yyyy-MM-dd HH:mm`), practice label.
+- List columns: unread, flag, attachments, delivery, type (PEC / RIC / REM / SIG), from, subject, date (local `yyyy-MM-dd HH:mm`), size, practice label.
 - View: HTML (OS web engine), plain text, raw source, or **FatturaPA**. Layout: list above reading, or three columns (folders, list, reading).
 - **Group conversations** indents replies in the folder list using Message-ID / In-Reply-To / References (depth up to 8). PEC ricevute that share the same original sit together. There is no separate conversation pane.
-- Message actions: reply, reply all, forward, open in a new window, read/unread, flag, priority, delete.
+- Message actions: reply, reply all, forward, open in a new window, read/unread, flag, priority, mark as spam, not spam, delete. **Shift+click** and **Ctrl+click** select several messages or folders. Delete (toolbar, **Del**, empty folder) moves the selection to Trash. Deleting from Trash is permanent.
 - Compose is **plain text**. To, Cc, Bcc are address chips. Attachments are listed on the composer. **Send attachments as ZIP** packs dropped files (optional password). Send uses the selected mailbox’s SMTP identity only.
 
 HTML uses the OS engine: **WebView2** on Windows (profile under the data folder), **WebKitGTK** on Linux, **WKWebView** on macOS. If the engine is missing, the text body is shown instead.
@@ -143,7 +143,7 @@ Get Messages indexes the **whole IMAP folder** into a local SQLite store (`mail.
 
 - **Settings → Indices…**: keyword index (FTS) plus optional EmbeddingGemma 300M (~300 MB) meaning index. The ONNX package downloads once into the machine folder (`ProgramData\MaksIT\Postclient\models`, or `/var/lib/maksit/postclient/models` on Linux) and is shared by every account and the sync service. Vectors stay in `mail.db` on this PC. Device: Auto / CPU / GPU (Windows DirectML). Rebuild or repair if search looks wrong. Weights use Google’s Gemma Terms.
 
-Search (current folder) covers subject, body, attachment text (PDF and text/XML/HTML/CSV/JSON), practice labels, and meaning when the model is ready. Labels exist only on this PC.
+Search (current folder) covers subject, body, attachment text (PDF and text/XML/HTML/CSV/JSON), practice labels, and meaning when the model is ready. The search box has an × that clears the text. Labels exist only on this PC.
 
 The archive is **only on this PC**. File → Open archive folder / Export archive copies `mail.db` and the `.eml` files. Paths:
 
@@ -170,6 +170,9 @@ IMAP **QUOTA** from the gestore (when the server supports it) is a thin bar on t
 | Retention | **Settings → Retention…**: days per folder (`0` = forever). Expired folder mail is moved to Trash after Get Messages. On Trash, `0` keeps it forever and a number of days permanently deletes older Trash. |
 | Background sync | **Settings → Background sync**: a boot-time service (Windows service, Linux system systemd unit). It syncs every saved mailbox with nobody signed in. **Share this account** only lets other people on this PC open that mailbox. |
 | Shared account | **Account settings → Share this account with other users on this PC**: that mailbox moves to the machine folder (`ProgramData\MaksIT\Postclient`, or `Public` when ProgramData is not writable; `/var/lib/maksit/postclient` on Linux; `/Users/Shared/MaksIT/Postclient` on macOS). Other users see it when they open Postclient. Passwords are not copied. |
+| Easy Migration | **File → Easy Migration → Create bundle…** asks for a passphrase twice in one window, then Save. The `.postbundle` holds mail, accounts, secrets, and the shared model folder. **Open bundle…** restores it into this PC’s Postclient folders and rewrites store paths. Background sync stays off until you turn it on here. |
+| Spam marks | **Mark as spam** remembers that message on this PC and teaches every mailbox, even after the message or mailbox is gone. Similar mail is only a hint. **Not spam** drops that memory and returns the message to Inbox. Moving mail into Junk does not teach the filter. **Settings → Indices… → Spam marks…** lists what was learned. |
+| Updates and logs | **Help → Check for updates…** asks GitHub for the latest release and can download the package for this system. **Help → Logs** opens a copyable window over the app log folder. **Help → About** lists Info, Privacy, Security, and Support at maks-it.com. |
 | Rules | **Settings → Rules**: **Import rules…** reads this app’s JSON export or a legacy `.rwz` file. **Export rules…** writes JSON. Each rule is bound to an **account**; a move folder can live on another mailbox (including a store). They run on Get Messages, on import, and from **Run all rules**. |
 | Print | Readable HTML of the (optionally unwrapped) message |
 | Save PDF | Same content as a PDF |

@@ -21,6 +21,12 @@ public partial class PromptWindow : Window {
     window.ValueBox.PlaceholderText = request.Placeholder;
     window.ValueBox.PasswordChar = request.Password ? '●' : '\0';
     window.ValueBox.IsVisible = !request.ConfirmOnly;
+    window._repeat = request.RepeatPassword;
+    window._requiredMessage = request.RequiredMessage;
+    window._mismatchMessage = request.MismatchMessage;
+    window.RepeatLabel.Text = request.RepeatMessage;
+    window.RepeatLabel.IsVisible = request.RepeatPassword;
+    window.RepeatBox.IsVisible = request.RepeatPassword;
     if (!request.ConfirmOnly)
       window.ValueBox.Focus();
     await window.ShowDialog(owner);
@@ -28,12 +34,38 @@ public partial class PromptWindow : Window {
   }
 
   private bool _accepted;
+  private bool _repeat;
   private string? _value;
+  private string _requiredMessage = "";
+  private string _mismatchMessage = "";
 
   private void OnOkClick(object? sender, RoutedEventArgs e) {
+    var value = ValueBox.IsVisible ? ValueBox.Text ?? "" : "";
+    if (_repeat) {
+      if (string.IsNullOrWhiteSpace(value)) {
+        ShowError(_requiredMessage);
+        ValueBox.Focus();
+        return;
+      }
+
+      if (!string.Equals(value, RepeatBox.Text ?? "", StringComparison.Ordinal)) {
+        ShowError(_mismatchMessage);
+        RepeatBox.Focus();
+        return;
+      }
+    }
+
     _accepted = true;
-    _value = ValueBox.IsVisible ? ValueBox.Text ?? "" : "";
+    _value = value;
     Close();
+  }
+
+  private void OnValueChanged(object? sender, TextChangedEventArgs e) =>
+    ErrorText.IsVisible = false;
+
+  private void ShowError(string message) {
+    ErrorText.Text = message;
+    ErrorText.IsVisible = !string.IsNullOrWhiteSpace(message);
   }
 
   private void OnCancelClick(object? sender, RoutedEventArgs e) {

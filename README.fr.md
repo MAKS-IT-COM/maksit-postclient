@@ -37,8 +37,11 @@ La messagerie de bureau et le webmail traitent en général une **enveloppe** PE
 - **Étiquettes de dossier sur cet ordinateur** — copropriété, dossier client, avis fiscal. Les étiquettes sont locales, pas une base de cabinet en réseau.
 - **Archive locale du dossier entier** — Get Messages stocke **tout le dossier IMAP** dans `mail.db` plus les `.eml` sur disque (pas une fenêtre des N derniers). FTS sur objet, corps, texte des pièces PDF/XML/HTML/CSV/JSON et étiquettes.
 - **Recherche de sens sur l’appareil (RAG)** — EmbeddingGemma 300M optionnel dans **Paramètres → Indices…**. Les vecteurs restent dans `mail.db`. Le courrier ne quitte pas la machine. Reconstruire ou réparer les indices mot-clé et sens.
-- **Règles entre boîtes** — déplacer, supprimer, marquer, étiqueter ; le dossier cible peut vivre sur un autre compte, y compris un fichier `.pst` / `.ost` attaché. Import JSON ou fichier `.rwz` historique ; l’export est JSON.
-- **Ouvrir un `.pst` / `.ost` comme boîte** — le magasin Unicode est inscriptible (dossiers, drapeaux, déplacement, suppression). Un magasin hors ligne est copié vers un `.pst` Unicode à la première écriture. Aucun autre programme de messagerie n’est requis pour lire le fichier.
+- **Règles entre boîtes** — déplacer, supprimer, marquer, étiqueter ; le dossier cible peut vivre sur un autre compte, y compris un **magasin de dossiers**. Import JSON ou fichier `.rwz` historique ; l’export est JSON.
+- **Magasins de dossiers** — créer, attacher, déplacer ou détacher un dossier qui contient les `.eml` et son propre `mail.db`. **Importer PST/OST…** copie le courrier dans un magasin ; le `.pst` n’est pas une boîte. Chemin par défaut : `%LocalAppData%\Postclient\stores\{nom}` (portable : `{installation}/data/stores/{nom}`).
+- **Easy Migration** — **Fichier → Easy Migration → Créer un bundle…** demande la passphrase deux fois dans la même fenêtre, puis Enregistrer. Le `.postbundle` contient le courrier, les comptes, les secrets et le dossier de modèle partagé. **Ouvrir un bundle…** le restaure dans les dossiers Postclient de ce PC. La synchro en arrière-plan reste arrêtée.
+- **Synchro en arrière-plan** — **Paramètres → Synchro en arrière-plan pour ce compte…** : un service au démarrage (service Windows, unité systemd système sous Linux). Il synchronise chaque boîte enregistrée sans personne connectée.
+- **Spam** — **Marquer comme spam** retient ce message sur ce PC et l’enseigne à chaque boîte, même après la disparition du message ou de la boîte. Le courrier semblable n’est qu’un indice. **Pas du spam** efface cette mémoire et renvoie le message dans la boîte de réception. Déplacer vers Indésirable n’enseigne pas le filtre.
 - **Packs pays** — **Paramètres → Fonctionnalités** active ou désactive l’Italie (PEC, FatturaPA, fascicule), l’Europe (REM eIDAS), la France, l’Allemagne, l’Espagne et la Suisse. L’IMAP ordinaire reste disponible.
 
 ## Public
@@ -57,7 +60,7 @@ Le programme ne remplace pas le gestionnaire, n’émet pas d’accusé qualifi�
 
 ## Comptes et protocoles
 
-Entrée : **IMAP** (arborescence), **POP3** (boîte de réception seulement) ou un **`.pst` / `.ost`** attaché. Le `.pst` Unicode est inscriptible. Sortie : **SMTP**. Chiffrement : auto, SSL/TLS, STARTTLS, STARTTLS si disponible, ou aucun. MailKit utilise les méthodes SASL annoncées par le serveur.
+Entrée : **IMAP** (arborescence), **POP3** (boîte de réception seulement) ou un **magasin de dossiers** local. Un `.pst` Unicode peut encore être **importé** dans un magasin. Sortie : **SMTP**. Chiffrement : auto, SSL/TLS, STARTTLS, STARTTLS si disponible, ou aucun. MailKit utilise les méthodes SASL annoncées par le serveur.
 
 Plusieurs boîtes peuvent être enregistrées. Les profils remplissent hôtes et ports :
 
@@ -116,10 +119,10 @@ Les notifications système signalent les nouvelles PEC, avis et REM (toast Windo
 ## Lecture, dossiers, rédaction
 
 - L’arbre suit le serveur (Boîte de réception, Ricevute, Brouillons, Envoyés, Archive, Indésirable, Corbeille, plus dossiers personnalisés). Les chemins IMAP imbriqués apparaissent comme des dossiers imbriqués, y compris les libellés Gmail `[Gmail]/…` sous `[Gmail]`. Brouillons, Envoyés et Corbeille nommés `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` restent à côté de la boîte de réception, pas en dessous. Gmail utilise `/` comme séparateur : un libellé tel que `P.IVA` reste un seul dossier. Les dossiers système ne se suppriment pas. On peut créer un dossier, le vider (vers la Corbeille, ou définitivement dans la Corbeille), tout marquer lu/non lu, supprimer un dossier personnalisé, glisser des messages sur un dossier. L’état ouvert ou fermé des comptes et des dossiers imbriqués est conservé dans `settings.json`.
-- Colonnes : non lu, drapeau, pièces jointes, livraison, type (PEC / RIC / REM / SIG), de, objet, date (locale `yyyy-MM-dd HH:mm`), étiquette de dossier.
+- Colonnes : non lu, drapeau, pièces jointes, livraison, type (PEC / RIC / REM / SIG), de, objet, date (locale `yyyy-MM-dd HH:mm`), taille, étiquette de dossier.
 - Vue : HTML (moteur web du système), texte, source, ou **FatturaPA**. Disposition : liste au-dessus de la lecture, ou trois colonnes (dossiers, liste, lecture).
 - **Grouper les conversations** indente les réponses dans la liste (Message-ID / In-Reply-To / References, profondeur max. 8). Les avis PEC du même original restent ensemble. Il n’y a pas de volet conversation séparé.
-- Actions : répondre, répondre à tous, transférer, ouvrir dans une nouvelle fenêtre, lu/non lu, drapeau, priorité, supprimer.
+- Actions : répondre, répondre à tous, transférer, ouvrir dans une nouvelle fenêtre, lu/non lu, drapeau, priorité, marquer comme spam, pas du spam, supprimer. **Maj+clic** et **Ctrl+clic** sélectionnent plusieurs messages ou dossiers. Supprimer (barre, **Suppr**, vider le dossier) envoie la sélection à la Corbeille. Depuis la Corbeille, la suppression est définitive.
 - La rédaction est en **texte brut**. À, Cc, Cci sont des pastilles d’adresse. **Envoyer les pièces en ZIP** archive les fichiers déposés (mot de passe optionnel). L’envoi n’utilise que l’identité SMTP de la boîte choisie.
 
 HTML : **WebView2** sous Windows, **WebKitGTK** sous Linux, **WKWebView** sous macOS. Sans moteur, le corps texte s’affiche.
@@ -136,9 +139,9 @@ Fedora : `gtk3 webkit2gtk4.1 libsoup3`.
 
 « Get Messages » indexe **tout** le dossier IMAP dans SQLite (`mail.db`) plus les `.eml` sur disque. POP3 ne remplit que la boîte de réception. L’indexation tourne en arrière-plan ; la barre d’état indique l’avancement.
 
-- **Paramètres → Indices…** : index mot-clé (FTS) et, en option, EmbeddingGemma 300M (~300 Mo) pour le sens. Le paquet ONNX se télécharge depuis Hugging Face (`onnx-community/embeddinggemma-300m-ONNX`). Les vecteurs restent dans `mail.db` sur cet ordinateur. Périphérique : Auto / CPU / GPU (DirectML sous Windows). Reconstruire ou réparer si la recherche est fausse. Les poids suivent les conditions Google Gemma.
+- **Paramètres → Indices…** : index mot-clé (FTS) et, en option, EmbeddingGemma 300M (~300 Mo) pour le sens. Le paquet ONNX se télécharge une fois dans le dossier de la machine (`ProgramData\MaksIT\Postclient\models`, ou `/var/lib/maksit/postclient/models` sous Linux) et est partagé par chaque compte et par le service de synchro. Les vecteurs restent dans `mail.db` sur cet ordinateur. Périphérique : Auto / CPU / GPU (DirectML sous Windows). Reconstruire ou réparer si la recherche est fausse. Les poids suivent les conditions Google Gemma. **Marques de spam…** liste ce que le filtre a appris.
 
-La recherche (dossier courant) couvre objet, corps, texte des pièces (PDF et text/XML/HTML/CSV/JSON), étiquettes et le sens lorsque le modèle est prêt. Les étiquettes n’existent que sur ce PC.
+La recherche (dossier courant) couvre objet, corps, texte des pièces (PDF et text/XML/HTML/CSV/JSON), étiquettes et le sens lorsque le modèle est prêt. La zone de recherche a une × qui efface le texte. Les étiquettes n’existent que sur ce PC.
 
 L’archive est **uniquement sur cet ordinateur**. Fichier → Ouvrir le dossier d’archive / Exporter l’archive copie `mail.db` et les `.eml`. Emplacements :
 
@@ -158,10 +161,17 @@ Le **QUOTA** IMAP du gestionnaire (si le serveur le publie) apparaît dans la ba
 |--|--|
 | Importer EML | Originaux dans le dossier courant |
 | Importer mbox | Magasins mbox locaux issus d’un profil de messagerie de bureau |
-| Importer `.pst` / `.ost` | Copie le courrier du fichier de données dans le compte IMAP/POP3 **sélectionné**. Les magasins imbriqués dans le fichier sont importés aussi. Fermez tout programme qui a le fichier ouvert. |
-| Attacher un fichier de données | Ouvre un `.pst` / `.ost` comme boîte. Le `.pst` Unicode est inscriptible. L’`.ost` n’est pas écrit sur place — le premier changement le copie vers un `.pst` Unicode à côté de l’original. Menu Fichier ou type de compte *fichier de données*. |
-| Nouveau fichier de données | Menu Fichier : crée un `.pst` Unicode vide (Boîte de réception, Brouillons, Envoyés, Supprimés) et l’attache comme boîte. |
-| Règles | **Paramètres → Règles** : **Importer des règles…** lit l’export JSON de cette appli ou un fichier `.rwz` historique. **Exporter des règles…** écrit du JSON. Chaque règle est liée à un **compte** ; le dossier cible peut vivre sur une autre boîte (y compris un fichier de données attaché). Elles s’exécutent à la récupération, à l’import et via **Exécuter toutes les règles**. |
+| Importer `.pst` / `.ost` | Copie le courrier Outlook **dans un magasin de dossiers** (chemin proposé sous `stores/` dans les données de l’appli). Un second import dans le même magasin ignore les doublons par Message-ID. Fermez tout programme qui a le fichier ouvert. |
+| Nouveau magasin | Menu Fichier : dossier vide (`Boîte de réception`, `Brouillons`, `Envoyés`, `Supprimés`) avec `postclient.store.json` et `mail.db`. |
+| Attacher un magasin | Menu Fichier : choisir un dossier qui a déjà `postclient.store.json`. |
+| Déplacer / détacher | Copie tout le dossier, ou le retire de la liste. Le dossier reste sur le disque une fois détaché. |
+| Rétention | **Paramètres → Rétention…** : jours par dossier (`0` = toujours). À l’échéance, le courrier du dossier va à la Corbeille après la récupération. Sur la Corbeille, `0` la garde toujours et un nombre de jours supprime définitivement l’ancienne Corbeille. |
+| Synchro en arrière-plan | **Paramètres → Synchro en arrière-plan pour ce compte…** : service au démarrage (service Windows, unité systemd système sous Linux). Synchronise chaque boîte enregistrée sans connexion. **Partager ce compte** permet seulement aux autres personnes de ce PC d’ouvrir cette boîte. |
+| Compte partagé | **Paramètres du compte → Partager ce compte avec les autres utilisateurs de ce PC** : cette boîte passe dans le dossier de la machine (`ProgramData\MaksIT\Postclient`, ou `Public` si ProgramData n’est pas inscriptible ; `/var/lib/maksit/postclient` sous Linux ; `/Users/Shared/MaksIT/Postclient` sous macOS). Les autres utilisateurs la voient en ouvrant Postclient. Les mots de passe ne sont pas copiés. |
+| Easy Migration | **Fichier → Easy Migration → Créer un bundle…** demande la passphrase deux fois dans la même fenêtre, puis Enregistrer. Le `.postbundle` contient le courrier, les comptes, les secrets et le dossier de modèle partagé. **Ouvrir un bundle…** le restaure sur ce PC et réécrit les chemins des magasins. La synchro en arrière-plan reste arrêtée. |
+| Marques de spam | **Marquer comme spam** retient ce message sur ce PC et l’enseigne à chaque boîte, même après la disparition du message ou de la boîte. Le courrier semblable n’est qu’un indice. **Pas du spam** efface cette mémoire et renvoie le message dans la boîte de réception. Déplacer vers Indésirable n’enseigne pas le filtre. **Paramètres → Indices… → Marques de spam…** liste ce qui a été appris. |
+| Mises à jour et journal | **Aide → Rechercher des mises à jour…** interroge GitHub pour la dernière version et peut télécharger le paquet de ce système. **Aide → Journal** ouvre une fenêtre copiable sur le dossier des journaux. **Aide → À propos de Postclient** liste Info, Privacy, Security et Support sur maks-it.com. |
+| Règles | **Paramètres → Règles** : **Importer des règles…** lit l’export JSON de cette appli ou un fichier `.rwz` historique. **Exporter des règles…** écrit du JSON. Chaque règle est liée à un **compte** ; le dossier cible peut vivre sur une autre boîte (y compris un magasin). Elles s’exécutent à la récupération, à l’import et via **Exécuter toutes les règles**. |
 | Imprimer | HTML lisible du message (éventuellement désenveloppé) |
 | Enregistrer PDF | Le même contenu en PDF |
 | ZIP des pièces | Toutes les pièces du message ouvert |

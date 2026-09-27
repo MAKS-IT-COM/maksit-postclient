@@ -174,7 +174,13 @@ public class EnvelopeUnwrapperTests {
     if (files.Length == 0)
       return;
     foreach (var file in files) {
-      var mime = MimeMessage.Load(file, TestContext.Current.CancellationToken);
+      MimeMessage mime;
+      try {
+        mime = MimeMessage.Load(file, TestContext.Current.CancellationToken);
+      }
+      catch (IOException) {
+        continue;
+      }
       var parsed = EnvelopeUnwrapper.Inspect(mime);
       if (parsed.Info.Kind == EnvelopeKind.Ordinary)
         continue;

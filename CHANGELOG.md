@@ -6,6 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-27
+
+Create bundle asks for the passphrase once, then opens Save. About lists the company contacts. A Windows upgrade keeps the desktop shortcut that is already there.
+
+### Changed
+
+- **Help → About** lists Info, Privacy, Security, and Support (`info@`, `privacy@`, `security@`, `support@maks-it.com`) instead of one personal address.
+- The English, Italian, French, German, and Spanish READMEs describe folder stores, Easy Migration, background sync, spam marks, and the current menus.
+
+### Fixed
+
+- **File → Easy Migration → Create bundle…** asks for the passphrase and the repeat in one window. The save dialog opens after that window closes.
+- Windows setup keeps an existing desktop shortcut when the checkbox is off on upgrade. Installing the shortcut removes a second desktop icon, including the "(2)" copy.
+
 ## [0.4.0] - 2026-09-27
 
 Background sync runs at boot with nobody signed in. Easy Migration packs this PC into a passphrase-locked bundle. Marked spam is remembered across mailboxes, and Gmail folder reads stay on the open mailbox.

@@ -1070,26 +1070,14 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var pass = await PromptRequested(new PromptRequest {
       Title = Copy.EasyMigration,
       Message = Copy.EasyMigrationPassphrase,
-      Password = true
+      Password = true,
+      RepeatPassword = true,
+      RepeatMessage = Copy.EasyMigrationConfirmPassphrase,
+      RequiredMessage = Copy.EasyMigrationPassphraseRequired,
+      MismatchMessage = Copy.EasyMigrationPassphraseMismatch
     });
-    if (pass is null)
+    if (string.IsNullOrWhiteSpace(pass))
       return;
-    if (string.IsNullOrWhiteSpace(pass)) {
-      Status = Copy.EasyMigrationPassphraseRequired;
-      return;
-    }
-
-    var again = await PromptRequested(new PromptRequest {
-      Title = Copy.EasyMigration,
-      Message = Copy.EasyMigrationConfirmPassphrase,
-      Password = true
-    });
-    if (again is null)
-      return;
-    if (!string.Equals(pass, again, StringComparison.Ordinal)) {
-      Status = Copy.EasyMigrationPassphraseMismatch;
-      return;
-    }
 
     var path = await PickBundleRequested(true);
     if (string.IsNullOrWhiteSpace(path))
@@ -5209,6 +5197,14 @@ public sealed class PromptRequest {
   public string Placeholder { get; init; } = "";
 
   public bool Password { get; init; }
+
+  public bool RepeatPassword { get; init; }
+
+  public string RepeatMessage { get; init; } = "";
+
+  public string RequiredMessage { get; init; } = "";
+
+  public string MismatchMessage { get; init; } = "";
 
   public bool ConfirmOnly { get; init; }
 
