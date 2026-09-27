@@ -209,6 +209,19 @@
     <Setter Property="Margin" Value="0" />
     <Setter Property="MinHeight" Value="26" />
   </Style>
+  <Style Selector="Button.search-clear">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="MinWidth" Value="22" />
+    <Setter Property="Foreground" Value="#8AB4D0" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.search-clear:pointerover">
+    <Setter Property="Foreground" Value="#E8F4FC" />
+  </Style>
   <Style Selector="Border.message-header">
     <Setter Property="Background" Value="#15191e" />
     <Setter Property="Padding" Value="14,12" />

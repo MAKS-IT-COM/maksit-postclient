@@ -1,6 +1,7 @@
 global using MaksIT.PostClient.Client.Auth;
 global using MaksIT.PostClient.Client.Import;
 global using MaksIT.PostClient.Client.Mail;
+global using MaksIT.PostClient.Client.Upgrades;
 global using MaksIT.PostClient.Client.Mime;
 global using MaksIT.PostClient.Client.Search;
 global using MaksIT.PostClient.Client.Update;
@@ -12,4 +13,5 @@ global using MaksIT.PostClient.Shared.Content;
 global using MaksIT.PostClient.Shared.Envelope;
 global using MaksIT.PostClient.Shared.Localization;
 global using MaksIT.PostClient.Shared.Mail;
+global using MaksIT.PostClient.Shared.Upgrades;
 global using MaksIT.PostClient.Shared.Search;

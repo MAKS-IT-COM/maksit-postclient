@@ -87,6 +87,7 @@ public class AppPathsTests {
     Assert.Contains("Postclient", AppPaths.ConfigDirectory(), StringComparison.OrdinalIgnoreCase);
     Assert.EndsWith("webview", AppPaths.WebViewDirectory(), StringComparison.OrdinalIgnoreCase);
     Assert.EndsWith("models", AppPaths.ModelsDirectory(), StringComparison.OrdinalIgnoreCase);
+    Assert.StartsWith(SharedMailPaths.Root(), AppPaths.ModelsDirectory(), StringComparison.OrdinalIgnoreCase);
   }
 
   [Fact]
@@ -111,8 +112,8 @@ public class AppPathsTests {
     try {
       File.WriteAllText(source, """{"Configuration":{"Mailboxes":[{"Id":"keep"}]}}""");
       File.WriteAllText(dest, """{"Configuration":{"Mailboxes":[]}}""");
-      AppPaths.AdoptSettingsIfEmpty(source, dest);
-      Assert.Equal(1, AppPaths.MailboxCount(dest));
+      WindowsProfileLayoutUpgrade.AdoptSettingsIfEmpty(source, dest);
+      Assert.Equal(1, WindowsProfileLayoutUpgrade.MailboxCount(dest));
     }
     finally {
       Directory.Delete(dir, true);
@@ -171,7 +172,7 @@ public class AppPathsTests {
     Directory.CreateDirectory(dest);
     try {
       File.WriteAllText(Path.Combine(source, "session"), "hub");
-      AppPaths.MergeMissingDirectory(Path.Combine(dir, "old", "webview"), dest);
+      WindowsProfileLayoutUpgrade.MergeMissingDirectory(Path.Combine(dir, "old", "webview"), dest);
       Assert.True(File.Exists(Path.Combine(dest, "hub", "session")));
     }
     finally {

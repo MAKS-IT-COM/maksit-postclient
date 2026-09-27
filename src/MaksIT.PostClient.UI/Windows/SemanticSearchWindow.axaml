@@ -84,6 +84,18 @@
                    Classes="hint"
                    TextWrapping="Wrap" />
 
+        <TextBlock Text="{Binding Copy.SpamFilter}" Classes="kicker" />
+        <TextBlock Text="{Binding Copy.SpamFilterHint}"
+                   Classes="hint"
+                   TextWrapping="Wrap" />
+        <CheckBox Content="{Binding Copy.SpamFilter}"
+                  IsChecked="{Binding SpamFilter}"
+                  IsEnabled="{Binding !IsWorking}" />
+        <Button Content="{Binding Copy.SpamMarks}"
+                Classes="mail-tool"
+                HorizontalAlignment="Left"
+                Click="OnSpamMarksClick" />
+
         <TextBlock Text="{Binding Copy.IndicesSanitize}" Classes="kicker" />
         <TextBlock Text="{Binding Copy.IndicesSanitizeHint}"
                    Classes="hint"

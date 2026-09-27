@@ -64,6 +64,13 @@
         </Grid>
         <TextBox PlaceholderText="{Binding Copy.DisplayName}" Text="{Binding EditorName}" />
         <TextBox PlaceholderText="{Binding Copy.Address}" Text="{Binding EditorAddress}" />
+        <CheckBox Content="{Binding Copy.ShareAccount}"
+                  IsChecked="{Binding EditorShareAccount}"
+                  IsVisible="{Binding ShowServerFields}" />
+        <TextBlock Text="{Binding ShareAccountLocation}"
+                   Classes="hint"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding ShowServerFields}" />
         <TextBox PlaceholderText="{Binding Copy.Username}" Text="{Binding EditorUsername}" IsVisible="{Binding ShowServerFields}" />
         <TextBlock Text="{Binding OauthHint}" Classes="hint" TextWrapping="Wrap" IsVisible="{Binding ShowAuthHint}" />
         <Button Content="{Binding Copy.SignInGoogle}"

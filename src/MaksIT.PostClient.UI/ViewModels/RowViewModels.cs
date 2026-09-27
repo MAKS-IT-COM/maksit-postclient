@@ -294,6 +294,37 @@ public sealed class MessageRowViewModel : ObservableObject {
   public string FlagTip =>
     Header.IsFlagged ? UiLocale.Copy.Flagged : UiLocale.Copy.NotFlagged;
 
+  public bool MarkedSpam { get; private set; }
+
+  public bool SpamHintVisible { get; private set; }
+
+  public string SpamMark =>
+    MarkedSpam ? "⚠" : "";
+
+  public string SpamTip =>
+    MarkedSpam ? UiLocale.Copy.SpamMarkedTip : UiLocale.Copy.MarkSpam;
+
+  public string SpamHint =>
+    SpamHintVisible ? UiLocale.Copy.SpamHint : "";
+
+  public string SpamHintMark =>
+    SpamHintVisible ? "!" : "";
+
+  public int SpamSort =>
+    MarkedSpam ? 0 : 1;
+
+  public void SetSpam(bool marked, bool hint) {
+    MarkedSpam = marked;
+    SpamHintVisible = hint;
+    OnPropertyChanged(nameof(MarkedSpam));
+    OnPropertyChanged(nameof(SpamHintVisible));
+    OnPropertyChanged(nameof(SpamMark));
+    OnPropertyChanged(nameof(SpamTip));
+    OnPropertyChanged(nameof(SpamHint));
+    OnPropertyChanged(nameof(SpamHintMark));
+    OnPropertyChanged(nameof(SpamSort));
+  }
+
   public string DeliveryMark =>
     ReceiptStatus.Mark(Header.DeliveryStatus);
 

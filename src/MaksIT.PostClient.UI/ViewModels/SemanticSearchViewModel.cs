@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,18 +10,31 @@ namespace MaksIT.PostClient.UI.ViewModels;
 public sealed partial class SemanticSearchViewModel : ObservableObject {
   private readonly ConfigurationFileService _files;
   private readonly ISemanticSearchService _semantic;
+  private readonly Func<IReadOnlyList<SpamListItem>>? _examples;
+  private readonly Action<SpamListItem>? _deleteExample;
+  private readonly Func<SpamListItem, Task>? _notSpamExample;
   private int _statusPosted;
 
-  public SemanticSearchViewModel(ConfigurationFileService files, ISemanticSearchService semantic) {
+  public SemanticSearchViewModel(
+    ConfigurationFileService files,
+    ISemanticSearchService semantic,
+    Func<IReadOnlyList<SpamListItem>>? examples = null,
+    Action<SpamListItem>? deleteExample = null,
+    Func<SpamListItem, Task>? notSpamExample = null) {
     _files = files;
     _semantic = semantic;
+    _examples = examples;
+    _deleteExample = deleteExample;
+    _notSpamExample = notSpamExample;
     var settings = files.Current.Semantic ?? new SemanticSearchSettings();
     settings.Normalize();
     enabled = settings.Enabled;
     device = settings.Device;
+    spamFilter = settings.SpamFilter;
     status = semantic.StatusLine;
     modelFilesReady = EmbeddingModelSpec.FilesLookReady();
     RefreshStats();
+    ReloadExamples();
     semantic.Changed += OnChanged;
   }
 
@@ -38,6 +52,11 @@ public sealed partial class SemanticSearchViewModel : ObservableObject {
 
   [ObservableProperty]
   private bool enabled;
+
+  [ObservableProperty]
+  private bool spamFilter;
+
+  public ObservableCollection<SpamListItem> Examples { get; } = [];
 
   [ObservableProperty]
   private string device = SemanticDevice.Auto;
@@ -91,6 +110,7 @@ public sealed partial class SemanticSearchViewModel : ObservableObject {
     var configuration = _files.Current;
     configuration.Semantic ??= new SemanticSearchSettings();
     configuration.Semantic.Enabled = Enabled;
+    configuration.Semantic.SpamFilter = SpamFilter;
     configuration.Semantic.Device = SemanticDevice.Normalize(Device);
     configuration.Semantic.Normalize();
     _files.Save(configuration);
@@ -170,6 +190,7 @@ public sealed partial class SemanticSearchViewModel : ObservableObject {
       stats.MeaningRows,
       stats.MeaningPending,
       stats.Orphans);
+    ReloadExamples();
   }
 
   partial void OnIsWorkingChanged(bool value) =>
@@ -177,6 +198,33 @@ public sealed partial class SemanticSearchViewModel : ObservableObject {
 
   partial void OnEnabledChanged(bool value) =>
     Persist();
+
+  partial void OnSpamFilterChanged(bool value) =>
+    Persist();
+
+  [RelayCommand]
+  private void DeleteExample(SpamListItem? item) {
+    if (item is null)
+      return;
+    _deleteExample?.Invoke(item);
+    ReloadExamples();
+  }
+
+  [RelayCommand]
+  private async Task NotSpamExampleAsync(SpamListItem? item) {
+    if (item is null || _notSpamExample is null)
+      return;
+    await _notSpamExample(item);
+    ReloadExamples();
+  }
+
+  public void ReloadExamples() {
+    Examples.Clear();
+    if (_examples is null)
+      return;
+    foreach (var item in _examples())
+      Examples.Add(item);
+  }
 
   partial void OnDeviceChanged(string value) {
     OnPropertyChanged(nameof(IsAuto));

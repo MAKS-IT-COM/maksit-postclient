@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
+Background sync runs at boot with nobody signed in. Easy Migration packs this PC into a passphrase-locked bundle. Marked spam is remembered across mailboxes, and Gmail folder reads stay on the open mailbox.
+
+### Added
+
+- **File → Easy Migration** writes a `.postbundle` locked with a passphrase (mail, accounts, secrets, and the shared model folder). **Open bundle…** restores it into this PC’s Postclient folders and rewrites store paths. The background sync service is not reinstalled.
+- The message search box has an × that clears the text.
+- **Settings → Background sync** installs a boot-time service (Windows service as Local Service, Linux systemd system unit). It syncs every saved mailbox with nobody signed in. Passwords are copied into the machine store so the service can sign in to the mail servers. **Share this account** only lets other people on this PC open that mailbox.
+- **Mark as spam** remembers that message on this PC and teaches every mailbox, even after the message or mailbox is gone. Similar mail is only a hint. **Not spam** drops that memory and returns the message to Inbox. Moving mail into Junk does not teach the filter. **Settings → Indices… → Spam marks…** lists what was learned.
+- The meaning-search model lives in the same machine folder (`models` under ProgramData or `/var/lib/maksit/postclient`), so every account and the sync service share one download. An existing copy in the user profile is copied across on startup.
+- Layout upgrades live in `Upgrades` (folders, models, archive files, PST stores). Each one records `InstallsOver`, the last release that still has the old layout, so it can be removed once that version is no longer supported. SQL schema stays with the archive store.
+
+### Fixed
+
+- Gmail no longer fails with `UNSELECT not allowed now`. Reading a mailbox that is already open stays on that selection, and folder changes switch by opening another mailbox instead of sending `UNSELECT`.
+- Gmail OAuth no longer fails with `UID FETCH not allowed now`. Gmail can leave the selected state while the client still treats the folder as open, so each read selects the mailbox again and retries the fetch once if Gmail has dropped it.
+- Sorting, keyword indexing, and meaning search take turns in small slices. A folder fetch still pauses them so they do not share the mailbox connection.
+
 ## [0.3.8] - 2026-09-21
 
 HTML mail opens without a WebView2 crash dialog. The message list shows each item's size.

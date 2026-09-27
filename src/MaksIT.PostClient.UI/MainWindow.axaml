@@ -48,6 +48,10 @@
         <Separator />
         <MenuItem Header="{Binding Copy.OpenArchiveFolder}" Command="{Binding OpenArchiveFolderCommand}" />
         <MenuItem Header="{Binding Copy.ExportArchive}" Command="{Binding ExportArchiveCommand}" />
+        <MenuItem Header="{Binding Copy.EasyMigration}">
+          <MenuItem Header="{Binding Copy.CreateBundle}" Command="{Binding CreateBundleCommand}" />
+          <MenuItem Header="{Binding Copy.OpenBundle}" Command="{Binding OpenBundleCommand}" />
+        </MenuItem>
         <Separator />
         <MenuItem Header="{Binding Copy.Exit}" Click="OnExitClick" />
       </MenuItem>
@@ -131,6 +135,7 @@
         <MenuItem Header="{Binding Copy.SemanticSearch}" Command="{Binding OpenSemanticSearchCommand}" />
         <MenuItem Header="{Binding Copy.Retention}" Command="{Binding OpenRetentionCommand}" />
         <MenuItem Header="{Binding Copy.Features}" Command="{Binding OpenFeaturesCommand}" />
+        <MenuItem Header="{Binding BackgroundSyncLabel}" Command="{Binding ToggleBackgroundSyncCommand}" />
       </MenuItem>
       <MenuItem Header="{Binding Copy.Help}">
         <MenuItem Header="{Binding Copy.CheckUpdates}" Command="{Binding CheckForUpdatesCommand}" />
@@ -260,7 +265,15 @@
                         ToolTip.Tip="{Binding Copy.LabelTip}" />
               </StackPanel>
               <TextBox PlaceholderText="{Binding Copy.SearchPlaceholder}"
-                       Text="{Binding MessageFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                       Text="{Binding MessageFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                <TextBox.InnerRightContent>
+                  <Button Classes="search-clear"
+                          Content="×"
+                          Command="{Binding ClearMessageFilterCommand}"
+                          IsVisible="{Binding HasMessageFilter}"
+                          ToolTip.Tip="{Binding Copy.ClearSearch}" />
+                </TextBox.InnerRightContent>
+              </TextBox>
             </DockPanel>
           </Border>
           <DataGrid x:Name="MessagesGrid"
@@ -288,6 +301,8 @@
                 <MenuItem Header="{Binding Copy.MarkRead}" Command="{Binding MarkReadCommand}" />
                 <MenuItem Header="{Binding Copy.MarkUnread}" Command="{Binding MarkUnreadCommand}" />
                 <MenuItem Header="{Binding Copy.FlagToggle}" Command="{Binding ToggleFlagCommand}" />
+                <MenuItem Header="{Binding Copy.MarkSpam}" Command="{Binding MarkSpamCommand}" />
+                <MenuItem Header="{Binding Copy.MarkNotSpam}" Command="{Binding MarkNotSpamCommand}" />
                 <MenuItem Header="{Binding Copy.Priority}">
                   <MenuItem Header="{Binding Copy.PriorityHigh}" Command="{Binding SetPriorityCommand}" CommandParameter="high" />
                   <MenuItem Header="{Binding Copy.PriorityNormal}" Command="{Binding SetPriorityCommand}" CommandParameter="normal" />
@@ -306,6 +321,29 @@
                       <TextBlock Text="{Binding UnreadMark}"
                                  HorizontalAlignment="Center"
                                  VerticalAlignment="Center" />
+                    </Border>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="⚠" Tag="Spam" Width="28" MinWidth="28" CanUserSort="True" SortMemberPath="SpamSort">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Border Classes="cell-tip" ToolTip.Tip="{Binding SpamTip}">
+                      <TextBlock Text="{Binding SpamMark}"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center" />
+                    </Border>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+              <DataGridTemplateColumn Header="?" Tag="SpamHint" Width="22" MinWidth="22">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <Border Classes="cell-tip" ToolTip.Tip="{Binding SpamHint}">
+                      <TextBlock Text="{Binding SpamHintMark}"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center"
+                                 FontSize="10" />
                     </Border>
                   </DataTemplate>
                 </DataGridTemplateColumn.CellTemplate>

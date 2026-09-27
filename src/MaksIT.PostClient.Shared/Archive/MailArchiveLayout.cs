@@ -13,6 +13,8 @@ public static class MailArchiveLayout {
     ArgumentNullException.ThrowIfNull(account);
     if (account.IsLocalStore && !string.IsNullOrWhiteSpace(account.StorePath))
       return Path.Combine(account.StorePath, "mail.db");
+    if (!account.IsLocalStore && File.Exists(SharedMailPaths.AccountFile(account.Id)))
+      return Path.Combine(SharedMailPaths.AccountDirectory(account.Id), "mail.db");
     var store = BoundStore(account, mailboxes);
     if (store is not null)
       return Path.Combine(store.StorePath, "accounts", account.Id, "mail.db");
@@ -23,6 +25,8 @@ public static class MailArchiveLayout {
     ArgumentNullException.ThrowIfNull(account);
     if (account.IsLocalStore && !string.IsNullOrWhiteSpace(account.StorePath))
       return account.StorePath;
+    if (!account.IsLocalStore && File.Exists(SharedMailPaths.AccountFile(account.Id)))
+      return SharedMailPaths.AccountDirectory(account.Id);
     var store = BoundStore(account, mailboxes);
     if (store is not null)
       return Path.Combine(store.StorePath, "accounts", account.Id);

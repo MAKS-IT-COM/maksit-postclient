@@ -26,7 +26,7 @@ public sealed class MailWorkerHost : IDisposable {
     var files = new ConfigurationFileService();
     files.Current.EnsureDefaults();
     using var archive = new MailArchiveCatalog();
-    MailArchiveCatalog.MigrateLegacy(files.Current.Mailboxes);
+    LegacyArchiveUpgrade.Apply(files.Current.Mailboxes);
     archive.OpenAll(files.Current.Mailboxes);
     using var host = new MailWorkerHost(archive, files);
     var pipe = args.Length > 1 ? args[1] : "postclient-worker";
@@ -275,12 +275,21 @@ public sealed class MailWorkerClient : IDisposable {
     }
   }
 
-  public void Dispose() {
-    _inline?.Dispose();
-    _writer?.Dispose();
-    _reader?.Dispose();
-    _pipe?.Dispose();
+  public void Release() {
+    lock (_gate) {
+      _inline?.Dispose();
+      _inline = null;
+      _writer?.Dispose();
+      _reader?.Dispose();
+      _pipe?.Dispose();
+      _writer = null;
+      _reader = null;
+      _pipe = null;
+    }
   }
+
+  public void Dispose() =>
+    Release();
 
   private void Ensure() {
     if (_inline is not null || _writer is not null)

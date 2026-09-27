@@ -9,10 +9,20 @@ namespace MaksIT.PostClient.Shared.Auth;
 
 public sealed class FileSecretStore : ISecretStore {
   private readonly string _path;
+  private readonly DataProtectionScope _scope;
   private readonly Lock _gate = new();
 
-  public FileSecretStore(string? path = null) {
+  /// <summary>Secrets protected for the current user.</summary>
+  public static FileSecretStore OpenUser(string path) =>
+    new(path);
+
+  /// <summary>Secrets protected for this machine, so the sync service can read them.</summary>
+  public static FileSecretStore OpenMachine(string path) =>
+    new(path, DataProtectionScope.LocalMachine);
+
+  public FileSecretStore(string? path = null, DataProtectionScope scope = DataProtectionScope.CurrentUser) {
     _path = string.IsNullOrWhiteSpace(path) ? AppPaths.SecretsFile() : path;
+    _scope = scope;
   }
 
   public Result Put(string key, string secret) {
@@ -64,6 +74,29 @@ public sealed class FileSecretStore : ISecretStore {
   public static string OAuthClientSecretKey(string? authKind) =>
     "oauth-client-secret:" + MailAuthKind.Normalize(authKind);
 
+  public Dictionary<string, string> ExportPlain() {
+    lock (_gate) {
+      var plain = new Dictionary<string, string>(StringComparer.Ordinal);
+      foreach (var pair in Load())
+        plain[pair.Key] = Unprotect(pair.Value);
+      return plain;
+    }
+  }
+
+  public void ImportPlain(IReadOnlyDictionary<string, string> plain) {
+    ArgumentNullException.ThrowIfNull(plain);
+    lock (_gate) {
+      var map = new Dictionary<string, string>(StringComparer.Ordinal);
+      foreach (var pair in plain) {
+        if (string.IsNullOrWhiteSpace(pair.Key))
+          continue;
+        map[pair.Key] = Protect(pair.Value ?? "");
+      }
+
+      Save(map);
+    }
+  }
+
   public static int MergeMissingKeys(string sourcePath, string destPath) {
     var source = ReadMap(sourcePath);
     if (source.Count == 0)
@@ -110,17 +143,17 @@ public sealed class FileSecretStore : ISecretStore {
       File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
   }
 
-  private static string Protect(string secret) {
+  private string Protect(string secret) {
     var bytes = Encoding.UTF8.GetBytes(secret);
     if (OperatingSystem.IsWindows())
-      bytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
+      bytes = ProtectedData.Protect(bytes, null, _scope);
     return Convert.ToBase64String(bytes);
   }
 
-  private static string Unprotect(string packed) {
+  private string Unprotect(string packed) {
     var bytes = Convert.FromBase64String(packed);
     if (OperatingSystem.IsWindows())
-      bytes = ProtectedData.Unprotect(bytes, null, DataProtectionScope.CurrentUser);
+      bytes = ProtectedData.Unprotect(bytes, null, _scope);
     return Encoding.UTF8.GetString(bytes);
   }
 }

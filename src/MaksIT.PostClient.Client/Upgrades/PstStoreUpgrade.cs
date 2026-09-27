@@ -1,10 +1,15 @@
+namespace MaksIT.PostClient.Client.Upgrades;
 
 
-namespace MaksIT.PostClient.Client.Import;
+/// <summary>
+/// Turns a mailbox that still points at an Outlook data file into a folder store.
+/// <see cref="InstallsOver"/> is the last release that kept PST paths as mailboxes.
+/// Delete this type once installs of that version are no longer supported.
+/// </summary>
+public static class PstStoreUpgrade {
+  public static Version InstallsOver => new(0, 2, 0);
 
-
-public static class PstStoreMigrator {
-  public static int Migrate(ConfigurationFileService files, MailArchiveCatalog archive) {
+  public static int Apply(ConfigurationFileService files, MailArchiveCatalog archive) {
     ArgumentNullException.ThrowIfNull(files);
     ArgumentNullException.ThrowIfNull(archive);
     var configuration = files.Current;

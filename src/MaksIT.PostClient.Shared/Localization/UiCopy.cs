@@ -14,6 +14,14 @@ public sealed partial class UiCopy {
 
   public string FeaturesHint { get; init; } = "";
 
+  public string BackgroundSyncRegister { get; init; } = "";
+
+  public string BackgroundSyncRemove { get; init; } = "";
+
+  public string BackgroundSyncRegistered { get; init; } = "";
+
+  public string BackgroundSyncRemoved { get; init; } = "";
+
   public string Feature { get; init; } = "";
 
   public string SemanticSearch { get; init; } = "";
@@ -21,6 +29,26 @@ public sealed partial class UiCopy {
   public string SemanticSearchHint { get; init; } = "";
 
   public string SemanticSearchEnabled { get; init; } = "";
+
+  public string SpamFilter { get; init; } = "";
+
+  public string SpamFilterHint { get; init; } = "";
+
+  public string SpamExamples { get; init; } = "";
+
+  public string SpamMarks { get; init; } = "";
+
+  public string SpamGone { get; init; } = "";
+
+  public string MarkSpam { get; init; } = "";
+
+  public string MarkNotSpam { get; init; } = "";
+
+  public string SpamHint { get; init; } = "";
+
+  public string SpamMarkedTip { get; init; } = "";
+
+  public string SpamNoJunk { get; init; } = "";
 
   public string SemanticDevice { get; init; } = "";
 
@@ -176,6 +204,32 @@ public sealed partial class UiCopy {
 
   public string ExportArchive { get; init; } = "";
 
+  public string EasyMigration { get; init; } = "";
+
+  public string CreateBundle { get; init; } = "";
+
+  public string OpenBundle { get; init; } = "";
+
+  public string EasyMigrationPassphrase { get; init; } = "";
+
+  public string EasyMigrationUnlock { get; init; } = "";
+
+  public string EasyMigrationConfirmPassphrase { get; init; } = "";
+
+  public string EasyMigrationPassphraseRequired { get; init; } = "";
+
+  public string EasyMigrationPassphraseMismatch { get; init; } = "";
+
+  public string EasyMigrationReplace { get; init; } = "";
+
+  public string EasyMigrationCreated { get; init; } = "";
+
+  public string EasyMigrationRestored { get; init; } = "";
+
+  public string EasyMigrationWrongPassphrase { get; init; } = "";
+
+  public string EasyMigrationLocked { get; init; } = "";
+
   public string NewAccount { get; init; } = "";
 
   public string AccountSettings { get; init; } = "";
@@ -272,6 +326,8 @@ public sealed partial class UiCopy {
 
   public string SearchPlaceholder { get; init; } = "";
 
+  public string ClearSearch { get; init; } = "";
+
   public string Label { get; init; } = "";
 
   public string LabelTip { get; init; } = "";
@@ -343,6 +399,10 @@ public sealed partial class UiCopy {
   public string RemoveAccount { get; init; } = "";
 
   public string AccountHint { get; init; } = "";
+
+  public string ShareAccount { get; init; } = "";
+
+  public string ShareAccountHint { get; init; } = "";
 
   public string DisplayName { get; init; } = "";
 
@@ -618,11 +678,25 @@ public sealed partial class UiCopy {
       Help = "_Help",
       Logs = "_Logs",
       Features = "_Features…",
+      BackgroundSyncRegister = "Background _sync for this account…",
+      BackgroundSyncRemove = "Stop background _sync…",
+      BackgroundSyncRegistered = "Background sync is a service on this PC. It starts at boot and syncs every mailbox with nobody signed in.",
+      BackgroundSyncRemoved = "Background sync was removed for this account.",
       FeaturesHint = "Certified-mail packs only. Ordinary mail (IMAP/POP3, search, labels, imports) stays on. Header checkboxes turn a whole country on or off. Italy is PEC and FatturaPA; Europe is eIDAS REM. France, Germany, Spain, and Switzerland add operator evidence labels — those networks are usually not IMAP.",
       Feature = "Feature",
       SemanticSearch = "_Indices…",
       SemanticSearchHint = "Keyword index (FTS) and optional meaning index (RAG) on this PC. EmbeddingGemma 300M (~300 MB) comes from Hugging Face (onnx-community). It is not on the GitHub release. Mail never leaves the machine. Rebuild or repair if search looks wrong.",
       SemanticSearchEnabled = "Enable meaning index (RAG)",
+      SpamFilter = "Learn spam from messages I mark",
+      SpamFilterHint = "A message you mark as spam is remembered on this PC and teaches every mailbox, even after you delete it or remove the mailbox. Similar mail is only a hint. Not spam removes that memory and returns the message to Inbox. Moving mail into Junk does not teach the filter.",
+      SpamExamples = "Spam marks",
+      SpamMarks = "Spam marks…",
+      SpamGone = "Message is no longer in the archive",
+      MarkSpam = "Mark as spam",
+      MarkNotSpam = "Not spam",
+      SpamHint = "Looks like spam",
+      SpamMarkedTip = "Marked as spam",
+      SpamNoJunk = "There is no Junk folder on this mailbox. The mark was saved.",
       SemanticDevice = "Device",
       SemanticDeviceAuto = "Auto",
       SemanticDeviceCpu = "CPU",
@@ -698,6 +772,19 @@ public sealed partial class UiCopy {
       PstPathRequired = "Choose an existing .pst or .ost file.",
       OpenArchiveFolder = "Open archive folder",
       ExportArchive = "Export archive…",
+      EasyMigration = "Easy Migration",
+      CreateBundle = "Create bundle…",
+      OpenBundle = "Open bundle…",
+      EasyMigrationPassphrase = "Choose a passphrase. You will type it again on the other PC. It locks the whole file, including mailbox passwords.",
+      EasyMigrationUnlock = "Type the passphrase for this bundle.",
+      EasyMigrationConfirmPassphrase = "Type the passphrase again.",
+      EasyMigrationPassphraseRequired = "A passphrase is required.",
+      EasyMigrationPassphraseMismatch = "The passphrases do not match.",
+      EasyMigrationReplace = "This PC already has Postclient data. Replace it with the bundle? Mail, accounts, and settings on this PC will be overwritten.",
+      EasyMigrationCreated = "Bundle saved to {0}.",
+      EasyMigrationRestored = "Bundle restored. Background sync stays off until you turn it on for this PC.",
+      EasyMigrationWrongPassphrase = "Wrong passphrase.",
+      EasyMigrationLocked = "A file is in use. Close other Postclient windows and stop background sync, then try again.",
       NewAccount = "New Account…",
       AccountSettings = "Account Settings…",
       Exit = "E_xit",
@@ -746,6 +833,7 @@ public sealed partial class UiCopy {
       MoveTo = "Move To",
       Folders = "Folders",
       SearchPlaceholder = "Search subject, body, attachments, labels, meaning",
+      ClearSearch = "Clear search",
       Label = "Label",
       LabelTip = "Practice label on this PC only. Not a shared studio table.",
       Unread = "Unread",
@@ -782,6 +870,8 @@ public sealed partial class UiCopy {
       SaveAccount = "Save Account",
       RemoveAccount = "Remove Account",
       AccountHint = "Gmail and Outlook use OAuth when you Sign in. Italian PEC and EU QTSP mailboxes fill IMAP/SMTP. Other accounts use IMAP/POP3 and a password (DPAPI on Windows, mode 600 on Linux).",
+      ShareAccount = "Share this account with other users on this PC",
+      ShareAccountHint = "Other people on this PC can open this mailbox. The sync service already keeps every mailbox in {0}, with or without this box checked.",
       DisplayName = "Display name",
       Address = "Address",
       Username = "Username (if different)",
@@ -890,11 +980,25 @@ public sealed partial class UiCopy {
       Help = "_Aiuto",
       Logs = "_Registro",
       Features = "_Funzionalità…",
+      BackgroundSyncRegister = "Sincronizzazione in _background per questo account…",
+      BackgroundSyncRemove = "Ferma la sincronizzazione in _background…",
+      BackgroundSyncRegistered = "La sincronizzazione in background è un servizio di questo PC. Parte all'avvio e sincronizza ogni casella senza che nessuno abbia effettuato l'accesso.",
+      BackgroundSyncRemoved = "La sincronizzazione in background è stata rimossa per questo account.",
       FeaturesHint = "Solo posta certificata. La posta ordinaria (IMAP/POP3, ricerca, etichette, import) resta sempre disponibile. Le caselle in intestazione accendono o spengono un intero Paese. Italia è PEC e FatturaPA; Europa è REM eIDAS. Francia, Germania, Spagna e Svizzera aggiungono etichette di evidenza — quelle reti di solito non sono IMAP.",
       Feature = "Funzione",
       SemanticSearch = "_Indici…",
       SemanticSearchHint = "Indice per parole (FTS) e, se vuoi, indice per significato (RAG) su questo PC. EmbeddingGemma 300M (~300 MB) arriva da Hugging Face (onnx-community). Non è nel release GitHub. La posta non esce dalla macchina. Ricrea o ripara gli indici se la ricerca è storta.",
       SemanticSearchEnabled = "Attiva indice per significato (RAG)",
+      SpamFilter = "Impara lo spam dai messaggi che segno",
+      SpamFilterHint = "Un messaggio segnato come spam resta su questo PC e insegna a tutte le caselle, anche dopo la cancellazione o se elimini la casella. La posta simile è solo un suggerimento. Non spam toglie quel ricordo e riporta il messaggio in arrivo. Spostare in Posta indesiderata non insegna nulla al filtro.",
+      SpamExamples = "Segni spam",
+      SpamMarks = "Segni spam…",
+      SpamGone = "Il messaggio non è più nell'archivio",
+      MarkSpam = "Segna come spam",
+      MarkNotSpam = "Non spam",
+      SpamHint = "Sembra spam",
+      SpamMarkedTip = "Segnato come spam",
+      SpamNoJunk = "Questa casella non ha la cartella Posta indesiderata. Il segno è stato salvato.",
       SemanticDevice = "Dispositivo",
       SemanticDeviceAuto = "Automatico",
       SemanticDeviceCpu = "CPU",
@@ -970,6 +1074,19 @@ public sealed partial class UiCopy {
       PstPathRequired = "Scegli un file .pst o .ost esistente.",
       OpenArchiveFolder = "Apri cartella archivio",
       ExportArchive = "Esporta archivio…",
+      EasyMigration = "Easy Migration",
+      CreateBundle = "Crea bundle…",
+      OpenBundle = "Apri bundle…",
+      EasyMigrationPassphrase = "Scegli una passphrase. La ridigiterai sull’altro PC. Blocca l’intero file, password delle caselle comprese.",
+      EasyMigrationUnlock = "Scrivi la passphrase di questo bundle.",
+      EasyMigrationConfirmPassphrase = "Riscrivi la passphrase.",
+      EasyMigrationPassphraseRequired = "Serve una passphrase.",
+      EasyMigrationPassphraseMismatch = "Le passphrase non coincidono.",
+      EasyMigrationReplace = "Questo PC ha già dati di Postclient. Sostituirli con il bundle? Posta, account e impostazioni di questo PC verranno sovrascritti.",
+      EasyMigrationCreated = "Bundle salvato in {0}.",
+      EasyMigrationRestored = "Bundle ripristinato. La sincronizzazione in background resta spenta finché non la riattivi su questo PC.",
+      EasyMigrationWrongPassphrase = "Passphrase errata.",
+      EasyMigrationLocked = "Un file è in uso. Chiudi le altre finestre di Postclient e ferma la sincronizzazione in background, poi riprova.",
       NewAccount = "Nuovo account…",
       AccountSettings = "Impostazioni account…",
       Exit = "E_sci",
@@ -1018,6 +1135,7 @@ public sealed partial class UiCopy {
       MoveTo = "Sposta in",
       Folders = "Cartelle",
       SearchPlaceholder = "Cerca oggetto, corpo, allegati, etichette, significato",
+      ClearSearch = "Cancella ricerca",
       Label = "Etichetta",
       LabelTip = "Etichetta di pratica solo su questo PC. Non è una tabella di studio condivisa.",
       Unread = "Non letto",
@@ -1054,6 +1172,8 @@ public sealed partial class UiCopy {
       SaveAccount = "Salva account",
       RemoveAccount = "Rimuovi account",
       AccountHint = "Gmail e Outlook usano OAuth con Accedi. PEC italiane e caselle QTSP UE compilano IMAP/SMTP. Gli altri account usano IMAP/POP3 e una password (DPAPI su Windows, mode 600 su Linux).",
+      ShareAccount = "Condividi questo account con gli altri utenti di questo PC",
+      ShareAccountHint = "Le altre persone su questo PC possono aprire questa casella. Il servizio di sync tiene già ogni casella in {0}, con o senza questa opzione.",
       DisplayName = "Nome visualizzato",
       Address = "Indirizzo",
       Username = "Nome utente (se diverso)",

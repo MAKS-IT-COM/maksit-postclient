@@ -11,6 +11,16 @@ internal static class Program {
   public static void Main(string[] args) {
     AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandled;
     TaskScheduler.UnobservedTaskException += OnUnobservedTask;
+    if (MailSyncHost.IsSyncProcess(args)) {
+      try {
+        Environment.Exit(MailSyncHost.Run(args));
+      }
+      catch (Exception ex) {
+        ErrorReport.Capture(ex);
+        Environment.Exit(1);
+      }
+    }
+
     if (MailWorkerHost.IsWorkerProcess(args)) {
       try {
         Environment.Exit(MailWorkerHost.Run(args));

@@ -16,6 +16,10 @@ public interface ISemanticSearchService : IDisposable {
 
   void Start();
 
+  void ReleaseModel();
+
+  void ResumeModel();
+
   void NotifySettingsChanged();
 
   void Wake();

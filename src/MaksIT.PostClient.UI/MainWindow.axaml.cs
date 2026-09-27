@@ -80,6 +80,7 @@ public partial class MainWindow : Window {
     viewModel.LogsRequested += OnLogsRequested;
     viewModel.AccountSaved += OnAccountSaved;
     viewModel.ExportArchiveRequested += OnExportArchive;
+    viewModel.PickBundleRequested += OnPickBundle;
     viewModel.ExportFascicoloRequested += OnExportFascicolo;
     viewModel.ImportEmlRequested += OnImportEml;
     viewModel.ImportPstRequested += OnImportPst;
@@ -130,6 +131,8 @@ public partial class MainWindow : Window {
     foreach (var column in MessagesGrid.Columns) {
       column.Header = (column.Tag as string) switch {
         "Unread" => HeaderGlyph("●", copy.Unread),
+        "Spam" => HeaderGlyph("⚠", copy.MarkSpam),
+        "SpamHint" => HeaderGlyph("?", copy.SpamHint),
         "Flag" => HeaderGlyph("★", copy.Flag),
         "Priority" => HeaderGlyph("!", copy.Priority),
         "Attachments" => HeaderGlyph("📎", copy.Attachments),
@@ -302,7 +305,12 @@ public partial class MainWindow : Window {
     if (DataContext is not MainViewModel vm || _files is null)
       return;
     var window = new SemanticSearchWindow {
-      DataContext = new SemanticSearchViewModel(_files, vm.SemanticSearch),
+      DataContext = new SemanticSearchViewModel(
+        _files,
+        vm.SemanticSearch,
+        vm.SpamExamples,
+        vm.DeleteSpamExample,
+        vm.NotSpamExampleAsync),
       WindowStartupLocation = WindowStartupLocation.CenterOwner
     };
     await window.ShowDialog(this);
@@ -647,6 +655,30 @@ public partial class MainWindow : Window {
         CommandParameter = folder
       });
     }
+  }
+
+  private async Task<string?> OnPickBundle(bool save) {
+    if (DataContext is not MainViewModel vm)
+      return null;
+    var kind = new FilePickerFileType(vm.Copy.EasyMigration) { Patterns = ["*.postbundle"] };
+    if (save) {
+      var result = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions {
+        Title = vm.Copy.CreateBundle,
+        DefaultExtension = "postbundle",
+        SuggestedFileName = "Postclient-" + DateTime.Now.ToString("yyyyMMdd") + ".postbundle",
+        FileTypeChoices = [kind]
+      });
+      return result?.TryGetLocalPath();
+    }
+
+    var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions {
+      Title = vm.Copy.OpenBundle,
+      AllowMultiple = false,
+      FileTypeFilter = [kind, FilePickerFileTypes.All]
+    });
+    if (files.Count == 0)
+      return null;
+    return files[0].TryGetLocalPath();
   }
 
   private async void OnExportArchive() {

@@ -4,7 +4,7 @@ using Microsoft.Data.Sqlite;
 namespace MaksIT.PostClient.Shared.Archive;
 
 
-public sealed class MailArchiveStore : IDisposable {
+public sealed partial class MailArchiveStore : IDisposable {
   private readonly SqliteConnection _db;
   private readonly Lock _gate = new();
 
@@ -1265,10 +1265,27 @@ public sealed class MailArchiveStore : IDisposable {
         dims INTEGER NOT NULL,
         vector BLOB NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS spam_examples (
+        fingerprint TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        from_addr TEXT NOT NULL DEFAULT '',
+        subject TEXT NOT NULL DEFAULT '',
+        date_utc TEXT NOT NULL DEFAULT '',
+        marked_utc TEXT NOT NULL DEFAULT '',
+        vector BLOB,
+        dims INTEGER NOT NULL DEFAULT 0,
+        explicit INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (fingerprint, model_id)
+      );
+      CREATE TABLE IF NOT EXISTS spam_dismissals (
+        fingerprint TEXT PRIMARY KEY,
+        dismissed_utc TEXT NOT NULL DEFAULT ''
+      );
       """;
     cmd.ExecuteNonQuery();
     EnsureColumn("messages", "trashed_utc", "TEXT NOT NULL DEFAULT ''");
     EnsureColumn("messages", "size", "INTEGER NOT NULL DEFAULT 0");
+    EnsureColumn("messages", "spam_score", "REAL");
   }
 
   private void EnsureColumn(string table, string column, string definition) {

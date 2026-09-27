@@ -19,6 +19,7 @@ public partial class PromptWindow : Window {
     window.OkButton.Content = ok;
     window.CancelButton.Content = cancel;
     window.ValueBox.PlaceholderText = request.Placeholder;
+    window.ValueBox.PasswordChar = request.Password ? '●' : '\0';
     window.ValueBox.IsVisible = !request.ConfirmOnly;
     if (!request.ConfirmOnly)
       window.ValueBox.Focus();

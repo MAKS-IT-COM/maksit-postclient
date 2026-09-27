@@ -1,0 +1,113 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+        x:Class="MaksIT.PostClient.UI.Windows.SpamMarksWindow"
+        x:Name="Root"
+        x:DataType="vm:SemanticSearchViewModel"
+        Title="{Binding Copy.SpamExamples}"
+        Icon="/Assets/icon.ico"
+        Width="860"
+        Height="620"
+        MinWidth="720"
+        MinHeight="480"
+        CanResize="True"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="16" LastChildFill="True">
+    <StackPanel DockPanel.Dock="Bottom"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8"
+                Margin="0,12,0,0">
+      <Button Content="{Binding Copy.Close}"
+              Classes="quiet"
+              Click="OnCloseClick" />
+    </StackPanel>
+    <DataGrid x:Name="MarksGrid"
+              ItemsSource="{Binding Examples}"
+              AutoGenerateColumns="False"
+              IsReadOnly="True"
+              CanUserResizeColumns="True"
+              CanUserReorderColumns="True"
+              CanUserSortColumns="True"
+              GridLinesVisibility="Horizontal"
+              HeadersVisibility="Column"
+              HorizontalScrollBarVisibility="Auto"
+              VerticalScrollBarVisibility="Auto"
+              RowHeight="32">
+      <DataGrid.Columns>
+        <DataGridTemplateColumn Header="{Binding Copy.From, ElementName=Root}"
+                                Width="170"
+                                MinWidth="80"
+                                SortMemberPath="From">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:SpamListItem">
+              <TextBlock Text="{Binding From}"
+                         TextTrimming="CharacterEllipsis"
+                         Margin="6,0"
+                         VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="{Binding Copy.Subject, ElementName=Root}"
+                                Width="280"
+                                MinWidth="120"
+                                SortMemberPath="Line">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:SpamListItem">
+              <TextBlock Text="{Binding Line}"
+                         TextTrimming="CharacterEllipsis"
+                         Margin="6,0"
+                         VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTextColumn Header="{Binding Copy.Date, ElementName=Root}"
+                            Binding="{Binding When}"
+                            Width="132"
+                            MinWidth="110"
+                            SortMemberPath="SortDate" />
+        <DataGridTemplateColumn Header="{Binding Copy.SpamGone, ElementName=Root}"
+                                Width="180"
+                                MinWidth="80"
+                                SortMemberPath="Gone">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:SpamListItem">
+              <TextBlock Text="{Binding GoneText}"
+                         TextTrimming="CharacterEllipsis"
+                         Margin="6,0"
+                         VerticalAlignment="Center" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="{Binding Copy.MarkNotSpam, ElementName=Root}"
+                                Width="140"
+                                MinWidth="96">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:SpamListItem">
+              <Button Classes="quiet"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"
+                      Margin="4,0"
+                      Content="{Binding NotSpamText}"
+                      Click="OnNotSpamClick" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Header="{Binding Copy.Delete, ElementName=Root}"
+                                Width="100"
+                                MinWidth="72">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="vm:SpamListItem">
+              <Button Classes="quiet"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Center"
+                      Margin="4,0"
+                      Content="{Binding DeleteText}"
+                      Click="OnDeleteClick" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
+  </DockPanel>
+</Window>

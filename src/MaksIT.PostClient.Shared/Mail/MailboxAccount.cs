@@ -43,6 +43,12 @@ public sealed class MailboxAccount {
 
   public bool InitialSyncCompleted { get; set; }
 
+  /// <summary>
+  /// Mail for this account lives in the machine shared folder so other users on this PC can open it.
+  /// Secrets stay in each user's own secret file.
+  /// </summary>
+  public bool Shared { get; set; }
+
   [JsonIgnore]
   public bool TracksCertifiedReceipts =>
     MailCertifiedKind.TracksReceipts(CertifiedKind);

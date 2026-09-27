@@ -17,6 +17,7 @@ public sealed class SemanticSearchService : ISemanticSearchService {
   private string _status = "";
   private bool _ready;
   private long _statusTick;
+  private int _hold;
 
   public SemanticSearchService(ConfigurationFileService files, MailArchiveCatalog archive) {
     _files = files;
@@ -105,6 +106,17 @@ public sealed class SemanticSearchService : ISemanticSearchService {
     return dropped;
   }
 
+  public void ReleaseModel() {
+    Volatile.Write(ref _hold, 1);
+    _step?.Cancel();
+    CloseEmbedder();
+  }
+
+  public void ResumeModel() {
+    Volatile.Write(ref _hold, 0);
+    Wake();
+  }
+
   public void Start() {
     if (_run is not null)
       return;
@@ -142,6 +154,11 @@ public sealed class SemanticSearchService : ISemanticSearchService {
   }
 
   private async Task RunOnceAsync(CancellationToken token) {
+    if (Volatile.Read(ref _hold) != 0) {
+      await WaitAsync(token).ConfigureAwait(false);
+      return;
+    }
+
     var settings = _files.Current.Semantic ?? new SemanticSearchSettings();
     settings.Normalize();
     if (!settings.Enabled) {
@@ -173,6 +190,11 @@ public sealed class SemanticSearchService : ISemanticSearchService {
 
     var wantGpu = GpuProbe.UseGpu(settings.Device);
     if (!EnsureEmbedder(wantGpu, out var error)) {
+      if (Volatile.Read(ref _hold) != 0) {
+        await WaitAsync(token).ConfigureAwait(false);
+        return;
+      }
+
       AppLog.Write(error);
       SetStatus("", ready: false);
       await DelayAsync(TimeSpan.FromSeconds(30), token).ConfigureAwait(false);
@@ -231,12 +253,19 @@ public sealed class SemanticSearchService : ISemanticSearchService {
         }
 
         _archive.UpsertEmbedding(item.MailboxId, item.MessageId, EmbeddingModelSpec.Id, vector);
+        var spam = _files.Current.Semantic?.SpamFilter == true;
+        _archive.ApplySpamEmbedding(item.MailboxId, item.MessageId, EmbeddingModelSpec.Id, vector, spam);
       }
+
+      await DelayAsync(TimeSpan.FromMilliseconds(250), token).ConfigureAwait(false);
+      return;
     }
   }
 
   private bool EnsureEmbedder(bool wantGpu, out string error) {
     error = "";
+    if (Volatile.Read(ref _hold) != 0)
+      return false;
     if (wantGpu && _gpuFailed)
       wantGpu = false;
     lock (_gate) {
@@ -259,6 +288,11 @@ public sealed class SemanticSearchService : ISemanticSearchService {
       }
 
       lock (_gate) {
+        if (Volatile.Read(ref _hold) != 0) {
+          created.Dispose();
+          return false;
+        }
+
         _embedder = created;
         _gpu = created.UsesGpu;
         _ready = true;
@@ -273,6 +307,11 @@ public sealed class SemanticSearchService : ISemanticSearchService {
       try {
         var created = CreateEmbedder(false);
         lock (_gate) {
+          if (Volatile.Read(ref _hold) != 0) {
+            created.Dispose();
+            return false;
+          }
+
           _embedder = created;
           _gpu = created.UsesGpu;
           _ready = true;

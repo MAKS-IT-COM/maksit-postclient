@@ -6,4 +6,5 @@ global using MaksIT.PostClient.Shared.Content;
 global using MaksIT.PostClient.Shared.Envelope;
 global using MaksIT.PostClient.Shared.Localization;
 global using MaksIT.PostClient.Shared.Mail;
+global using MaksIT.PostClient.Shared.Upgrades;
 global using MaksIT.PostClient.Shared.Search;

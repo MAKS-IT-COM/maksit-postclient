@@ -1,8 +1,8 @@
 # Postclient — desktop PEC, REM, and IMAP mail client
 
-![Line Coverage](https://img.shields.io/badge/Line%20Coverage-56.5%25-yellowgreen)
-![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-43.8%25-yellowgreen)
-![Method Coverage](https://img.shields.io/badge/Method%20Coverage-57.1%25-yellowgreen)
+![Line Coverage](https://img.shields.io/badge/Line%20Coverage-60.8%25-green)
+![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-48%25-yellowgreen)
+![Method Coverage](https://img.shields.io/badge/Method%20Coverage-63.6%25-green)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)
@@ -141,7 +141,7 @@ Fedora: `gtk3 webkit2gtk4.1 libsoup3`.
 
 Get Messages indexes the **whole IMAP folder** into a local SQLite store (`mail.db`) plus `.eml` objects on disk. POP3 only fills Inbox. Indexing runs in the background; the status bar shows progress.
 
-- **Settings → Indices…**: keyword index (FTS) plus optional EmbeddingGemma 300M (~300 MB) meaning index. The ONNX package downloads from Hugging Face (`onnx-community/embeddinggemma-300m-ONNX`). Vectors stay in `mail.db` on this PC. Device: Auto / CPU / GPU (Windows DirectML). Rebuild or repair if search looks wrong. Weights use Google’s Gemma Terms.
+- **Settings → Indices…**: keyword index (FTS) plus optional EmbeddingGemma 300M (~300 MB) meaning index. The ONNX package downloads once into the machine folder (`ProgramData\MaksIT\Postclient\models`, or `/var/lib/maksit/postclient/models` on Linux) and is shared by every account and the sync service. Vectors stay in `mail.db` on this PC. Device: Auto / CPU / GPU (Windows DirectML). Rebuild or repair if search looks wrong. Weights use Google’s Gemma Terms.
 
 Search (current folder) covers subject, body, attachment text (PDF and text/XML/HTML/CSV/JSON), practice labels, and meaning when the model is ready. Labels exist only on this PC.
 
@@ -168,6 +168,8 @@ IMAP **QUOTA** from the gestore (when the server supports it) is a thin bar on t
 | Attach store | File menu: pick a folder that already has `postclient.store.json`. Recovers mail + search after an AppData wipe. |
 | Move / Detach store | Copy the whole directory (or unregister it). The folder stays on disk when detached. |
 | Retention | **Settings → Retention…**: days per folder (`0` = forever). Expired folder mail is moved to Trash after Get Messages. On Trash, `0` keeps it forever and a number of days permanently deletes older Trash. |
+| Background sync | **Settings → Background sync**: a boot-time service (Windows service, Linux system systemd unit). It syncs every saved mailbox with nobody signed in. **Share this account** only lets other people on this PC open that mailbox. |
+| Shared account | **Account settings → Share this account with other users on this PC**: that mailbox moves to the machine folder (`ProgramData\MaksIT\Postclient`, or `Public` when ProgramData is not writable; `/var/lib/maksit/postclient` on Linux; `/Users/Shared/MaksIT/Postclient` on macOS). Other users see it when they open Postclient. Passwords are not copied. |
 | Rules | **Settings → Rules**: **Import rules…** reads this app’s JSON export or a legacy `.rwz` file. **Export rules…** writes JSON. Each rule is bound to an **account**; a move folder can live on another mailbox (including a store). They run on Get Messages, on import, and from **Run all rules**. |
 | Print | Readable HTML of the (optionally unwrapped) message |
 | Save PDF | Same content as a PDF |

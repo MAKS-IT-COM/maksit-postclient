@@ -10,8 +10,14 @@ public sealed class MailArchiveCatalog : IDisposable {
   private readonly ConcurrentDictionary<string, string> _paths =
     new(StringComparer.OrdinalIgnoreCase);
   private readonly Lock _gate = new();
+  private readonly string? _spamPath;
+  private SpamMemory? _spam;
 
   public event Action<string, int>? Progress;
+
+  public MailArchiveCatalog(string? spamDatabasePath = null) {
+    _spamPath = spamDatabasePath;
+  }
 
   public MailArchiveStore Open(string mailboxId, string databasePath) {
     ArgumentException.ThrowIfNullOrWhiteSpace(mailboxId);
@@ -20,13 +26,23 @@ public sealed class MailArchiveCatalog : IDisposable {
       lock (_gate) {
         if (_stores.TryGetValue(mailboxId, out var existing)
             && _paths.TryGetValue(mailboxId, out var path)
-            && path.Equals(databasePath, StringComparison.OrdinalIgnoreCase))
+            && path.Equals(databasePath, StringComparison.OrdinalIgnoreCase)) {
+          if (_spam is not null)
+            Absorb(existing);
           return existing;
-        if (_stores.TryRemove(mailboxId, out var previous))
+        }
+
+        if (_stores.TryRemove(mailboxId, out var previous)) {
+          if (_spam is not null)
+            Absorb(previous);
           previous.Dispose();
+        }
+
         var store = new MailArchiveStore(databasePath);
         _stores[mailboxId] = store;
         _paths[mailboxId] = databasePath;
+        if (_spam is not null)
+          Absorb(store);
         return store;
       }
     });
@@ -34,8 +50,12 @@ public sealed class MailArchiveCatalog : IDisposable {
 
   public void Close(string mailboxId) {
     OffUi(() => {
-      if (_stores.TryRemove(mailboxId, out var store))
+      if (_stores.TryRemove(mailboxId, out var store)) {
+        if (_spam is not null)
+          Absorb(store);
         store.Dispose();
+      }
+
       _paths.TryRemove(mailboxId, out _);
       return 0;
     });
@@ -49,32 +69,11 @@ public sealed class MailArchiveCatalog : IDisposable {
       catch {
       }
     }
-  }
 
-  public static void MigrateLegacy(IReadOnlyList<MailboxAccount> mailboxes) {
-    var legacy = AppPaths.ArchiveDatabase();
-    if (!File.Exists(legacy))
-      return;
-    using var source = new MailArchiveStore(legacy);
-    var ids = source.DistinctMailboxIds();
-    if (ids.Count == 0)
-      return;
-    foreach (var id in ids) {
-      var box = mailboxes.FirstOrDefault(m => m.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
-        ?? new MailboxAccount { Id = id };
-      var destPath = MailArchiveLayout.DatabasePath(box, mailboxes);
-      if (destPath.Equals(legacy, StringComparison.OrdinalIgnoreCase))
-        continue;
-      using var dest = new MailArchiveStore(destPath);
-      source.CopyMailboxInto(id, dest);
-    }
-
-    source.Dispose();
-    try {
-      File.Move(legacy, legacy + ".migrated", overwrite: true);
-    }
-    catch {
-    }
+    OffUi(() => {
+      AbsorbAll();
+      return 0;
+    });
   }
 
   public MailArchiveStore Require(string mailboxId) {
@@ -191,6 +190,73 @@ public sealed class MailArchiveCatalog : IDisposable {
     OffUi(() => {
       Require(mailboxId).UpsertEmbedding(messageId, modelId, vector);
       return 0;
+    });
+
+  public void MarkSpam(string mailboxId, string folder, uint uid, string modelId) =>
+    OffUi(() => {
+      var store = TryGet(mailboxId);
+      store?.MarkSpam(mailboxId, folder, uid, modelId);
+      var fingerprint = store?.SpamFingerprintOf(mailboxId, folder, uid);
+      if (string.IsNullOrWhiteSpace(fingerprint))
+        return 0;
+      foreach (var other in Stores())
+        other.ClearSpamDismissal(fingerprint);
+      Spam().ClearDismissal(fingerprint);
+      AbsorbAll();
+      return 0;
+    });
+
+  public void DismissMessage(string mailboxId, string folder, uint uid) =>
+    OffUi(() => {
+      var fingerprint = TryGet(mailboxId)?.SpamFingerprintOf(mailboxId, folder, uid);
+      if (string.IsNullOrWhiteSpace(fingerprint))
+        return 0;
+      Spam().Dismiss(fingerprint);
+      foreach (var store in Stores())
+        store.DismissSpam(fingerprint);
+      return 0;
+    });
+
+  public void DismissSpam(string mailboxId, string fingerprint) =>
+    OffUi(() => {
+      Spam().Dismiss(fingerprint);
+      foreach (var store in Stores())
+        store.DismissSpam(fingerprint);
+      return 0;
+    });
+
+  public void ApplySpamEmbedding(string mailboxId, long messageId, string modelId, float[] vector, bool filterEnabled) =>
+    OffUi(() => {
+      var store = TryGet(mailboxId);
+      if (store is null)
+        return 0;
+      var fingerprint = store.SpamFingerprintOf(messageId) ?? "";
+      var shared = Spam().Vectors(modelId, fingerprint);
+      store.ApplySpamEmbedding(messageId, modelId, vector, filterEnabled, shared);
+      Absorb(store);
+      return 0;
+    });
+
+  public SpamExampleInfo? LocateSpam(string mailboxId, string fingerprint) =>
+    OffUi(() => TryGet(mailboxId)?.LocateSpam(fingerprint));
+
+  public IReadOnlyList<(string MailboxId, SpamExampleInfo Example)> ListSpam(string modelId) =>
+    OffUi(() => {
+      AbsorbAll();
+      var rows = new List<(string, SpamExampleInfo)>();
+      foreach (var example in Spam().List(modelId))
+        rows.Add(Present(example));
+      return rows;
+    });
+
+  public IReadOnlyDictionary<uint, SpamFlag> SpamFlags(string mailboxId, string folder, string modelId) =>
+    OffUi(() => TryGet(mailboxId)?.SpamFlags(mailboxId, folder, modelId, Spam().ExplicitMap(modelId))
+      ?? new Dictionary<uint, SpamFlag>());
+
+  public int SpamExampleCount(string modelId) =>
+    OffUi(() => {
+      AbsorbAll();
+      return Spam().Count(modelId);
     });
 
   public void DropForeignEmbeddings(string modelId) =>
@@ -401,11 +467,69 @@ public sealed class MailArchiveCatalog : IDisposable {
       return 1;
     });
 
-  public void Dispose() {
-    foreach (var store in Stores())
-      store.Dispose();
-    _stores.Clear();
-    _paths.Clear();
+  public void Release() {
+    OffUi(() => {
+      foreach (var store in Stores())
+        store.Dispose();
+      _stores.Clear();
+      _paths.Clear();
+      _spam?.Dispose();
+      _spam = null;
+      return 0;
+    });
+  }
+
+  public void Dispose() =>
+    Release();
+
+  private SpamMemory Spam() {
+    if (_spam is not null)
+      return _spam;
+    var path = string.IsNullOrWhiteSpace(_spamPath) ? AppPaths.SpamDatabase() : _spamPath;
+    _spam = new SpamMemory(path);
+    return _spam;
+  }
+
+  private void AbsorbAll() {
+    var lessons = new List<SpamLesson>();
+    var dismissals = new List<string>();
+    foreach (var store in Stores()) {
+      lessons.AddRange(store.ExportSpam());
+      dismissals.AddRange(store.ExportSpamDismissals());
+    }
+
+    Spam().Absorb(lessons, dismissals);
+  }
+
+  private void Absorb(MailArchiveStore store) =>
+    Spam().Absorb(store.ExportSpam(), store.ExportSpamDismissals());
+
+  private (string MailboxId, SpamExampleInfo Example) Present(SpamExampleInfo example) {
+    foreach (var pair in _stores) {
+      var hit = pair.Value.LocateSpam(example.Fingerprint);
+      if (hit is not { Found: true })
+        continue;
+      return (pair.Key, new SpamExampleInfo {
+        Fingerprint = example.Fingerprint,
+        From = example.From,
+        Subject = example.Subject,
+        DateUtc = example.DateUtc,
+        Explicit = example.Explicit,
+        Gone = false,
+        Found = true,
+        Folder = hit.Folder,
+        Uid = hit.Uid
+      });
+    }
+
+    return ("", new SpamExampleInfo {
+      Fingerprint = example.Fingerprint,
+      From = example.From,
+      Subject = example.Subject,
+      DateUtc = example.DateUtc,
+      Explicit = example.Explicit,
+      Gone = true
+    });
   }
 
   private IEnumerable<MailArchiveStore> Stores() =>
