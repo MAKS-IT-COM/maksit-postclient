@@ -33,9 +33,10 @@ public static class ErrorReport {
 
   public static string? TryWrite(string report) {
     try {
-      AppPaths.EnsureDirectories();
-      var name = "crash-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Environment.ProcessId + ".txt";
-      var path = Path.Combine(AppPaths.LogsDirectory(), name);
+      var directory = AppPaths.LogsDirectory();
+      Directory.CreateDirectory(directory);
+      var name = "crash-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + "-" + Environment.ProcessId + ".txt";
+      var path = Path.Combine(directory, name);
       File.WriteAllText(path, report ?? "");
       return path;
     }

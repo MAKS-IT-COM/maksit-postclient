@@ -213,7 +213,7 @@ public sealed class SemanticSearchService : ISemanticSearchService {
         return;
       }
 
-      var pending = _archive.PendingEmbeddings(EmbeddingModelSpec.Id, 8, ready);
+      var pending = _archive.PendingEmbeddings(EmbeddingModelSpec.Id, MailPipeline.MeaningBatch, ready);
       if (pending.Count == 0) {
         await DelayAsync(TimeSpan.FromMilliseconds(800), token).ConfigureAwait(false);
         if (_archive.PendingEmbeddings(EmbeddingModelSpec.Id, 1, ready).Count > 0)
@@ -257,7 +257,7 @@ public sealed class SemanticSearchService : ISemanticSearchService {
         _archive.ApplySpamEmbedding(item.MailboxId, item.MessageId, EmbeddingModelSpec.Id, vector, spam);
       }
 
-      await DelayAsync(TimeSpan.FromMilliseconds(250), token).ConfigureAwait(false);
+      await DelayAsync(MailPipeline.MeaningYield, token).ConfigureAwait(false);
       return;
     }
   }

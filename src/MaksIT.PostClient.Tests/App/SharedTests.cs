@@ -21,6 +21,7 @@ public class AppInfoTests {
 }
 
 
+[Collection(ProcessEnvironment.Name)]
 public class ErrorReportTests {
   [Fact]
   public void Format_IncludesTypeMessageInnerAndStack() {
@@ -82,6 +83,7 @@ public class ErrorReportTests {
 }
 
 
+[Collection(ProcessEnvironment.Name)]
 public class AppPathsTests {
   [Fact]
   public void ProductFolderUsesMaksItBrand() {

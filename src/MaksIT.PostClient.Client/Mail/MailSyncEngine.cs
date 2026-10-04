@@ -7,7 +7,6 @@ namespace MaksIT.PostClient.Client.Mail;
 /// </summary>
 public sealed class MailSyncEngine {
   public static readonly TimeSpan Interval = TimeSpan.FromMinutes(3);
-  private const int ListChunk = 250;
 
   private readonly ConfigurationFileService _files;
   private readonly MailArchiveCatalog _archive;
@@ -144,8 +143,6 @@ public sealed class MailSyncEngine {
     var ruleFolders = _archive.ListFolders(box.Id).ToList();
     var ruleCursor = 0;
     var ruleOffset = 0;
-    const int rulesSlice = 48;
-    const int bodyTurn = 4;
     while (true) {
       cancellationToken.ThrowIfCancellationRequested();
       var listedPage = false;
@@ -164,7 +161,7 @@ public sealed class MailSyncEngine {
         var headers = _archive.ListFolder(box.Id, folder).Select(MailArchiveMap.ToHeader).ToList();
         if (ruleOffset > headers.Count)
           ruleOffset = 0;
-        var slice = headers.Skip(ruleOffset).Take(rulesSlice).ToList();
+        var slice = headers.Skip(ruleOffset).Take(MailPipeline.RulesBatch).ToList();
         if (slice.Count > 0)
           await ApplyRulesAsync(configuration, box, session, folder, slice, names, cancellationToken)
             .ConfigureAwait(false);
@@ -183,7 +180,7 @@ public sealed class MailSyncEngine {
       }
 
       _archive.SetKeywordIndexEnabled(box.Id, box.InitialSyncCompleted);
-      var fetched = await IndexBodiesAsync(configuration, box, session, bodyTurn, cancellationToken)
+      var fetched = await IndexBodiesAsync(configuration, box, session, names, cancellationToken)
         .ConfigureAwait(false);
       if (fetched > 0)
         _semantic.Wake();
@@ -200,7 +197,8 @@ public sealed class MailSyncEngine {
     IReadOnlyList<(string Name, string FullName)> names,
     CancellationToken cancellationToken) {
     var known = _archive.Uids(box.Id, folder);
-    var page = await session.ListMessagesAsync(folder, known, cancellationToken, ListChunk).ConfigureAwait(false);
+    var page = await session.ListMessagesAsync(folder, known, cancellationToken, MailPipeline.HeaderPage)
+      .ConfigureAwait(false);
     if (!page.IsSuccess)
       return true;
     var sync = page.Value ?? new MailFolderSync();
@@ -215,9 +213,12 @@ public sealed class MailSyncEngine {
         _archive.RemoveUids(box.Id, folder, gone);
     }
 
-    var fresh = sync.Headers.Where(h => !known.Contains(h.Id)).Take(48).ToList();
-    await ApplyRulesAsync(configuration, box, session, folder, fresh, names, cancellationToken)
-      .ConfigureAwait(false);
+    var fresh = sync.Headers.Where(h => !known.Contains(h.Id)).ToList();
+    for (var offset = 0; offset < fresh.Count; offset += MailPipeline.RulesBatch) {
+      var slice = fresh.Skip(offset).Take(MailPipeline.RulesBatch).ToList();
+      await ApplyRulesAsync(configuration, box, session, folder, slice, names, cancellationToken)
+        .ConfigureAwait(false);
+    }
     if (sync.Incomplete && fresh.Count == 0)
       return true;
     return !sync.Incomplete;
@@ -227,12 +228,13 @@ public sealed class MailSyncEngine {
     Configuration configuration,
     MailboxAccount box,
     IMailSession session,
-    int limit,
+    IReadOnlyList<(string Name, string FullName)> names,
     CancellationToken cancellationToken) {
     var pending = _archive.MissingBodies([box.Id], 512)
       .Where(item => item.Size <= 0 || item.Size <= MailFetch.MaxBackfillBytes)
-      .Take(limit)
+      .Take(MailPipeline.BodyBatch)
       .ToList();
+    var stored = new List<MailMessageHeader>();
     var fetched = 0;
     foreach (var item in pending) {
       cancellationToken.ThrowIfCancellationRequested();
@@ -241,6 +243,7 @@ public sealed class MailSyncEngine {
           .ConfigureAwait(false);
         if (result.IsSuccess && result.Value is not null) {
           StoreBody(configuration, box, result.Value);
+          stored.Add(result.Value.Header);
           fetched++;
           continue;
         }
@@ -258,6 +261,9 @@ public sealed class MailSyncEngine {
       }
     }
 
+    foreach (var group in stored.GroupBy(header => header.Folder))
+      await ApplyRulesAsync(configuration, box, session, group.Key, group.ToList(), names, cancellationToken)
+        .ConfigureAwait(false);
     return fetched;
   }
 
@@ -298,7 +304,8 @@ public sealed class MailSyncEngine {
       foreach (var rule in rules) {
         if (!MailRuleEngine.CanApply(rule, box.Id, names))
           continue;
-        if (!MailRuleEngine.Matches(rule, header.From, "", header.Subject, "", header.HasAttachments))
+        var body = _archive.MessageBody(box.Id, folder, header.Id);
+        if (!MailRuleEngine.Matches(rule, header.From, "", header.Subject, body, header.HasAttachments))
           continue;
         if (rule.Action == MailRuleAction.Delete) {
           var trash = MailRetention.ResolveTrash(names);

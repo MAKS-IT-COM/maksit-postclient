@@ -26,7 +26,6 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private CancellationTokenSource? _work;
   private CancellationTokenSource? _readingLoad;
   private CancellationTokenSource? _folderLoad;
-  private CancellationTokenSource? _backfill;
   private CancellationTokenSource? _search;
   private int _searchGen;
   private int _indexPause;
@@ -38,11 +37,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private readonly HashSet<string> _rulesDone = new(StringComparer.OrdinalIgnoreCase);
   private readonly Dictionary<string, int> _rulesOffset = new(StringComparer.OrdinalIgnoreCase);
   private readonly HashSet<MailMessageKey> _indexSkip = [];
-  private const int IndexCatalogChunk = 250;
   private const int IndexUiChunk = 250;
   private const int IndexBodyChunk = 16;
-  private const int IndexBodyTurn = 4;
-  private const int RulesSlice = 48;
   private const int IndexBodyLookahead = 512;
   private readonly StatusLineHold _indexHold;
   private readonly StatusLineHold _semanticHold;
@@ -521,6 +517,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       return;
     _uiReady = true;
     _semantic.Start();
+    StartPipeline();
     if (SelectedMailbox is not null && !AccountSettingsOpen)
       _ = ConnectAsync();
   }
@@ -3269,7 +3266,8 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         var destFolders = DestFoldersFor(rule, box.Id, folders);
         if (!MailRuleEngine.CanApply(rule, box.Id, destFolders))
           continue;
-        if (!MailRuleEngine.Matches(rule, header.From, "", header.Subject, "", header.HasAttachments))
+        var body = _archive.MessageBody(box.Id, folder, header.Id);
+        if (!MailRuleEngine.Matches(rule, header.From, "", header.Subject, body, header.HasAttachments))
           continue;
         touched.Add(header.Id);
         if (rule.Action == MailRuleAction.Delete) {
@@ -4231,9 +4229,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     _rulesDone.Clear();
     _rulesOffset.Clear();
     _indexSkip.Clear();
-    _backfill?.Cancel();
-    _backfill?.Dispose();
-    _backfill = null;
+    StopPipeline();
     _indexHold.ClearNow();
   }
 
@@ -4241,15 +4237,11 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     if (!string.IsNullOrWhiteSpace(mailboxId))
       _indexMailboxes.Add(mailboxId);
     TrackConnectedMailboxes();
-    if (_backfill is not null || _indexMailboxes.Count == 0)
-      return;
-    StartIndexing();
+    StartPipeline();
   }
 
   private void EnsureBodyBackfill(string mailboxId) {
-    if (string.IsNullOrWhiteSpace(mailboxId) || _backfill is not null)
-      return;
-    if (NextMissingBodies([mailboxId]).Count == 0)
+    if (string.IsNullOrWhiteSpace(mailboxId))
       return;
     EnsureIndexing(mailboxId);
   }
@@ -4264,180 +4256,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     foreach (var key in _rulesOffset.Keys.Where(key =>
                key.StartsWith(mailboxId + "\n", StringComparison.OrdinalIgnoreCase)).ToList())
       _rulesOffset.Remove(key);
-    if (_indexMailboxes.Count > 0)
-      return;
-    _backfill?.Cancel();
-    _backfill?.Dispose();
-    _backfill = null;
-    _indexHold.ClearNow();
-  }
-
-  private void StartIndexing() {
-    if (_backfill is not null || _indexMailboxes.Count == 0)
-      return;
-    var cts = new CancellationTokenSource();
-    _backfill = cts;
-    _ = IndexAllAsync(cts);
-  }
-
-  private async Task IndexAllAsync(CancellationTokenSource cts) {
-    var token = cts.Token;
-    await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
-    try {
-      while (!token.IsCancellationRequested) {
-        await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-        var (snapshot, readyIds) = await Dispatcher.UIThread.InvokeAsync(() => {
-          TrackConnectedMailboxes();
-          return (CaptureIndexSnapshot(), ReadyMailboxIds());
-        });
-        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
-        if (snapshot.Count == 0)
-          break;
-
-        await ApplyNextArchiveRulesAsync(snapshot, token).ConfigureAwait(false);
-
-        var sessions = snapshot.ToDictionary(
-          s => s.Id,
-          s => s.Session,
-          StringComparer.OrdinalIgnoreCase);
-        var cataloged = false;
-        foreach (var box in snapshot) {
-          if (box.CatalogDone
-              || box.Session is not { IsConnected: true }
-              || !box.Session.SupportsFolders)
-            continue;
-          var pendingFolders = false;
-          foreach (var folder in box.Folders) {
-            token.ThrowIfCancellationRequested();
-            var open = box.OpenFolder is not null
-              && folder.FullName.Equals(box.OpenFolder, StringComparison.OrdinalIgnoreCase);
-            if (open || box.CatalogedFolders.Contains(folder.FullName))
-              continue;
-            pendingFolders = true;
-            cataloged = true;
-            await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-            var known = _archive.Uids(box.Id, folder.FullName);
-            var listed = await box.Session
-              .ListMessagesAsync(folder.FullName, known, token, IndexCatalogChunk)
-              .ConfigureAwait(false);
-            if (!listed.IsSuccess)
-              continue;
-            var sync = listed.Value ?? new MailFolderSync();
-            ApplyFolderSync(box.Id, folder.FullName, sync);
-            if (sync.Headers.Any(header => !known.Contains(header.Id))) {
-              var key = CatalogKey(box.Id, folder.FullName);
-              _rulesDone.Remove(key);
-              _rulesOffset.Remove(key);
-            }
-            await SetIndexLineAsync(GlobalIndexLine(), token)
-              .ConfigureAwait(false);
-            var counts = _archive.FolderCounts(box.Id, folder.FullName);
-            await UiAsync(() => RefreshIndexedFolderCounts(box.Id, folder.FullName, counts))
-              .ConfigureAwait(false);
-            if (!sync.Incomplete) {
-              await UiAsync(() => {
-                _catalogFolders.Add(CatalogKey(box.Id, folder.FullName));
-                TryCompleteInitialSync(MailboxById(box.Id));
-              }).ConfigureAwait(false);
-            }
-
-            await Task.Delay(15, token).ConfigureAwait(false);
-            break;
-          }
-
-          if (pendingFolders)
-            break;
-            await UiAsync(() => TryCompleteInitialSync(MailboxById(box.Id))).ConfigureAwait(false);
-        }
-
-        await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-        var pending = NextMissingBodies(readyIds).Take(IndexBodyTurn).ToList();
-        if (pending.Count == 0) {
-          await SetIndexLineAsync("", token).ConfigureAwait(false);
-          if (!cataloged && !RulesRemain(snapshot))
-            break;
-          await Task.Delay(400, token).ConfigureAwait(false);
-          continue;
-        }
-
-        await SetIndexLineAsync(GlobalIndexLine(), token)
-          .ConfigureAwait(false);
-        var fetched = 0;
-        foreach (var item in pending) {
-          token.ThrowIfCancellationRequested();
-          await WaitIfIndexingPausedAsync(token).ConfigureAwait(false);
-          if (!sessions.TryGetValue(item.MailboxId, out var session) || session is null)
-            continue;
-          var key = MailMessageKey.Of(item.MailboxId, item.Folder, item.Uid);
-          try {
-            var result = await session
-              .GetMessageAsync(item.Folder, item.Uid, token, interactive: false)
-              .ConfigureAwait(false);
-            if (result.IsSuccess && result.Value is not null) {
-              StoreArchivedBody(item.MailboxId, result.Value.Header, result.Value);
-              _indexSkip.Remove(key);
-              fetched++;
-              continue;
-            }
-
-            if (MailFetch.IsGone(result.Messages)) {
-              _archive.RemoveUids(item.MailboxId, item.Folder, [item.Uid]);
-              _indexSkip.Remove(key);
-              fetched++;
-              continue;
-            }
-
-            _indexSkip.Add(key);
-          }
-          catch (OperationCanceledException) when (token.IsCancellationRequested) {
-            throw;
-          }
-          catch (OperationCanceledException) {
-            _indexSkip.Add(key);
-          }
-          catch {
-            _indexSkip.Add(key);
-          }
-        }
-
-        if (fetched == 0 && !cataloged) {
-          if (NextMissingBodies(readyIds).Count == 0)
-            break;
-          await Task.Delay(500, token).ConfigureAwait(false);
-          continue;
-        }
-      }
-    }
-    catch (OperationCanceledException) {
-      return;
-    }
-    finally {
-      await Dispatcher.UIThread.InvokeAsync(() => {
-        if (_backfill != cts)
-          return;
-        _backfill.Dispose();
-        _backfill = null;
-        if (token.IsCancellationRequested)
-          return;
-        foreach (var id in _indexMailboxes.ToList()) {
-          if (NextMissingBodies([id]).Count > 0)
-            continue;
-          var box = MailboxById(id);
-          if (_catalogDone.Contains(id) || (box is not null && AllFoldersCataloged(box)))
-            _indexMailboxes.Remove(id);
-        }
-
-        var again = _indexMailboxes.Any(id =>
-          SessionFor(MailboxById(id)) is { IsConnected: true }
-          && (NextMissingBodies([id]).Count > 0 || !_catalogDone.Contains(id) || RulesRemainFor(id)));
-        if (!again) {
-          _indexHold.Set("");
-          return;
-        }
-
-        StartIndexing();
-      });
-    }
+    DropPipelineMailbox(mailboxId);
   }
 
   private async Task<bool> ApplyNextArchiveRulesAsync(
@@ -4459,7 +4278,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         _rulesOffset.TryGetValue(key, out var offset);
         if (offset > headers.Count)
           offset = 0;
-        var slice = headers.Skip(offset).Take(RulesSlice).ToList();
+        var slice = headers.Skip(offset).Take(MailPipeline.RulesBatch).ToList();
         if (slice.Count > 0)
           await ApplyRulesToFolderAsync(account, box.Session, folder.FullName, slice, names, token)
             .ConfigureAwait(false);
@@ -4471,25 +4290,6 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
           _rulesOffset[key] = offset + slice.Count;
         return true;
       }
-    }
-
-    return false;
-  }
-
-  private bool RulesRemain(IReadOnlyList<IndexMailboxSnap> snapshot) {
-    foreach (var box in snapshot) {
-      if (RulesRemainFor(box.Id))
-        return true;
-    }
-
-    return false;
-  }
-
-  private bool RulesRemainFor(string mailboxId) {
-    var box = MailboxById(mailboxId);
-    foreach (var folder in FoldersFor(box)) {
-      if (!_rulesDone.Contains(CatalogKey(mailboxId, folder.FullName)))
-        return true;
     }
 
     return false;
@@ -4592,22 +4392,40 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   }
 
   private async Task DisconnectMailboxAsync(string mailboxId) {
-    StopIndexingMailbox(mailboxId);
-    IMailSession? session;
-    lock (_connections)
-      _connections.Remove(mailboxId, out session);
-    if (session is not null)
-      await session.DisposeAsync();
-    _foldersByMailbox.Remove(mailboxId);
-    if (SelectedMailbox?.Id == mailboxId) {
-      Messages.Clear();
-      RebuildVisible();
-      ClearReading();
-      Folders.Clear();
-      FolderStats = "";
+    var pause = _pipeline is not null;
+    if (pause) {
+      var holding = PipelineHolding();
+      PauseIndexing();
+      InterruptPipeline();
+      try {
+        await holding.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+      }
+      catch (TimeoutException) {
+      }
     }
 
-    RebuildFolderTree();
+    try {
+      StopIndexingMailbox(mailboxId);
+      IMailSession? session;
+      lock (_connections)
+        _connections.Remove(mailboxId, out session);
+      if (session is not null)
+        await session.DisposeAsync();
+      _foldersByMailbox.Remove(mailboxId);
+      if (SelectedMailbox?.Id == mailboxId) {
+        Messages.Clear();
+        RebuildVisible();
+        ClearReading();
+        Folders.Clear();
+        FolderStats = "";
+      }
+
+      RebuildFolderTree();
+    }
+    finally {
+      if (pause)
+        ResumeIndexing();
+    }
   }
 
   private void NotifyMessageCommands() {
@@ -5093,6 +4911,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private async Task WaitIfIndexingPausedAsync(CancellationToken token) {
     while (Volatile.Read(ref _indexPause) > 0) {
       token.ThrowIfCancellationRequested();
+      _indexHolding.TrySetResult();
       await Task.Delay(40, token).ConfigureAwait(false);
     }
   }

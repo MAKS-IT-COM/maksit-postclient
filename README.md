@@ -1,8 +1,8 @@
 # Postclient — desktop PEC, REM, and IMAP mail client
 
-![Line Coverage](https://img.shields.io/badge/Line%20Coverage-60.8%25-green)
-![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-48%25-yellowgreen)
-![Method Coverage](https://img.shields.io/badge/Method%20Coverage-63.6%25-green)
+![Line Coverage](https://img.shields.io/badge/Line%20Coverage-60.4%25-green)
+![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-47.9%25-yellowgreen)
+![Method Coverage](https://img.shields.io/badge/Method%20Coverage-62.8%25-green)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)

@@ -402,6 +402,9 @@ public sealed class MailArchiveCatalog : IDisposable {
       return 0;
     });
 
+  public string MessageBody(string mailboxId, string folder, uint uid) =>
+    OffUi(() => TryGet(mailboxId)?.MessageBody(mailboxId, folder, uid) ?? "");
+
   public void Checkpoint() =>
     OffUi(() => {
       foreach (var store in Stores())

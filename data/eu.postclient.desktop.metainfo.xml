@@ -30,6 +30,11 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.4.2" date="2026-10-04">
+      <description>
+        <p>Rules keep running after the first sync. Each pass gets one page of mail, applies rules, then indexes a few messages, and meaning search only embeds a few at a time. A large new page is fully filtered, and body or attachment rules run again after the body is saved. The folder list, message list, and reading pane each remember their own layout.</p>
+      </description>
+    </release>
     <release version="0.4.1" date="2026-09-27">
       <description>
         <p>Create bundle asks for the passphrase and the repeat in one window, then opens Save. About lists Info, Privacy, Security, and Support. A Windows upgrade keeps an existing desktop shortcut and removes a duplicate icon.</p>

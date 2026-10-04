@@ -9,6 +9,8 @@ public sealed class SavedColumnSort {
 
 
 public sealed class LayoutSettings {
+  public const string MessagesTable = "messages";
+
   public const double DefaultWindowWidth = 1280;
   public const double DefaultWindowHeight = 860;
   public const double DefaultFolderWidth = 248;

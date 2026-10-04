@@ -622,6 +622,22 @@ public sealed partial class MailArchiveStore : IDisposable {
     }
   }
 
+  public string MessageBody(string mailboxId, string folder, uint uid) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT body_text FROM messages
+        WHERE mailbox_id = $m AND folder = $f AND uid = $u
+        LIMIT 1;
+        """;
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      cmd.Parameters.AddWithValue("$f", folder);
+      cmd.Parameters.AddWithValue("$u", uid);
+      var text = cmd.ExecuteScalar() as string ?? "";
+      return text.Length <= 65536 ? text : text[..65536];
+    }
+  }
+
   public void Checkpoint() {
     lock (_gate) {
       using var cmd = _db.CreateCommand();

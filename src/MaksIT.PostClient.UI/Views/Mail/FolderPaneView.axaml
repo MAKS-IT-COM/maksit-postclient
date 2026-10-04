@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:layout="using:MaksIT.PostClient.UI.Layout"
+             xmlns:vm="using:MaksIT.PostClient.UI.ViewModels"
+             x:Class="MaksIT.PostClient.UI.Views.Mail.FolderPaneView"
+             x:DataType="vm:MainViewModel"
+             layout:LayoutMemento.PaneRole="Folder">
+  <layout:LayoutMemento.Band>
+    <layout:LayoutBand Slot="FolderWidth" Min="160" Max="900" Fallback="248" />
+  </layout:LayoutMemento.Band>
+  <DockPanel Background="#121416">
+    <TextBlock DockPanel.Dock="Top" Text="{Binding Copy.Folders}" Classes="kicker" Margin="12,10,12,6" />
+    <TreeView x:Name="FolderTree"
+              ItemsSource="{Binding FolderTree}"
+              SelectionMode="Multiple"
+              SelectionChanged="OnSelectionChanged"
+              ContextRequested="OnContextRequested"
+              DragDrop.AllowDrop="True"
+              DragDrop.DragOver="OnDragOver"
+              DragDrop.Drop="OnDrop"
+              layout:LayoutMemento.PersistFolders="True"
+              Margin="4,0,4,8">
+      <TreeView.ContextFlyout>
+        <MenuFlyout>
+          <MenuItem Header="{Binding Copy.NewFolder}"
+                    Command="{Binding CreateFolderCommand}"
+                    IsVisible="{Binding ShowFolderContext}" />
+          <MenuItem Header="{Binding EmptyFolderLabel}"
+                    Command="{Binding EmptyFolderCommand}"
+                    IsVisible="{Binding ShowFolderContext}" />
+          <MenuItem Header="{Binding Copy.MarkFolderRead}"
+                    Command="{Binding MarkFolderReadCommand}"
+                    IsVisible="{Binding ShowFolderContext}" />
+          <MenuItem Header="{Binding Copy.MarkFolderUnread}"
+                    Command="{Binding MarkFolderUnreadCommand}"
+                    IsVisible="{Binding ShowFolderContext}" />
+          <Separator IsVisible="{Binding ShowFolderContext}" />
+          <MenuItem Header="{Binding Copy.DeleteFolder}"
+                    Command="{Binding DeleteCustomFolderCommand}"
+                    IsVisible="{Binding ShowFolderContext}" />
+          <MenuItem Header="{Binding Copy.DetachStore}"
+                    Command="{Binding DetachPstCommand}"
+                    IsVisible="{Binding ShowDetachPst}" />
+          <MenuItem Header="{Binding Copy.MoveStore}"
+                    Command="{Binding MoveStoreCommand}"
+                    IsVisible="{Binding ShowDetachPst}" />
+        </MenuFlyout>
+      </TreeView.ContextFlyout>
+      <TreeView.ItemTemplate>
+        <TreeDataTemplate ItemsSource="{Binding Children}">
+          <DockPanel LastChildFill="True" Margin="0,1" HorizontalAlignment="Stretch">
+            <TextBlock DockPanel.Dock="Right"
+                       Width="44"
+                       Text="{Binding RetentionLabel}"
+                       Classes="hint folder-meta"
+                       TextAlignment="Right"
+                       VerticalAlignment="Center"
+                       Margin="0,0,4,0" />
+            <TextBlock DockPanel.Dock="Right"
+                       Width="40"
+                       Text="{Binding UnreadLabel}"
+                       Classes="unread-count folder-meta"
+                       TextAlignment="Right"
+                       VerticalAlignment="Center"
+                       Margin="8,0,4,0" />
+            <TextBlock Text="{Binding Glyph}"
+                       Width="20"
+                       FontSize="12"
+                       VerticalAlignment="Center"
+                       DockPanel.Dock="Left" />
+            <StackPanel Spacing="2" VerticalAlignment="Center" Margin="0,0,4,0">
+              <TextBlock Text="{Binding Title}"
+                         FontWeight="{Binding Weight}"
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip.Tip="{Binding QuotaTip}" />
+              <ProgressBar Height="3"
+                           Minimum="0"
+                           Maximum="100"
+                           Value="{Binding QuotaPercent}"
+                           IsVisible="{Binding ShowQuota}" />
+            </StackPanel>
+          </DockPanel>
+        </TreeDataTemplate>
+      </TreeView.ItemTemplate>
+    </TreeView>
+  </DockPanel>
+</UserControl>

@@ -1,3 +1,4 @@
+global using MaksIT.PostClient.Tests;
 global using MaksIT.PostClient.Client.Auth;
 global using MaksIT.PostClient.Client.Import;
 global using MaksIT.PostClient.Client.Mail;

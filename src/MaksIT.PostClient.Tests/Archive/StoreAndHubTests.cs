@@ -250,6 +250,7 @@ file sealed class FakeIdentityHub : IIdentityHubClient {
 }
 
 
+[Collection(ProcessEnvironment.Name)]
 public class LocalStoreTests {
   [Fact]
   public void ProposedStoreDirectory_LivesUnderDataStoresStem() {

@@ -1,6 +1,7 @@
 namespace MaksIT.PostClient.Tests.App;
 
 
+[Collection(ProcessEnvironment.Name)]
 public class SharedMailboxTests {
   [Fact]
   public void SharedMailLeavesTheUserProfile() {

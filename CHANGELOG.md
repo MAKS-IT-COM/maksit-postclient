@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-04
+
+Rules keep running after the first sync. New mail is fetched, filtered, and indexed a little at a time so the rest of the app stays usable. Each pane remembers its own layout.
+
+### Changed
+
+- The folder list, message list, and reading pane each save their own size, columns, sort, and search text. Closing the window still restores the layout you left.
+
+### Fixed
+
+- Rules keep running for as long as Postclient is open. Each pass gets one page of mail, applies rules, then indexes a few message bodies. Meaning search stays on its own pass and only embeds a few messages at a time.
+- A large new page is fully filtered, not only the first few messages.
+- Rules that look at the message body or attachments run again after the body is saved.
+- A crash log is still written when another data folder cannot be created.
+
 ## [0.4.1] - 2026-09-27
 
 Create bundle asks for the passphrase once, then opens Save. About lists the company contacts. A Windows upgrade keeps the desktop shortcut that is already there.
