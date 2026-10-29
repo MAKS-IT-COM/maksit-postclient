@@ -142,6 +142,11 @@ public sealed partial class UiCopy {
       UnwrapEnvelope = "PEC-/REM-Umschlag öffnen",
       GroupConversations = "Unterhaltungen gruppieren",
       GroupConversationsTip = "Rückt Antworten in diesem Ordner ein. Message-ID / In-Reply-To / References — kein Unterhaltungsfenster.",
+      BlockRemoteContent = "Externe Inhalte blockieren",
+      BlockRemoteContentTip = "Lädt keine Bilder oder Tracking-Pixel aus dem Internet. Eingebettete Anhänge bleiben sichtbar.",
+      ShowRemoteImages = "Bilder anzeigen",
+      RemoteContentBlocked = "Externe Bilder sind blockiert, damit Öffnungs-Tracking nicht läuft.",
+
       ListAboveReading = "Liste über dem Lesen",
       ThreeColumns = "Drei Spalten",
       ThreeColumnsTip = "Ordner, Liste und Lesen nebeneinander",

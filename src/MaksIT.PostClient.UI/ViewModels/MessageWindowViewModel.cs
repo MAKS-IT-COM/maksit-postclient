@@ -12,8 +12,11 @@ public partial class MessageWindowViewModel : ObservableObject {
   private readonly ComposeIdentity _from;
   private readonly Func<ComposeIdentity, CancellationToken, Task<IMailSession?>>? _ensureFrom;
   private readonly string _preference;
+  private readonly bool _blockRemoteContent;
   private bool _syncingKind;
   private bool _htmlReady;
+  private bool _allowRemoteForMessage;
+  private bool _readingHasRemoteContent;
 
   [ObservableProperty]
   private string readingSubject = "";
@@ -100,6 +103,12 @@ public partial class MessageWindowViewModel : ObservableObject {
   public bool ShowFatturaPaTools =>
     HasReadingFattura && UseFatturaPa;
 
+  public bool ShowRemoteContentBanner =>
+    ShowHtmlBody
+    && _blockRemoteContent
+    && !_allowRemoteForMessage
+    && _readingHasRemoteContent;
+
   public bool HasReadingFattura { get; private set; }
 
   public string ReadingFattura { get; private set; } = "";
@@ -117,6 +126,7 @@ public partial class MessageWindowViewModel : ObservableObject {
     bool unwrap,
     string preference,
     bool htmlReady,
+    bool blockRemoteContent = true,
     Func<ComposeIdentity, CancellationToken, Task<IMailSession?>>? ensureFrom = null) {
     _body = body;
     _fromAccounts = fromAccounts;
@@ -124,6 +134,7 @@ public partial class MessageWindowViewModel : ObservableObject {
     _ensureFrom = ensureFrom;
     _preference = MailBodyKind.Preference(preference);
     _htmlReady = htmlReady;
+    _blockRemoteContent = blockRemoteContent;
     unwrapEnvelope = unwrap;
     readingBodyKind = MailBodyKind.DefaultView(
       unwrap && body.Envelope.HasInnerMessage ? body.InnerHtml : body.Html,
@@ -161,6 +172,18 @@ public partial class MessageWindowViewModel : ObservableObject {
     if (UseFatturaPa)
       SetReadingKind(MailBodyKind.Fattura);
   }
+
+  [RelayCommand(CanExecute = nameof(CanShowRemoteImages))]
+  private void ShowRemoteImages() {
+    if (!CanShowRemoteImages())
+      return;
+    _allowRemoteForMessage = true;
+    ApplyReading(true);
+    NotifyRemoteContent();
+  }
+
+  private bool CanShowRemoteImages() =>
+    ShowRemoteContentBanner;
 
   [RelayCommand]
   private void Reply() =>
@@ -234,12 +257,17 @@ public partial class MessageWindowViewModel : ObservableObject {
     var markup = MessageHtml.HasMarkup(html);
     if (string.IsNullOrWhiteSpace(text))
       text = MessageText.StripHtml(html);
-    if (markup) {
-      var cid = MessageHtml.DataUris(files.Select(f => (f.ContentId, f.ContentType, f.Bytes)));
-      ReadingHtmlDocument = MessageHtml.Document(MessageHtml.InlineCid(html, cid));
-    }
+    var inlined = markup
+      ? MessageHtml.InlineCid(html, MessageHtml.DataUris(files.Select(f => (f.ContentId, f.ContentType, f.Bytes))))
+      : "";
+    _readingHasRemoteContent = MessageHtml.HasRemoteContent(inlined.Length > 0 ? inlined : html);
+    if (!keepKind)
+      _allowRemoteForMessage = false;
+    var allowRemote = !_blockRemoteContent || _allowRemoteForMessage;
+    if (markup)
+      ReadingHtmlDocument = MessageHtml.Document(inlined, allowRemote);
     else if (keepKind && MailBodyKind.IsHtml(ReadingBodyKind))
-      ReadingHtmlDocument = MessageHtml.Document(MessageHtml.FromPlain(text));
+      ReadingHtmlDocument = MessageHtml.Document(MessageHtml.FromPlain(text), allowRemote);
     else
       ReadingHtmlDocument = "";
     ReadingBody = text ?? "";
@@ -272,11 +300,17 @@ public partial class MessageWindowViewModel : ObservableObject {
     NotifyBodyKind();
   }
 
+  private void NotifyRemoteContent() {
+    OnPropertyChanged(nameof(ShowRemoteContentBanner));
+    ShowRemoteImagesCommand.NotifyCanExecuteChanged();
+  }
+
   private void NotifyBodyKind() {
     OnPropertyChanged(nameof(ShowHtmlBody));
     OnPropertyChanged(nameof(ShowTextBody));
     OnPropertyChanged(nameof(ShowSourceBody));
     OnPropertyChanged(nameof(ShowFatturaBody));
+    NotifyRemoteContent();
     OnPropertyChanged(nameof(IsHtmlKind));
     OnPropertyChanged(nameof(IsTextKind));
     OnPropertyChanged(nameof(IsSourceKind));

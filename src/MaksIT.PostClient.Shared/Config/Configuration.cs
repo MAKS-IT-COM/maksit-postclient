@@ -21,6 +21,8 @@ public sealed class Configuration {
 
   public bool GroupConversations { get; set; } = true;
 
+  public bool BlockRemoteContent { get; set; } = true;
+
   public string Language { get; set; } = "";
 
   [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

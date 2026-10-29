@@ -87,6 +87,11 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.4.4" date="2026-10-29">
+      <description>
+        <p>HTML mail blocks remote images by default (Show images for one message). Windows setup upgrades keep sibling assemblies (Identity Hub Contracts). Release also builds a Store MSIX.</p>
+      </description>
+    </release>
     <release version="0.4.3" date="2026-10-29">
       <description>
         <p>Gmail and Microsoft sign-in uses Identity Hub IdP-only; mailbox tokens renew automatically while Hub keeps the IdP refresh. What’s New appears after upgrade. Store and Flathub packaging notes are included.</p>

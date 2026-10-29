@@ -16,25 +16,31 @@ public static class MessageHtml {
   private static readonly Regex Head = new(
     @"<head[^>]*>",
     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-  private const string Csp =
+  private static readonly Regex RemoteRef = new(
+    @"\b(?:src|srcset|poster|background)\s*=\s*[""']?\s*(?:https?:|//)|url\(\s*['""]?\s*(?:https?:|//)",
+    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+  private const string CspAllow =
     """<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http:; style-src 'unsafe-inline'; font-src data: https:; media-src data:">""";
+  private const string CspBlock =
+    """<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; media-src data:">""";
   private const string Style =
     "<style>html{color-scheme:light;background:#fff;} img{max-width:100%;height:auto;} a{color:#1565c0;}</style>";
 
-  public static string Document(string? html) {
+  public static string Document(string? html, bool allowRemoteContent = true) {
     var body = (html ?? "").Trim();
+    var csp = allowRemoteContent ? CspAllow : CspBlock;
     string document;
     if (LooksLikeDocument(body)) {
       document = Head.IsMatch(body)
-        ? Head.Replace(body, m => m.Value + Csp + Style, 1)
-        : Csp + Style + body;
+        ? Head.Replace(body, m => m.Value + csp + Style, 1)
+        : csp + Style + body;
     }
     else {
       document = """
 <!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
-""" + Csp + Style + """
+""" + csp + Style + """
 </head>
 <body style="margin:12px;background:#fff;color:#222;font:14px/1.45 Segoe UI, Ubuntu, sans-serif;">
 """ + body + "</body></html>";
@@ -60,6 +66,12 @@ public static class MessageHtml {
     if (string.IsNullOrWhiteSpace(html))
       return false;
     return LooksLikeDocument(html) || Markup.IsMatch(html);
+  }
+
+  public static bool HasRemoteContent(string? html) {
+    if (string.IsNullOrWhiteSpace(html))
+      return false;
+    return RemoteRef.IsMatch(html);
   }
 
   public static string FromPlain(string? text) {

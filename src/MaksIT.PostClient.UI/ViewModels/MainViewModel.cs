@@ -217,6 +217,12 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   private bool groupConversations;
 
   [ObservableProperty]
+  private bool blockRemoteContent = true;
+
+  private bool _allowRemoteForMessage;
+  private bool _readingHasRemoteContent;
+
+  [ObservableProperty]
   private string readingBodyKind = MailBodyKind.Html;
 
   [ObservableProperty]
@@ -499,6 +505,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     backgroundSyncLabel = BackgroundSyncCaption(copy);
     unwrapEnvelope = files.Current.UnwrapEnvelope;
     groupConversations = files.Current.GroupConversations;
+    blockRemoteContent = files.Current.BlockRemoteContent;
     _bodyPreference = MailBodyKind.Preference(files.Current.ReadingBodyKind);
     readingBodyKind = _bodyPreference;
     readingLayout = MailLayout.Normalize(files.Current.ReadingLayout);
@@ -2627,6 +2634,36 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     RebuildVisible();
   }
 
+  partial void OnBlockRemoteContentChanged(bool value) {
+    var configuration = _files.Current;
+    configuration.BlockRemoteContent = value;
+    _files.Save(configuration);
+    _allowRemoteForMessage = false;
+    if (_reading is not null)
+      ApplyReading(_reading, keepKind: true);
+    NotifyRemoteContent();
+  }
+
+  public bool ShowRemoteContentBanner =>
+    HasReading
+    && ShowHtmlBody
+    && BlockRemoteContent
+    && !_allowRemoteForMessage
+    && _readingHasRemoteContent;
+
+  [RelayCommand(CanExecute = nameof(CanShowRemoteImages))]
+  private void ShowRemoteImages() {
+    if (!CanShowRemoteImages())
+      return;
+    _allowRemoteForMessage = true;
+    if (_reading is not null)
+      ApplyReading(_reading, keepKind: true);
+    NotifyRemoteContent();
+  }
+
+  private bool CanShowRemoteImages() =>
+    ShowRemoteContentBanner;
+
   partial void OnReadingBodyKindChanged(string value) {
     if (_syncingBodyKind)
       return;
@@ -2687,6 +2724,11 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   partial void OnHasReadingChanged(bool value) =>
     NotifyBodyKind();
 
+  private void NotifyRemoteContent() {
+    OnPropertyChanged(nameof(ShowRemoteContentBanner));
+    ShowRemoteImagesCommand.NotifyCanExecuteChanged();
+  }
+
   private void NotifyBodyKind() {
     OnPropertyChanged(nameof(ShowHtmlBody));
     OnPropertyChanged(nameof(ShowTextBody));
@@ -2697,6 +2739,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     OnPropertyChanged(nameof(IsSourceKind));
     OnPropertyChanged(nameof(IsFatturaKind));
     OnPropertyChanged(nameof(HtmlEngineReady));
+    NotifyRemoteContent();
     OnPropertyChanged(nameof(ShowFatturaPaTools));
   }
 
@@ -4335,6 +4378,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       UnwrapEnvelope,
       _bodyPreference,
       HtmlEngineReady,
+      BlockRemoteContent,
       EnsureComposeSessionAsync);
     vm.ComposeRequested += compose => {
       compose.Sent += RememberSent;
@@ -4409,12 +4453,17 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var markup = MessageHtml.HasMarkup(html);
     if (string.IsNullOrWhiteSpace(text))
       text = MessageText.StripHtml(html);
-    if (markup) {
-      var cid = MessageHtml.DataUris(files.Select(f => (f.ContentId, f.ContentType, f.Bytes)));
-      ReadingHtmlDocument = MessageHtml.Document(MessageHtml.InlineCid(html, cid));
-    }
+    var inlined = markup
+      ? MessageHtml.InlineCid(html, MessageHtml.DataUris(files.Select(f => (f.ContentId, f.ContentType, f.Bytes))))
+      : "";
+    _readingHasRemoteContent = MessageHtml.HasRemoteContent(inlined.Length > 0 ? inlined : html);
+    if (!keepKind)
+      _allowRemoteForMessage = false;
+    var allowRemote = !BlockRemoteContent || _allowRemoteForMessage;
+    if (markup)
+      ReadingHtmlDocument = MessageHtml.Document(inlined, allowRemote);
     else if (keepKind && MailBodyKind.IsHtml(ReadingBodyKind))
-      ReadingHtmlDocument = MessageHtml.Document(MessageHtml.FromPlain(text));
+      ReadingHtmlDocument = MessageHtml.Document(MessageHtml.FromPlain(text), allowRemote);
     else
       ReadingHtmlDocument = "";
     ReadingBody = text ?? "";
@@ -4438,6 +4487,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       ApplyBodyKind(fattura is not null && UseFatturaPa
         ? MailBodyKind.Fattura
         : MailBodyKind.DefaultView(html, inner ? body.InnerText : body.Text, _bodyPreference));
+    NotifyRemoteContent();
   }
 
   private static bool IsInlineImage(MailFileAttachment file, string html) {
@@ -4467,6 +4517,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     HasReadingFattura = false;
     ReadingFattura = "";
     ReadingFiles.Clear();
+    _allowRemoteForMessage = false;
+    _readingHasRemoteContent = false;
+    NotifyRemoteContent();
   }
 
   private void MarkRowAttachments(MailMessageHeader header) {

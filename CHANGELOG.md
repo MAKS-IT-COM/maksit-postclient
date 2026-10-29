@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-10-29
+
+HTML mail blocks remote images by default. Windows setup upgrades keep Identity Hub sibling DLLs. Store MSIX is built with each release.
+
+### Added
+
+- **View → Block remote content** stops HTML mail from loading images and tracking pixels from the internet (on by default). Inline attachments still show; **Show images** loads remotes for the open message only.
+
+### Changed
+
+- Release builds a Store **MSIX** (`postclient-{version}.msix`) as well as the setup exe and portable zip. Partner Center identity: `MAKS-IT.Postclient` / Store ID `9N7F29XPK5W4` (see CONTRIBUTING).
+
+### Fixed
+
+- Windows setup (WiX): upgrades remove the previous product only after the new files are installed, file components keep stable GUIDs, and the pack step requires Identity Hub Client + Contracts DLLs in the publish folder so sibling assemblies cannot be dropped from the installer.
+
 ## [0.4.3] - 2026-10-29
 
 Gmail and Microsoft mailbox sign-in uses Identity Hub IdP-only. Hub keeps the IdP refresh in its vault; Postclient renews mailbox tokens automatically. Help shows What’s New after upgrade. Store and Flathub packaging notes.

@@ -33,20 +33,22 @@ WinGet listing is not in this repo yet: it will point at the same GitHub setup e
 
 ## Microsoft Store (MSIX)
 
-`MsixPack` is present and disabled. It writes `releases/postclient-{version}.msix` from the win-x64 publish once `enabled` is true and `publisher` is the Partner Center identity. It is a full-trust desktop package (`runFullTrust`), x64. The package language stays English (`en-us`): the app picks English, Italian, French, German, or Spanish at runtime. Upload that file on an **MSIX** product in Partner Center. The Store re-signs it. An EXE/MSI product listing cannot take this file. The listing will be published soon. The README badge stays a placeholder until the Store ID exists. Add a Store listing for each UI language. The paste text is under [packaging/microsoft-store](packaging/microsoft-store/description.md).
+`MsixPack` is enabled. Each release writes `releases/postclient-{version}.msix` from the win-x64 publish (Windows SDK `makeappx` / `signtool`). It is a full-trust desktop package (`runFullTrust`), x64. The package language stays English (`en-us`): the app picks English, Italian, French, German, or Spanish at runtime. Upload that file on an **MSIX** product in Partner Center. The Store re-signs it. An EXE/MSI product listing cannot take this file. Add a Store listing for each UI language. The paste text is under [packaging/microsoft-store](packaging/microsoft-store/description.md).
 
-The `.msix` is not a GitHub release asset.
-
-Partner Center package identity for this product. The publisher and Store ID are not reserved yet:
+Partner Center package identity for this product:
 
 | Field | Value |
 |-------|--------|
 | Package/Identity/Name | `MAKS-IT.Postclient` |
-| Package/Identity/Publisher | not reserved. `CN=PartnerCenter` stops `MsixPack` |
+| Package/Identity/Publisher | `CN=FCC8C0E7-6D5F-4028-B8EE-903B88C0C8F9` |
 | PublisherDisplayName | `MaksIT` |
-| Store ID | not reserved |
+| Package Family Name | `MAKS-IT.Postclient_pt3s39h1tn26a` |
+| Package SID | `S-1-15-2-1760430311-4196969058-3832155388-2991238057-1261587593-1009432215-1213270591` |
+| Store ID | `9N7F29XPK5W4` |
 
-Those name, publisher, and publisher display strings are `packageName`, `publisher`, and `publisherDisplayName` in `utils/engines/release/scriptSettings.json`. Replace `CN=PartnerCenter`, then set `enabled` to true.
+Those name, publisher, and publisher display strings are `packageName`, `publisher`, and `publisherDisplayName` in `utils/engines/release/scriptSettings.json`.
+
+The Store deep link and the Web Store URL are available after the product is live. The `.msix` is not a GitHub release asset.
 
 Store listing copy:
 

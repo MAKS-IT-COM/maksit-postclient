@@ -215,7 +215,24 @@ public class MessageHtmlTests {
     var html = MessageHtml.Document("<p>Hello</p>");
     Assert.Contains("<p>Hello</p>", html);
     Assert.Contains("Content-Security-Policy", html);
+    Assert.Contains("img-src data: https: http:", html);
     Assert.Contains("<html>", html);
+  }
+
+  [Fact]
+  public void Document_BlocksRemoteImagesWhenAsked() {
+    var html = MessageHtml.Document("<img src=\"https://track.example/pixel.gif\">", allowRemoteContent: false);
+    Assert.Contains("img-src data:", html);
+    Assert.DoesNotContain("img-src data: https:", html);
+  }
+
+  [Fact]
+  public void HasRemoteContent_DetectsHttpImagesNotCid() {
+    Assert.True(MessageHtml.HasRemoteContent("<img src=\"https://track.example/x.gif\">"));
+    Assert.True(MessageHtml.HasRemoteContent("style=\"background:url(http://x/y.png)\""));
+    Assert.False(MessageHtml.HasRemoteContent("<img src=\"cid:pic@mail\">"));
+    Assert.False(MessageHtml.HasRemoteContent("<img src=\"data:image/png;base64,xx\">"));
+    Assert.False(MessageHtml.HasRemoteContent("<a href=\"https://example.com\">link</a>"));
   }
 
   [Fact]

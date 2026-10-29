@@ -67,6 +67,10 @@
                   ToggleType="CheckBox"
                   IsChecked="{Binding GroupConversations}"
                   ToolTip.Tip="{Binding Copy.GroupConversationsTip}" />
+        <MenuItem Header="{Binding Copy.BlockRemoteContent}"
+                  ToggleType="CheckBox"
+                  IsChecked="{Binding BlockRemoteContent}"
+                  ToolTip.Tip="{Binding Copy.BlockRemoteContentTip}" />
         <Separator />
         <MenuItem Header="{Binding Copy.ListAboveReading}"
                   ToggleType="Radio"

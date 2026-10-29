@@ -1,8 +1,8 @@
 # Postclient
 
 ![Line Coverage](https://img.shields.io/badge/Line%20Coverage-60.4%25-green)
-![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-47.9%25-yellowgreen)
-![Method Coverage](https://img.shields.io/badge/Method%20Coverage-62.8%25-green)
+![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-46.3%25-yellowgreen)
+![Method Coverage](https://img.shields.io/badge/Method%20Coverage-63.1%25-green)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE.md)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)
@@ -20,12 +20,12 @@ It is not a qualified trust service provider, not a PEC operator, not a timestam
 
 ![Inbox](assets/screenshots/inbox.png)
 
-![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-published%20soon-5C2D91)
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-9N7F29XPK5W4-5C2D91)](https://apps.microsoft.com/store/detail/9N7F29XPK5W4?cid=DevShareMCLPCB)
 [![Windows](https://img.shields.io/badge/Windows-zip%20%26%20setup-0078D6)](https://github.com/MAKS-IT-COM/maksit-postclient/releases/latest)
 [![Linux](https://img.shields.io/badge/Linux-Flatpak-0078D6)](https://github.com/MAKS-IT-COM/maksit-postclient/releases/latest)
 [![macOS](https://img.shields.io/badge/macOS-DMG-000000)](https://github.com/MAKS-IT-COM/maksit-postclient/releases/latest)
 
-macOS builds are unsigned: first launch is **Open** from the context menu. The Microsoft Store listing will be published soon.
+macOS builds are unsigned: first launch is **Open** from the context menu. The Microsoft Store product is reserved (`9N7F29XPK5W4`); the public listing goes live after the first submission.
 
 Changes: [CHANGELOG.md](CHANGELOG.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -153,6 +153,7 @@ Desktop notices fire for new PEC, ricevute, and REM (Windows toast, macOS notifi
 - Folder tree follows the server (Inbox, Ricevute/Receipts, Drafts, Sent, Archive, Junk, Trash, plus custom folders). Nested IMAP paths show as nested folders, including Gmail’s `[Gmail]/…` labels under `[Gmail]`. Standard folders that the server stores as `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` sit next to Inbox, not under it. Gmail uses `/` as the separator, so a label like `P.IVA` stays one folder. System folders cannot be deleted. You can create a folder, empty one (to Trash, or permanently in Trash), mark all read/unread, delete a custom folder, and drag messages onto a folder. Which accounts and nested folders are expanded or collapsed is kept in `settings.json`.
 - List columns: unread, flag, attachments, delivery, type (PEC / RIC / REM / SIG), from, subject, date (local `yyyy-MM-dd HH:mm`), size, practice label.
 - View: HTML (OS web engine), plain text, raw source, or **FatturaPA**. Layout: list above reading, or three columns (folders, list, reading).
+- **Block remote content** (on by default) keeps HTML mail from loading images or tracking pixels from the internet; use **Show images** on a message when you want remotes for that view only. Inline attachments still show.
 - **Group conversations** indents replies in the folder list using Message-ID / In-Reply-To / References (depth up to 8). PEC ricevute that share the same original sit together. There is no separate conversation pane.
 - Message actions: reply, reply all, forward, open in a new window, read/unread, flag, priority, mark as spam, not spam, delete. **Shift+click** and **Ctrl+click** select several messages or folders. Delete (toolbar, **Del**, empty folder) moves the selection to Trash. Deleting from Trash is permanent.
 - Compose is **plain text**. To, Cc, Bcc are address chips. Attachments are listed on the composer. **Send attachments as ZIP** packs dropped files (optional password). Send uses the selected mailbox’s SMTP identity only.
@@ -237,7 +238,7 @@ Turn off a pack to hide its menus, columns, and account presets. Existing mailbo
 
 ## Getting started
 
-Install a build from [Releases](https://github.com/MAKS-IT-COM/maksit-postclient/releases): Windows portable zip and setup (`postclient-{version}.exe`, self-contained — no .NET SDK on the PC; default path `C:\Program Files\MaksIT\Postclient`), Linux Flatpak, macOS DMG (`osx-arm64` and `osx-x64`). The Microsoft Store listing will be published soon. WinGet listing comes later from the same setup exe.
+Install a build from [Releases](https://github.com/MAKS-IT-COM/maksit-postclient/releases): Windows portable zip and setup (`postclient-{version}.exe`, self-contained — no .NET SDK on the PC; default path `C:\Program Files\MaksIT\Postclient`), Linux Flatpak, macOS DMG (`osx-arm64` and `osx-x64`). Microsoft Store product ID `9N7F29XPK5W4` (listing after first submission). WinGet listing comes later from the same setup exe.
 
 Or from `src/`:
 
@@ -285,7 +286,7 @@ The local archive (`mail.db` and `.eml`) stays on this computer. IMAP and POP3 s
 Next to settings (`DPAPI` on Windows, file mode `600` on Linux and macOS), never in `settings.json`. Gmail and Microsoft 365 sign in through Identity Hub. The Hub tokens stay in `secrets.bin`.
 
 **Where are the installers?**
-[GitHub Releases](https://github.com/MAKS-IT-COM/maksit-postclient/releases). The Microsoft Store listing will be published soon.
+[GitHub Releases](https://github.com/MAKS-IT-COM/maksit-postclient/releases). [Microsoft Store](https://apps.microsoft.com/store/detail/9N7F29XPK5W4?cid=DevShareMCLPCB) (product reserved; public page after submission).
 
 ## Tests
 

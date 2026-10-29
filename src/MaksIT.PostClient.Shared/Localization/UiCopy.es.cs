@@ -142,6 +142,11 @@ public sealed partial class UiCopy {
       UnwrapEnvelope = "Abrir sobre PEC/REM",
       GroupConversations = "Agrupar conversaciones",
       GroupConversationsTip = "Sangra las respuestas en esta carpeta. Message-ID / In-Reply-To / References — no un panel de conversación.",
+      BlockRemoteContent = "Bloquear contenido remoto",
+      BlockRemoteContentTip = "No carga imágenes ni píxeles de seguimiento de Internet. Los adjuntos incrustados siguen visibles.",
+      ShowRemoteImages = "Mostrar imágenes",
+      RemoteContentBlocked = "Las imágenes remotas están bloqueadas para evitar el seguimiento de apertura.",
+
       ListAboveReading = "Lista encima de la lectura",
       ThreeColumns = "Tres columnas",
       ThreeColumnsTip = "Carpetas, lista y lectura en paralelo",

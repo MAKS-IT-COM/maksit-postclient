@@ -2,7 +2,7 @@
 
 The app UI is English, Italian, French, German, or Spanish. Partner Center needs a Store listing for each of those languages. Paste only the fenced text. The MSIX package language stays `en-us`: the app chooses the UI language at runtime, so the package does not ship satellite resources.
 
-The listing is not in the Store yet. Fill the Store ID in [CONTRIBUTING.md](../../CONTRIBUTING.md) when Partner Center reserves the product.
+Partner Center Store ID is `9N7F29XPK5W4` (see [CONTRIBUTING.md](../../CONTRIBUTING.md)). The Store deep link and Web Store URL appear after the product is live.
 
 | Partner Center language | Code | Listing |
 |-------------------------|------|---------|

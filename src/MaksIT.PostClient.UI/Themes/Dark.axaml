@@ -228,6 +228,12 @@
     <Setter Property="BorderBrush" Value="#2a2e33" />
     <Setter Property="BorderThickness" Value="0,0,0,1" />
   </Style>
+  <Style Selector="Border.remote-content-banner">
+    <Setter Property="Background" Value="#1e262e" />
+    <Setter Property="BorderBrush" Value="#33404c" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
   <Style Selector="TextBlock.header-label">
     <Setter Property="Foreground" Value="#9aa0a6" />
     <Setter Property="FontSize" Value="12" />

@@ -278,6 +278,14 @@ public sealed partial class UiCopy {
 
   public string GroupConversationsTip { get; init; } = "";
 
+  public string BlockRemoteContent { get; init; } = "";
+
+  public string BlockRemoteContentTip { get; init; } = "";
+
+  public string ShowRemoteImages { get; init; } = "";
+
+  public string RemoteContentBlocked { get; init; } = "";
+
   public string ListAboveReading { get; init; } = "";
 
   public string ThreeColumns { get; init; } = "";
@@ -809,6 +817,10 @@ public sealed partial class UiCopy {
       UnwrapEnvelope = "Unwrap PEC/REM envelope",
       GroupConversations = "Group conversations",
       GroupConversationsTip = "Indent replies in this folder. Message-ID / In-Reply-To / References — not a conversation pane.",
+      BlockRemoteContent = "Block remote content",
+      BlockRemoteContentTip = "Do not load images or tracking pixels from the internet. Inline attachments still show.",
+      ShowRemoteImages = "Show images",
+      RemoteContentBlocked = "Remote images are blocked so open tracking cannot run.",
       ListAboveReading = "List above reading",
       ThreeColumns = "Three columns",
       ThreeColumnsTip = "Folders, list, and reading side by side",
@@ -1111,6 +1123,10 @@ public sealed partial class UiCopy {
       UnwrapEnvelope = "Apri busta PEC/REM",
       GroupConversations = "Raggruppa conversazioni",
       GroupConversationsTip = "Indenta le risposte in questa cartella. Message-ID / In-Reply-To / References — non un riquadro conversazioni.",
+      BlockRemoteContent = "Blocca contenuto remoto",
+      BlockRemoteContentTip = "Non carica immagini o pixel di tracking da Internet. Gli allegati incorporati restano visibili.",
+      ShowRemoteImages = "Mostra immagini",
+      RemoteContentBlocked = "Le immagini remote sono bloccate per evitare il tracking di apertura.",
       ListAboveReading = "Elenco sopra la lettura",
       ThreeColumns = "Tre colonne",
       ThreeColumnsTip = "Cartelle, elenco e lettura affiancati",

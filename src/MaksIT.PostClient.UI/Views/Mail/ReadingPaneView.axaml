@@ -53,6 +53,21 @@
           <CheckBox Content="{Binding Copy.UnwrapEnvelope}"
                     IsChecked="{Binding UnwrapEnvelope}"
                     IsVisible="{Binding UseEnvelopeTools}" />
+          <Border Classes="remote-content-banner"
+                  IsVisible="{Binding ShowRemoteContentBanner}"
+                  Padding="8,6"
+                  Margin="0,2,0,0">
+            <DockPanel>
+              <Button DockPanel.Dock="Right"
+                      Content="{Binding Copy.ShowRemoteImages}"
+                      Classes="mail-tool"
+                      Command="{Binding ShowRemoteImagesCommand}"
+                      Margin="8,0,0,0" />
+              <TextBlock Text="{Binding Copy.RemoteContentBlocked}"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
           <StackPanel Orientation="Horizontal" Spacing="4">
             <Button Content="{Binding Copy.Html}"
                     Classes="body-kind"
