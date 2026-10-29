@@ -281,7 +281,6 @@ function Invoke-Plugin {
 
     Write-Log -Level "STEP" -Message "Building Windows installer exe ($wixArch)..."
     try {
-        Invoke-ExternalCommand -Name wix -ArgumentList (@('extension', 'add', '-g', 'WixToolset.Util.wixext') + $eulaArgs) | Out-Null
         Invoke-ExternalCommand -Name wix -ArgumentList (@('build') + $eulaArgs + $archArgs + @($bundleWxsPath, '-ext', $bundleExt, '-ext', 'WixToolset.Util.wixext', '-o', $exePath)) | Out-Null
     }
     catch {

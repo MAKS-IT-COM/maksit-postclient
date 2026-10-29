@@ -372,6 +372,7 @@ public sealed class MessageRowViewModel : ObservableObject {
     OnPropertyChanged(nameof(Badge));
     OnPropertyChanged(nameof(UnreadMark));
     OnPropertyChanged(nameof(UnreadTip));
+    OnPropertyChanged(nameof(Weight));
     OnPropertyChanged(nameof(FlagMark));
     OnPropertyChanged(nameof(FlagTip));
     OnPropertyChanged(nameof(PriorityMark));

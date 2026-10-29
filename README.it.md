@@ -202,7 +202,9 @@ Spegnere un pacchetto nasconde menu, colonne e profili. Le caselle già configur
 
 ## Download
 
-Quando esiste una GitHub Release: zip portatile e setup Windows (`postclient-{version}.exe`, self-contained — niente SDK .NET sul PC; percorso predefinito `C:\Program Files\MaksIT\Postclient`), Flatpak Linux, DMG macOS (`osx-arm64` e `osx-x64`). Le build macOS non sono firmate: al primo avvio **Apri** dal menu contestuale.
+Quando esiste una GitHub Release: zip portatile e setup Windows (`postclient-{version}.exe`, self-contained — niente SDK .NET sul PC; percorso predefinito `C:\Program Files\MaksIT\Postclient`), Flatpak Linux, DMG macOS (`osx-arm64` e `osx-x64`). Le build macOS non sono firmate: al primo avvio **Apri** dal menu contestuale. Il Microsoft Store sarà pubblicato a breve.
+
+![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-published%20soon-5C2D91)
 
 ### Linux (Flatpak)
 

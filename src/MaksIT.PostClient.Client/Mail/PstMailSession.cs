@@ -1107,19 +1107,20 @@ public sealed class PstMailSession : IMailSession {
   private static string DisplaySubject(EmailStoreItemSummary? summary) =>
     PstSubject.Display(summary?.Subject, summary?.NormalizedSubject);
 
+  private static readonly EmailWriterOptions EmlWriteOptions = new(
+    EmailConversionLossPolicy.Allow,
+    EmailWriterOptions.Default.UsePreservedRawSource,
+    EmailWriterOptions.Default.IncludeBccHeader,
+    EmailWriterOptions.Default.Base64LineLength,
+    EmailWriterOptions.Default.MaxNestedMessageDepth,
+    EmailWriterOptions.Default.MaxOutputBytes);
+
   private static byte[] ToEml(EmailDocument document) {
     document.Subject = PstSubject.Display(
       document.Subject,
       document.MessageMetadata?.NormalizedSubject,
       document.MessageMetadata?.SubjectPrefix);
-    try {
-      return document.ToBytes(EmailFileFormat.Eml);
-    }
-    catch {
-      using var stream = new MemoryStream();
-      new EmailDocumentWriter().Write(document, stream, EmailFileFormat.Eml);
-      return stream.ToArray();
-    }
+    return document.ToBytes(EmailFileFormat.Eml, EmlWriteOptions);
   }
 
   private static string ItemId(EmailStoreItemReference reference) =>

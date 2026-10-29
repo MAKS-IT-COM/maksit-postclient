@@ -197,7 +197,9 @@ Ein Paket auszuschalten blendet Menüs, Spalten und Profile aus. Vorhandene Post
 
 ## Downloads
 
-Wenn ein GitHub-Release existiert: portables Windows-Zip und Setup (`postclient-{version}.exe`, eigenständig — kein .NET-SDK auf dem PC; Standardpfad `C:\Program Files\MaksIT\Postclient`), Linux-Flatpak, macOS-DMG (`osx-arm64` und `osx-x64`). macOS-Builds sind unsigniert: beim ersten Start **Öffnen** im Kontextmenü.
+Wenn ein GitHub-Release existiert: portables Windows-Zip und Setup (`postclient-{version}.exe`, eigenständig — kein .NET-SDK auf dem PC; Standardpfad `C:\Program Files\MaksIT\Postclient`), Linux-Flatpak, macOS-DMG (`osx-arm64` und `osx-x64`). macOS-Builds sind unsigniert: beim ersten Start **Öffnen** im Kontextmenü. Der Microsoft Store wird in Kürze veröffentlicht.
+
+![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-published%20soon-5C2D91)
 
 ### Linux (Flatpak)
 

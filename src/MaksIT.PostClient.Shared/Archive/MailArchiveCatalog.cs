@@ -22,42 +22,21 @@ public sealed class MailArchiveCatalog : IDisposable {
   public MailArchiveStore Open(string mailboxId, string databasePath) {
     ArgumentException.ThrowIfNullOrWhiteSpace(mailboxId);
     ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
-    return OffUi(() => {
-      lock (_gate) {
-        if (_stores.TryGetValue(mailboxId, out var existing)
-            && _paths.TryGetValue(mailboxId, out var path)
-            && path.Equals(databasePath, StringComparison.OrdinalIgnoreCase)) {
-          if (_spam is not null)
-            Absorb(existing);
-          return existing;
-        }
-
-        if (_stores.TryRemove(mailboxId, out var previous)) {
-          if (_spam is not null)
-            Absorb(previous);
-          previous.Dispose();
-        }
-
-        var store = new MailArchiveStore(databasePath);
-        _stores[mailboxId] = store;
-        _paths[mailboxId] = databasePath;
-        if (_spam is not null)
-          Absorb(store);
-        return store;
-      }
-    });
+    return OffUi(() => OpenCore(mailboxId, databasePath));
   }
 
   public void Close(string mailboxId) {
     OffUi(() => {
-      if (_stores.TryRemove(mailboxId, out var store)) {
-        if (_spam is not null)
-          Absorb(store);
-        store.Dispose();
-      }
+      lock (_gate) {
+        if (_stores.TryRemove(mailboxId, out var store)) {
+          if (_spam is not null)
+            Absorb(store);
+          store.Dispose();
+        }
 
-      _paths.TryRemove(mailboxId, out _);
-      return 0;
+        _paths.TryRemove(mailboxId, out _);
+        return 0;
+      }
     });
   }
 
@@ -82,16 +61,65 @@ public sealed class MailArchiveCatalog : IDisposable {
     throw new InvalidOperationException("Archive is not open for mailbox " + mailboxId + ".");
   }
 
+  private MailArchiveStore OpenCore(string mailboxId, string databasePath) {
+    lock (_gate) {
+      if (TrySamePath(mailboxId, databasePath, out var existing)) {
+        if (_spam is not null)
+          Absorb(existing);
+        return existing;
+      }
+    }
+
+    var store = new MailArchiveStore(databasePath);
+    lock (_gate) {
+      if (TrySamePath(mailboxId, databasePath, out var raced)) {
+        store.Dispose();
+        if (_spam is not null)
+          Absorb(raced);
+        return raced;
+      }
+
+      _stores.TryRemove(mailboxId, out var previous);
+      _stores[mailboxId] = store;
+      _paths[mailboxId] = databasePath;
+      if (_spam is not null) {
+        if (previous is not null)
+          Absorb(previous);
+        Absorb(store);
+      }
+
+      previous?.Dispose();
+      return store;
+    }
+  }
+
+  private bool TrySamePath(string mailboxId, string databasePath, out MailArchiveStore store) {
+    store = null!;
+    if (!_stores.TryGetValue(mailboxId, out var found))
+      return false;
+    if (!_paths.TryGetValue(mailboxId, out var path)
+        || !path.Equals(databasePath, StringComparison.OrdinalIgnoreCase))
+      return false;
+    store = found;
+    return true;
+  }
+
+  private int Use(string mailboxId, Action<MailArchiveStore> work) {
+    lock (_gate) {
+      if (!_stores.TryGetValue(mailboxId, out var store))
+        return 0;
+      work(store);
+      return 0;
+    }
+  }
+
   public MailArchiveStore? TryGet(string mailboxId) {
     _stores.TryGetValue(mailboxId, out var store);
     return store;
   }
 
   public void UpsertHeaders(string mailboxId, IEnumerable<MailArchiveHeader> headers) =>
-    OffUi(() => {
-      Require(mailboxId).UpsertHeaders(mailboxId, headers);
-      return 0;
-    });
+    OffUi(() => Use(mailboxId, store => store.UpsertHeaders(mailboxId, headers)));
 
   public void SetKeywordIndexEnabled(string mailboxId, bool enabled) =>
     OffUi(() => {
@@ -119,10 +147,7 @@ public sealed class MailArchiveCatalog : IDisposable {
     string mailboxId,
     string folder,
     IEnumerable<(uint Uid, bool IsSeen, bool IsFlagged)> flags) =>
-    OffUi(() => {
-      Require(mailboxId).UpdateFlags(mailboxId, folder, flags);
-      return 0;
-    });
+    OffUi(() => Use(mailboxId, store => store.UpdateFlags(mailboxId, folder, flags)));
 
   public void UpsertBody(
     string mailboxId,
@@ -130,10 +155,8 @@ public sealed class MailArchiveCatalog : IDisposable {
     string emlPath,
     string bodyText,
     string attachmentText) =>
-    OffUi(() => {
-      Require(mailboxId).UpsertBody(mailboxId, header, emlPath, bodyText, attachmentText);
-      return 0;
-    });
+    OffUi(() => Use(mailboxId, store =>
+      store.UpsertBody(mailboxId, header, emlPath, bodyText, attachmentText)));
 
   public IReadOnlyList<EmbeddingWorkItem> PendingEmbeddings(
     string modelId,
@@ -187,10 +210,7 @@ public sealed class MailArchiveCatalog : IDisposable {
     });
 
   public void UpsertEmbedding(string mailboxId, long messageId, string modelId, float[] vector) =>
-    OffUi(() => {
-      Require(mailboxId).UpsertEmbedding(messageId, modelId, vector);
-      return 0;
-    });
+    OffUi(() => Use(mailboxId, store => store.UpsertEmbedding(messageId, modelId, vector)));
 
   public void MarkSpam(string mailboxId, string folder, uint uid, string modelId) =>
     OffUi(() => {
@@ -391,7 +411,10 @@ public sealed class MailArchiveCatalog : IDisposable {
     });
 
   public uint NextUid(string mailboxId, string folder) =>
-    OffUi(() => Require(mailboxId).NextUid(mailboxId, folder));
+    OffUi(() => {
+      lock (_gate)
+        return Require(mailboxId).NextUid(mailboxId, folder);
+    });
 
   public IReadOnlyList<string> LabelNames(string mailboxId) =>
     OffUi(() => TryGet(mailboxId)?.LabelNames(mailboxId) ?? []);
@@ -424,36 +447,38 @@ public sealed class MailArchiveCatalog : IDisposable {
     string destEmlPath,
     uint destUid = 0) =>
     OffUi(() => {
-      var source = Require(sourceMailboxId);
-      var dest = Require(destMailboxId);
-      var copy = source.ReadCopy(sourceMailboxId, sourceFolder, uid)
-        ?? throw new InvalidOperationException("Message is missing from the source archive.");
-      copy = new MailArchiveCopy {
-        Header = new MailArchiveHeader {
-          Uid = destUid,
-          Folder = destFolder,
-          Subject = copy.Header.Subject,
-          From = copy.Header.From,
-          Date = copy.Header.Date,
-          IsSeen = copy.Header.IsSeen,
-          IsFlagged = copy.Header.IsFlagged,
-          HasAttachments = copy.Header.HasAttachments,
-          Priority = copy.Header.Priority,
-          EnvelopeKind = copy.Header.EnvelopeKind,
-          EnvelopeBadge = copy.Header.EnvelopeBadge,
-          EnvelopeTipo = copy.Header.EnvelopeTipo,
-          MessageId = copy.Header.MessageId,
-          InReplyTo = copy.Header.InReplyTo,
-          EmlPath = destEmlPath,
-          Labels = copy.Header.Labels
-        },
-        BodyText = copy.BodyText,
-        AttachmentText = copy.AttachmentText,
-        Labels = copy.Labels,
-        ModelId = copy.ModelId,
-        Vector = copy.Vector
-      };
-      return dest.InsertCopy(destMailboxId, destFolder, copy);
+      lock (_gate) {
+        var source = Require(sourceMailboxId);
+        var dest = Require(destMailboxId);
+        var copy = source.ReadCopy(sourceMailboxId, sourceFolder, uid)
+          ?? throw new InvalidOperationException("Message is missing from the source archive.");
+        copy = new MailArchiveCopy {
+          Header = new MailArchiveHeader {
+            Uid = destUid,
+            Folder = destFolder,
+            Subject = copy.Header.Subject,
+            From = copy.Header.From,
+            Date = copy.Header.Date,
+            IsSeen = copy.Header.IsSeen,
+            IsFlagged = copy.Header.IsFlagged,
+            HasAttachments = copy.Header.HasAttachments,
+            Priority = copy.Header.Priority,
+            EnvelopeKind = copy.Header.EnvelopeKind,
+            EnvelopeBadge = copy.Header.EnvelopeBadge,
+            EnvelopeTipo = copy.Header.EnvelopeTipo,
+            MessageId = copy.Header.MessageId,
+            InReplyTo = copy.Header.InReplyTo,
+            EmlPath = destEmlPath,
+            Labels = copy.Header.Labels
+          },
+          BodyText = copy.BodyText,
+          AttachmentText = copy.AttachmentText,
+          Labels = copy.Labels,
+          ModelId = copy.ModelId,
+          Vector = copy.Vector
+        };
+        return dest.InsertCopy(destMailboxId, destFolder, copy);
+      }
     });
 
   public IReadOnlyList<uint> UidsOlderThan(
@@ -472,13 +497,15 @@ public sealed class MailArchiveCatalog : IDisposable {
 
   public void Release() {
     OffUi(() => {
-      foreach (var store in Stores())
-        store.Dispose();
-      _stores.Clear();
-      _paths.Clear();
-      _spam?.Dispose();
-      _spam = null;
-      return 0;
+      lock (_gate) {
+        foreach (var store in Stores())
+          store.Dispose();
+        _stores.Clear();
+        _paths.Clear();
+        _spam?.Dispose();
+        _spam = null;
+        return 0;
+      }
     });
   }
 

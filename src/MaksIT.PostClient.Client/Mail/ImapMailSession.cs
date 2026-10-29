@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
@@ -97,11 +98,21 @@ public sealed class ImapMailSession : IMailSession {
 
     try {
       var layout = AccountLayout();
+      // Gmail LIST-STATUS counts every label and then blocks the folder tree. One LIST plus Inbox
+      // is enough to show folders; other counts come from the local archive and later sync.
+      var countAll = !layout.PreferGmailSystemPaths;
       var folders = new List<MailFolderInfo>();
-      await AddFolderAsync(client.Inbox, folders, layout, cancellationToken).ConfigureAwait(false);
+      await AddFolderAsync(client.Inbox, folders, layout, fetchStatus: true, cancellationToken)
+        .ConfigureAwait(false);
       foreach (var ns in client.PersonalNamespaces) {
-        foreach (var folder in await ListNamespaceAsync(client, ns, cancellationToken).ConfigureAwait(false))
-          await AddFolderAsync(folder, folders, layout, cancellationToken).ConfigureAwait(false);
+        var batch = await ListNamespaceAsync(client, ns, countAll, cancellationToken).ConfigureAwait(false);
+        foreach (var folder in batch.Folders)
+          await AddFolderAsync(
+            folder,
+            folders,
+            layout,
+            fetchStatus: countAll && !batch.HasStatus,
+            cancellationToken).ConfigureAwait(false);
       }
 
       return Result<IReadOnlyList<MailFolderInfo>>.Ok(MailFolderCatalog.Normalize(folders, layout));
@@ -257,10 +268,11 @@ public sealed class ImapMailSession : IMailSession {
     if (client is null)
       return Result<MailMessageBody>.UnprocessableEntity(null, "Not connected.");
 
-    using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-    using var abort = linked.Token.Register(DropSocket);
-    if (!interactive)
-      linked.CancelAfter(MailFetch.BackfillTimeout);
+    using var timeout = interactive ? null : new CancellationTokenSource(MailFetch.BackfillTimeout);
+    using var linked = timeout is null
+      ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+      : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+    using var abort = timeout is null ? default : timeout.Token.Register(DropSocket);
     MimeMessage mime;
     try {
       var imapFolder = await GetMailFolderAsync(client, folder, linked.Token).ConfigureAwait(false);
@@ -439,36 +451,47 @@ public sealed class ImapMailSession : IMailSession {
     MailFlagUpdate update,
     CancellationToken cancellationToken) {
     ArgumentNullException.ThrowIfNull(update);
-    var client = RequireImap();
-    if (client is null)
-      return Result.UnprocessableEntity("Not connected.");
     var uids = Uids(ids);
     if (uids.Count == 0)
       return Result.BadRequest("Select at least one message.");
 
-    try {
-      var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
-      await imapFolder.OpenAsync(FolderAccess.ReadWrite, cancellationToken).ConfigureAwait(false);
-      if (update.Seen == true)
-        await StoreFlagsAsync(imapFolder, uids, StoreAction.Add, MessageFlags.Seen, cancellationToken).ConfigureAwait(false);
-      if (update.Seen == false)
-        await StoreFlagsAsync(imapFolder, uids, StoreAction.Remove, MessageFlags.Seen, cancellationToken).ConfigureAwait(false);
-      if (update.Flagged == true)
-        await StoreFlagsAsync(imapFolder, uids, StoreAction.Add, MessageFlags.Flagged, cancellationToken).ConfigureAwait(false);
-      if (update.Flagged == false)
-        await StoreFlagsAsync(imapFolder, uids, StoreAction.Remove, MessageFlags.Flagged, cancellationToken).ConfigureAwait(false);
-      if (update.Deleted)
-        await StoreFlagsAsync(imapFolder, uids, StoreAction.Add, MessageFlags.Deleted, cancellationToken).ConfigureAwait(false);
-      if (update.Priority is not null)
-        await StorePriorityAsync(imapFolder, uids, update.Priority, cancellationToken).ConfigureAwait(false);
-      if (update.Deleted)
-        await imapFolder.ExpungeAsync(uids, cancellationToken).ConfigureAwait(false);
-      return Result.Ok();
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var client = await EnsureImapAsync(cancellationToken).ConfigureAwait(false);
+      if (client is null)
+        return Result.UnprocessableEntity("Not connected.");
+      try {
+        var imapFolder = await GetMailFolderAsync(client, folder, cancellationToken).ConfigureAwait(false);
+        await imapFolder.OpenAsync(FolderAccess.ReadWrite, cancellationToken).ConfigureAwait(false);
+        if (update.Seen == true)
+          await StoreFlagsAsync(imapFolder, uids, StoreAction.Add, MessageFlags.Seen, cancellationToken).ConfigureAwait(false);
+        if (update.Seen == false)
+          await StoreFlagsAsync(imapFolder, uids, StoreAction.Remove, MessageFlags.Seen, cancellationToken).ConfigureAwait(false);
+        if (update.Flagged == true)
+          await StoreFlagsAsync(imapFolder, uids, StoreAction.Add, MessageFlags.Flagged, cancellationToken).ConfigureAwait(false);
+        if (update.Flagged == false)
+          await StoreFlagsAsync(imapFolder, uids, StoreAction.Remove, MessageFlags.Flagged, cancellationToken).ConfigureAwait(false);
+        if (update.Deleted)
+          await StoreFlagsAsync(imapFolder, uids, StoreAction.Add, MessageFlags.Deleted, cancellationToken).ConfigureAwait(false);
+        if (update.Priority is not null)
+          await StorePriorityAsync(imapFolder, uids, update.Priority, cancellationToken).ConfigureAwait(false);
+        if (update.Deleted)
+          await imapFolder.ExpungeAsync(uids, cancellationToken).ConfigureAwait(false);
+        return Result.Ok();
+      }
+      catch (Exception ex) when (attempt == 0 && IsBrokenConnection(ex)) {
+        DropSocket();
+      }
+      catch (Exception ex) {
+        return Result.UnprocessableEntity(ex.Message);
+      }
     }
-    catch (Exception ex) {
-      return Result.UnprocessableEntity(ex.Message);
-    }
+
+    return Result.UnprocessableEntity("Not connected.");
   }
+
+  private static bool IsBrokenConnection(Exception ex) =>
+    ex is IOException or SocketException or ObjectDisposedException or ImapProtocolException
+    || (ex.InnerException is not null && IsBrokenConnection(ex.InnerException));
 
   public Task<Result> CreateFolderAsync(
     string name,
@@ -850,32 +873,33 @@ public sealed class ImapMailSession : IMailSession {
     return client.Inbox.ParentFolder ?? client.Inbox;
   }
 
-  private static async Task<IReadOnlyList<IMailFolder>> ListNamespaceAsync(
+  private readonly record struct NamespaceFolders(IReadOnlyList<IMailFolder> Folders, bool HasStatus);
+
+  private static async Task<NamespaceFolders> ListNamespaceAsync(
     ImapClient client,
     FolderNamespace ns,
+    bool countAll,
     CancellationToken cancellationToken) {
+    var status = countAll ? StatusItems.Unread | StatusItems.Count : StatusItems.None;
     try {
-      var all = await client.GetFoldersAsync(ns, StatusItems.Unread | StatusItems.Count, false, cancellationToken)
-        .ConfigureAwait(false);
+      var all = await client.GetFoldersAsync(ns, status, false, cancellationToken).ConfigureAwait(false);
       if (all.Count > 0)
-        return all.ToList();
+        return new NamespaceFolders(all.ToList(), countAll);
     }
     catch {
     }
 
     try {
-      var subscribed = await client
-        .GetFoldersAsync(ns, StatusItems.Unread | StatusItems.Count, true, cancellationToken)
-        .ConfigureAwait(false);
+      var subscribed = await client.GetFoldersAsync(ns, status, true, cancellationToken).ConfigureAwait(false);
       if (subscribed.Count > 0)
-        return subscribed.ToList();
+        return new NamespaceFolders(subscribed.ToList(), countAll);
     }
     catch {
     }
 
     var folders = new List<IMailFolder>();
     await WalkAsync(client.GetFolder(ns), folders, cancellationToken).ConfigureAwait(false);
-    return folders;
+    return new NamespaceFolders(folders, false);
   }
 
   private static async Task WalkAsync(
@@ -900,6 +924,7 @@ public sealed class ImapMailSession : IMailSession {
     IMailFolder folder,
     List<MailFolderInfo> folders,
     MailFolderLayout layout,
+    bool fetchStatus,
     CancellationToken cancellationToken) {
     if (ShouldSkip(folder, layout))
       return;
@@ -909,11 +934,13 @@ public sealed class ImapMailSession : IMailSession {
     var total = 0;
     try {
       if (folder.Exists) {
-        try {
-          await folder.StatusAsync(StatusItems.Unread | StatusItems.Count, cancellationToken)
-            .ConfigureAwait(false);
-        }
-        catch {
+        if (fetchStatus) {
+          try {
+            await folder.StatusAsync(StatusItems.Unread | StatusItems.Count, cancellationToken)
+              .ConfigureAwait(false);
+          }
+          catch {
+          }
         }
 
         unread = folder.Unread;
@@ -1214,7 +1241,7 @@ public sealed class ImapMailSession : IMailSession {
     StoreAction action,
     MessageFlags flags,
     CancellationToken cancellationToken) =>
-    folder.StoreAsync(uids, new StoreFlagsRequest(action, flags) { Silent = true }, cancellationToken);
+    folder.StoreAsync(uids, new StoreFlagsRequest(action, flags) { Silent = false }, cancellationToken);
 
   private static void CollectPartNames(BodyPart? part, List<string> names) {
     if (part is null)

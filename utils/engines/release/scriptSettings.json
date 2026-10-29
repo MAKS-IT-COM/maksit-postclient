@@ -65,6 +65,19 @@
       "exeNamePattern": "postclient-{version}.exe"
     },
     {
+      "name": "MsixPack",
+      "stageLabel": "build",
+      "enabled": false,
+      "packageName": "MAKS-IT.Postclient",
+      "publisher": "CN=PartnerCenter",
+      "publisherDisplayName": "MaksIT",
+      "displayName": "Postclient",
+      "executableName": "MaksIT.PostClient.UI.exe",
+      "runtimeIdentifier": "win-x64",
+      "iconPath": "..\\..\\..\\src\\MaksIT.PostClient.UI\\Assets\\icon.png",
+      "msixNamePattern": "postclient-{version}.msix"
+    },
+    {
       "name": "FlatpakPack",
       "stageLabel": "build",
       "enabled": true,
@@ -129,7 +142,8 @@
       "excludePatterns": [
         "*.zip",
         "*.exe",
-        "*.flatpak"
+        "*.flatpak",
+        "*.msix"
       ]
     }
   ],

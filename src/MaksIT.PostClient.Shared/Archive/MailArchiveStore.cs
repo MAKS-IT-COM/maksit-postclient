@@ -18,7 +18,7 @@ public sealed partial class MailArchiveStore : IDisposable {
     _db = new SqliteConnection("Data Source=" + file + ";Pooling=False");
     _db.Open();
     using var pragma = _db.CreateCommand();
-    pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;";
+    pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;";
     pragma.ExecuteNonQuery();
     EnsureSchema();
   }

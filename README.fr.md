@@ -197,7 +197,9 @@ Désactiver un pack masque menus, colonnes et profils. Les boîtes déjà config
 
 ## Téléchargements
 
-Lorsqu’une GitHub Release existe : zip portable et installeur Windows (`postclient-{version}.exe`, autonome — pas de SDK .NET sur le PC ; chemin par défaut `C:\Program Files\MaksIT\Postclient`), Flatpak Linux, DMG macOS (`osx-arm64` et `osx-x64`). Les builds macOS ne sont pas signées : au premier lancement, **Ouvrir** depuis le menu contextuel.
+Lorsqu’une GitHub Release existe : zip portable et installeur Windows (`postclient-{version}.exe`, autonome — pas de SDK .NET sur le PC ; chemin par défaut `C:\Program Files\MaksIT\Postclient`), Flatpak Linux, DMG macOS (`osx-arm64` et `osx-x64`). Les builds macOS ne sont pas signées : au premier lancement, **Ouvrir** depuis le menu contextuel. Le Microsoft Store sera publié prochainement.
+
+![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-published%20soon-5C2D91)
 
 ### Linux (Flatpak)
 

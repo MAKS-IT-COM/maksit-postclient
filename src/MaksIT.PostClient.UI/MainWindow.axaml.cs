@@ -7,6 +7,7 @@ using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Controls.ApplicationLifetimes;
+using MaksIT.PostClient.UI.Services;
 using MaksIT.PostClient.UI.Windows;
 using MaksIT.PostClient.UI.ViewModels;
 using MaksIT.PostClient.UI.Views.Mail;
@@ -23,7 +24,7 @@ public partial class MainWindow : Window {
   public MainWindow() =>
     InitializeComponent();
 
-  public MainWindow(MainViewModel viewModel, ConfigurationFileService files) : this() {
+  public MainWindow(MainViewModel viewModel, ConfigurationFileService files, ScreenshotTourOptions? tour = null) : this() {
     DataContext = viewModel;
     _files = files;
     _layout = new LayoutPersistence(this, files);
@@ -55,7 +56,27 @@ public partial class MainWindow : Window {
     viewModel.PromptRequested += OnPromptRequested;
     Program.WebViewFailed += _ => viewModel.DisableHtmlEngine();
     _layout.Attach();
-    Opened += (_, _) => {
+    Opened += async (_, _) => {
+      if (tour is not null) {
+        if (DataContext is MainViewModel capture) {
+          capture.SuppressAccountPrompt = true;
+          capture.ShowScreenshotSample(tour.Language);
+        }
+
+        var desktop = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+        await ScreenshotTour.RunAsync(
+          this,
+          viewModel,
+          files,
+          tour,
+          code => desktop?.Shutdown(code));
+
+        return;
+      }
+
+      if (_files is not null)
+        await WhatsNewWindow.ShowIfNeededAsync(this, _files);
+
       if (DataContext is MainViewModel ready) {
         ready.StartBackgroundWork();
         ready.RestoreFolderTreeSelection();

@@ -1,0 +1,50 @@
+{
+  "Folders": "folders.png",
+  "Shots": [
+    {
+      "Id": "inbox",
+      "Window": "inbox.png"
+    },
+    {
+      "Id": "compose",
+      "Window": "compose.png"
+    },
+    {
+      "Id": "message",
+      "Window": "message.png"
+    },
+    {
+      "Id": "accounts",
+      "Window": "accounts.png"
+    },
+    {
+      "Id": "features",
+      "Window": "features.png"
+    },
+    {
+      "Id": "rules",
+      "Window": "rules.png"
+    },
+    {
+      "Id": "search",
+      "Window": "search.png"
+    },
+    {
+      "Id": "retention",
+      "Window": "retention.png"
+    },
+    {
+      "Id": "spam",
+      "Window": "spam.png"
+    },
+    {
+      "Id": "about",
+      "Window": "about.png"
+    },
+    {
+      "Id": "logs",
+      "Window": "logs.png"
+    }
+  ],
+  "Skipped": []
+}

@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-29
+
+Gmail and Microsoft mailbox sign-in uses Identity Hub IdP-only. Hub keeps the IdP refresh in its vault; Postclient renews mailbox tokens automatically. Help shows What’s New after upgrade. Store and Flathub packaging notes.
+
+### Added
+
+- Microsoft Store and Flathub submission notes under `packaging/` (listing copy in English, Italian, French, German, and Spanish).
+- **Help → What’s New** shows the changelog once after each upgrade (seen version is remembered in settings).
+- Screenshot tour helpers under `utils/tools/` and `assets/screenshots/` for store listings.
+
+### Changed
+
+- Gmail / Microsoft auth uses **MaksIT.IdentityHub.Client** **3.1.3** with **`AddIdentityHubIdpClient`** only. On connect, Postclient asks Hub for a fresh IdP mailbox token and renews the Hub session when needed.
+- About, log, and error dialogs use shared Core UI helpers instead of separate AXAML windows.
+
+### Fixed
+
+- Opening a message, a subfolder, or the star uses the window's own mailbox connection. Background sync keeps a separate connection, so a long sync no longer blocks those updates or puts the old unread mark back.
+- Reading a message from an Outlook data file after a write no longer fails with “End of stream”: EML export allows dropping opaque MAPI metadata that has no portable equivalent.
+
 ## [0.4.2] - 2026-10-04
 
 Rules keep running after the first sync. New mail is fetched, filtered, and indexed a little at a time so the rest of the app stays usable. Each pane remembers its own layout.

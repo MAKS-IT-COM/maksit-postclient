@@ -1,9 +1,9 @@
 using System.Text;
 using MaksIT.IdentityHub.Client;
-using MaksIT.IdentityHub.Contracts.Health;
-using MaksIT.IdentityHub.Contracts.Identity;
-using MaksIT.IdentityHub.Contracts.Identity.Login;
-using MaksIT.IdentityHub.Contracts.Identity.Mailbox;
+using MaksIT.IdentityHub.Contracts.Health.Responses;
+using MaksIT.IdentityHub.Contracts.IdP.Login.Responses;
+using MaksIT.IdentityHub.Contracts.IdP.Mailbox.Responses;
+using MaksIT.Results;
 
 
 namespace MaksIT.PostClient.Tests.Archive;
@@ -48,7 +48,7 @@ public class IdentityHubAddressTests {
 
 public class MailAuthServiceHubTests {
   [Fact]
-  public async Task ResolveAsync_UsesMailboxTokenNotHubJwt() {
+  public async Task ResolveAsync_ExpiredHubSessionAutoRenewsMailbox() {
     var secrets = new FileSecretStore(Path.Combine(Path.GetTempPath(), "postclient-hub-" + Guid.NewGuid().ToString("N") + ".bin"));
     var hub = new FakeIdentityHub();
     var auth = new MailAuthService(secrets, hub);
@@ -63,12 +63,34 @@ public class MailAuthServiceHubTests {
     Assert.True(material.IsSuccess);
     Assert.Equal("imap-mailbox-token", material.Value?.AccessToken);
     Assert.NotEqual("hub-jwt", material.Value?.AccessToken);
-    Assert.Equal("hub-jwt-refreshed", hub.AccessToken);
     Assert.Equal(1, hub.RefreshCalls);
+    Assert.Equal(1, hub.MailboxCalls);
+    Assert.Equal("hub-jwt-refreshed", hub.LastMailboxBearer);
   }
 
   [Fact]
-  public async Task ResolveAsync_RefreshesHubSessionWhenStillValid() {
+  public async Task ResolveAsync_UsesMailboxTokenNotHubJwt() {
+    var secrets = new FileSecretStore(Path.Combine(Path.GetTempPath(), "postclient-hub-" + Guid.NewGuid().ToString("N") + ".bin"));
+    var hub = new FakeIdentityHub();
+    var auth = new MailAuthService(secrets, hub);
+    var box = new MailboxAccount { AuthKind = MailAuthKind.Google };
+    auth.SaveTokens(box.Id, new OAuthTokenSet {
+      HubToken = "hub-jwt",
+      HubRefreshToken = "hub-refresh",
+      HubExpires = DateTimeOffset.UtcNow.AddHours(8),
+      Email = "user@gmail.com"
+    });
+    var material = await auth.ResolveAsync(box, password: null, TestContext.Current.CancellationToken);
+    Assert.True(material.IsSuccess);
+    Assert.Equal("imap-mailbox-token", material.Value?.AccessToken);
+    Assert.NotEqual("hub-jwt", material.Value?.AccessToken);
+    Assert.Equal(0, hub.RefreshCalls);
+    Assert.Equal("hub-jwt", hub.LastMailboxBearer);
+    Assert.Equal(1, hub.MailboxCalls);
+  }
+
+  [Fact]
+  public async Task ResolveAsync_ReusesLiveHubToken() {
     var secrets = new FileSecretStore(Path.Combine(Path.GetTempPath(), "postclient-hub-" + Guid.NewGuid().ToString("N") + ".bin"));
     var hub = new FakeIdentityHub();
     var auth = new MailAuthService(secrets, hub);
@@ -81,10 +103,11 @@ public class MailAuthServiceHubTests {
     });
     var material = await auth.ResolveAsync(box, password: null, TestContext.Current.CancellationToken);
     Assert.True(material.IsSuccess);
-    Assert.Equal(1, hub.RefreshCalls);
-    Assert.Equal("hub-jwt-refreshed", hub.AccessToken);
-    var stored = auth.HasTokens(box.Id);
-    Assert.True(stored);
+    Assert.Equal(0, hub.RefreshCalls);
+    Assert.Equal(1, hub.MailboxCalls);
+    Assert.Equal("hub-jwt", hub.LastMailboxBearer);
+    Assert.Equal("imap-mailbox-token", material.Value?.AccessToken);
+    Assert.True(auth.HasTokens(box.Id));
   }
 
   [Fact]
@@ -135,7 +158,8 @@ public class MailAuthServiceHubTests {
   [Fact]
   public async Task CompleteHubSignInAsync_FetchesMailboxToken() {
     var secrets = new FileSecretStore(Path.Combine(Path.GetTempPath(), "postclient-hub-" + Guid.NewGuid().ToString("N") + ".bin"));
-    var auth = new MailAuthService(secrets, new FakeIdentityHub());
+    var hub = new FakeIdentityHub();
+    var auth = new MailAuthService(secrets, hub);
     var result = await auth.CompleteHubSignInAsync(
       """{"token":"hub-jwt","refreshToken":"hub-refresh","username":"user@outlook.com"}""",
       MailAuthKind.Microsoft,
@@ -143,13 +167,14 @@ public class MailAuthServiceHubTests {
     Assert.True(result.IsSuccess);
     Assert.Equal("hub-jwt", result.Value?.HubToken);
     Assert.Equal("imap-mailbox-token", result.Value?.AccessToken);
+    Assert.Equal("hub-jwt", hub.LastMailboxBearer);
     Assert.Equal("user@outlook.com", result.Value?.Email);
   }
 
   [Fact]
-  public async Task ResolveAsync_UsesCachedMailboxTokenWhenHubRefreshFails() {
+  public async Task ResolveAsync_UsesCachedMailboxToken() {
     var secrets = new FileSecretStore(Path.Combine(Path.GetTempPath(), "postclient-hub-" + Guid.NewGuid().ToString("N") + ".bin"));
-    var hub = new FakeIdentityHub { FailRefresh = true };
+    var hub = new FakeIdentityHub();
     var auth = new MailAuthService(secrets, hub);
     var box = new MailboxAccount { AuthKind = MailAuthKind.Google };
     auth.SaveTokens(box.Id, new OAuthTokenSet {
@@ -163,7 +188,27 @@ public class MailAuthServiceHubTests {
     var material = await auth.ResolveAsync(box, password: null, TestContext.Current.CancellationToken);
     Assert.True(material.IsSuccess);
     Assert.Equal("cached-imap", material.Value?.AccessToken);
-    Assert.Equal(1, hub.RefreshCalls);
+    Assert.Equal(0, hub.MailboxCalls);
+  }
+
+  [Fact]
+  public async Task ResolveAsync_ExpiredHubSessionUsesCachedMailbox() {
+    var secrets = new FileSecretStore(Path.Combine(Path.GetTempPath(), "postclient-hub-" + Guid.NewGuid().ToString("N") + ".bin"));
+    var hub = new FakeIdentityHub();
+    var auth = new MailAuthService(secrets, hub);
+    var box = new MailboxAccount { AuthKind = MailAuthKind.Google };
+    auth.SaveTokens(box.Id, new OAuthTokenSet {
+      HubToken = "hub-jwt",
+      HubRefreshToken = "hub-refresh",
+      HubExpires = DateTimeOffset.UtcNow.AddMinutes(1),
+      AccessToken = "cached-imap",
+      AccessExpires = DateTimeOffset.UtcNow.AddMinutes(30),
+      Email = "user@gmail.com"
+    });
+    var material = await auth.ResolveAsync(box, password: null, TestContext.Current.CancellationToken);
+    Assert.True(material.IsSuccess);
+    Assert.Equal("cached-imap", material.Value?.AccessToken);
+    Assert.Equal(0, hub.MailboxCalls);
   }
 }
 
@@ -193,60 +238,73 @@ public class HubDesktopSessionTests {
 }
 
 
-file sealed class FakeIdentityHub : IIdentityHubClient {
-  public string? AccessToken { get; set; }
+file sealed class FakeIdentityHub : IIdentityHubIdpClient {
+  public string? ExternalLoginAccessToken { get; set; }
+
+  public string? LastMailboxBearer { get; private set; }
+
+  public int MailboxCalls { get; private set; }
 
   public int RefreshCalls { get; private set; }
 
   public bool FailRefresh { get; set; }
 
-  public Task CheckHealthLiveAsync(CancellationToken cancellationToken = default) =>
-    Task.CompletedTask;
+  public Task<Result> CheckHealthLiveAsync(CancellationToken cancellationToken = default) =>
+    Task.FromResult(Result.Ok());
 
-  public Task CheckHealthReadyAsync(CancellationToken cancellationToken = default) =>
-    Task.CompletedTask;
+  public Task<Result> CheckHealthReadyAsync(CancellationToken cancellationToken = default) =>
+    Task.FromResult(Result.Ok());
 
-  public Task<StartupHealthResponse> GetStartupHealthAsync(CancellationToken cancellationToken = default) =>
-    throw new NotImplementedException();
+  public Task<Result<StartupHealthResponse>> GetStartupHealthAsync(CancellationToken cancellationToken = default) =>
+    Task.FromResult(Result<StartupHealthResponse>.NotImplemented(null, "not used"));
 
-  public Task<CoveredApplicationsResponse> GetCoveredApplicationsAsync(CancellationToken cancellationToken = default) =>
-    throw new NotImplementedException();
+  public Task<Result<CoveredApplicationsResponse>> GetCoveredApplicationsAsync(CancellationToken cancellationToken = default) =>
+    Task.FromResult(Result<CoveredApplicationsResponse>.NotImplemented(null, "not used"));
 
-  public Task<string> GetLoginExternalChallengeAsync(
+  public Task<Result<string>> GetLoginExternalChallengeAsync(
     string provider,
     string postLogin,
     string codeChallenge,
     bool mailboxPurpose = false,
     CancellationToken cancellationToken = default) =>
-    throw new NotImplementedException();
+    Task.FromResult(Result<string>.NotImplemented(null, "not used"));
 
-  public Task<LoginResponse> RedeemLoginExternalAsync(
+  public Task<Result<RedeemLoginExternalResponse>> RedeemLoginExternalAsync(
     string code,
     string codeVerifier,
     CancellationToken cancellationToken = default) =>
-    throw new NotImplementedException();
+    Task.FromResult(Result<RedeemLoginExternalResponse>.NotImplemented(null, "not used"));
 
-  public Task<MailboxAccessTokenResponse> GetMailboxAccessTokenAsync(CancellationToken cancellationToken = default) =>
-    Task.FromResult(new MailboxAccessTokenResponse { AccessToken = "imap-mailbox-token" });
-
-  public Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default) =>
-    throw new NotImplementedException();
-
-  public Task<LoginResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default) {
+  public Task<Result<RedeemLoginExternalResponse>> RefreshLoginExternalAsync(
+    string refreshToken,
+    bool force = false,
+    CancellationToken cancellationToken = default) {
     RefreshCalls++;
+    _ = refreshToken;
+    _ = force;
     if (FailRefresh)
-      throw new IdentityHubApiException(401, "refresh failed", "", null);
-    return Task.FromResult(new LoginResponse(
+      return Task.FromResult(Result<RedeemLoginExternalResponse>.Unauthorized(null, "refresh failed"));
+    var response = new RedeemLoginExternalResponse(
       "Bearer",
       "hub-jwt-refreshed",
       DateTime.UtcNow.AddHours(1),
       "hub-refresh-2",
       DateTime.UtcNow.AddDays(1),
-      "user@gmail.com"));
+      "user@gmail.com");
+    ExternalLoginAccessToken = response.ExternalLoginAccessToken;
+    return Task.FromResult(Result<RedeemLoginExternalResponse>.Ok(response));
   }
 
-  public Task LogoutAsync(LogoutRequest request, CancellationToken cancellationToken = default) =>
-    Task.CompletedTask;
+  public Task<Result<MailboxAccessTokenResponse>> GetMailboxAccessTokenAsync(
+    string? externalLoginAccessToken = null,
+    CancellationToken cancellationToken = default) {
+    MailboxCalls++;
+    LastMailboxBearer = !string.IsNullOrWhiteSpace(externalLoginAccessToken)
+      ? externalLoginAccessToken
+      : ExternalLoginAccessToken;
+    return Task.FromResult(Result<MailboxAccessTokenResponse>.Ok(
+      new MailboxAccessTokenResponse { IdpAccessToken = "imap-mailbox-token" }));
+  }
 }
 
 
@@ -598,6 +656,47 @@ public class LocalStoreTests {
     var values = new float[EmbeddingModelSpec.StoredDimensions];
     values[0] = sign;
     return EmbeddingVector.Normalize(values);
+  }
+
+  [Fact]
+  public void ClosedMailbox_IgnoresHeaderSync() {
+    var root = Path.Combine(Path.GetTempPath(), "postclient-closed-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try {
+      using var catalog = new MailArchiveCatalog();
+      var id = "box";
+      var database = Path.Combine(root, "mail.db");
+      catalog.Open(id, database);
+      catalog.Close(id);
+      catalog.UpsertHeaders(id, [
+        new MailArchiveHeader {
+          Uid = 1,
+          Folder = "INBOX",
+          Subject = "Hi",
+          From = "a@b.c",
+          Date = DateTimeOffset.UtcNow
+        }
+      ]);
+      catalog.UpdateFlags(id, "INBOX", [(1u, true, false)]);
+      catalog.UpsertBody(
+        id,
+        new MailArchiveHeader {
+          Uid = 1,
+          Folder = "INBOX",
+          Subject = "Hi",
+          From = "a@b.c",
+          Date = DateTimeOffset.UtcNow
+        },
+        "a.eml",
+        "body",
+        "");
+      catalog.Open(id, database);
+      Assert.Empty(catalog.ListFolder(id, "INBOX"));
+    }
+    finally {
+      if (Directory.Exists(root))
+        Directory.Delete(root, recursive: true);
+    }
   }
 
   private static void CopyTree(string source, string dest) {

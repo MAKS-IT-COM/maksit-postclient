@@ -4,11 +4,13 @@
   <name>Postclient</name>
   <summary>The client for the mailbox you already have</summary>
   <developer id="eu.postclient">
-    <name>Postclient</name>
+    <name>MaksIT</name>
   </developer>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <description>
+    <p>After installation, connect an IMAP, POP3, or SMTP mailbox you already have, or open a local folder store. This app does not create a PEC or REM address.</p>
+    <p>Settings and the archive stay on this computer. Network access reaches the mail server. HTML mail shows the text body when the platform web engine is not available.</p>
     <p>Free open-source desktop mail client for ordinary email and Italian PEC/REM. It talks IMAP, POP3, and SMTP to the mailbox you already hold at a QTSP or ordinary provider, and keeps the archive on this computer.</p>
     <p>This app is not a qualified trust service, not a PEC operator, and not a timestamp authority. Receipts and envelopes come from the gestore; Postclient shows them.</p>
     <ul>
@@ -19,17 +21,77 @@
     </ul>
   </description>
   <launchable type="desktop-id">eu.postclient.desktop.desktop</launchable>
+  <url type="homepage">https://maks-it.com/</url>
+  <url type="bugtracker">https://github.com/MAKS-IT-COM/maksit-postclient/issues</url>
+  <url type="vcs-browser">https://github.com/MAKS-IT-COM/maksit-postclient</url>
+  <url type="donation">https://www.buymeacoffee.com/maksitcom</url>
   <branding>
     <color type="primary" scheme_preference="light">#33A5CF</color>
     <color type="primary" scheme_preference="dark">#002A6A</color>
   </branding>
-  <content_rating type="oars-1.1"/>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/MAKS-IT-COM/maksit-postclient/main/assets/screenshots/inbox.png</image>
+      <caption>Inbox</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MAKS-IT-COM/maksit-postclient/main/assets/screenshots/compose.png</image>
+      <caption>Compose</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MAKS-IT-COM/maksit-postclient/main/assets/screenshots/message.png</image>
+      <caption>Message</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MAKS-IT-COM/maksit-postclient/main/assets/screenshots/accounts.png</image>
+      <caption>Accounts</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MAKS-IT-COM/maksit-postclient/main/assets/screenshots/search.png</image>
+      <caption>Search</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MAKS-IT-COM/maksit-postclient/main/assets/screenshots/rules.png</image>
+      <caption>Rules</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MAKS-IT-COM/maksit-postclient/main/assets/screenshots/features.png</image>
+      <caption>Country packs</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">none</content_attribute>
+    <content_attribute id="violence-fantasy">none</content_attribute>
+    <content_attribute id="violence-realistic">none</content_attribute>
+    <content_attribute id="violence-bloodshed">none</content_attribute>
+    <content_attribute id="violence-sexual">none</content_attribute>
+    <content_attribute id="drugs-alcohol">none</content_attribute>
+    <content_attribute id="drugs-narcotics">none</content_attribute>
+    <content_attribute id="drugs-tobacco">none</content_attribute>
+    <content_attribute id="sex-nudity">none</content_attribute>
+    <content_attribute id="sex-themes">none</content_attribute>
+    <content_attribute id="language-profanity">none</content_attribute>
+    <content_attribute id="language-humor">none</content_attribute>
+    <content_attribute id="language-discrimination">none</content_attribute>
+    <content_attribute id="social-chat">none</content_attribute>
+    <content_attribute id="social-info">none</content_attribute>
+    <content_attribute id="social-audio">none</content_attribute>
+    <content_attribute id="social-location">none</content_attribute>
+    <content_attribute id="social-contacts">none</content_attribute>
+    <content_attribute id="money-purchasing">none</content_attribute>
+    <content_attribute id="money-gambling">none</content_attribute>
+  </content_rating>
   <requires>
     <control>keyboard</control>
     <control>pointing</control>
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.4.3" date="2026-10-29">
+      <description>
+        <p>Gmail and Microsoft sign-in uses Identity Hub IdP-only; mailbox tokens renew automatically while Hub keeps the IdP refresh. What’s New appears after upgrade. Store and Flathub packaging notes are included.</p>
+      </description>
+    </release>
     <release version="0.4.2" date="2026-10-04">
       <description>
         <p>Rules keep running after the first sync. Each pass gets one page of mail, applies rules, then indexes a few messages, and meaning search only embeds a few at a time. A large new page is fully filtered, and body or attachment rules run again after the body is saved. The folder list, message list, and reading pane each remember their own layout.</p>

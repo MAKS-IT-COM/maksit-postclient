@@ -21,6 +21,8 @@ public sealed class ConfigurationFileService {
 
   public Configuration Current => _current;
 
+  public bool FileExisted { get; }
+
   public ConfigurationFileService(string? configurationPath = null, string? seedPath = null) {
     FilePath = string.IsNullOrWhiteSpace(configurationPath)
       ? AppPaths.SettingsFile()
@@ -28,6 +30,7 @@ public sealed class ConfigurationFileService {
     _seedPath = !string.IsNullOrWhiteSpace(seedPath)
       ? seedPath
       : Path.Combine(AppContext.BaseDirectory, SeedFileName);
+    FileExisted = File.Exists(FilePath);
     _current = LoadFromDisk();
     _current.EnsureDefaults();
     CopySeedIfNeeded();

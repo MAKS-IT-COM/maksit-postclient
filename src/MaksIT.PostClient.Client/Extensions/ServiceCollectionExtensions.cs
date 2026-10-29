@@ -7,11 +7,11 @@ namespace MaksIT.PostClient.Client.Extensions;
 
 public static class ServiceCollectionExtensions {
   /// <summary>
-  /// Registers the IMAP/POP3/SMTP session factory, archive catalog, worker, and Identity Hub client.
+  /// Registers the IMAP/POP3/SMTP session factory, archive catalog, worker, and Identity Hub IdP client.
   /// </summary>
   public static IServiceCollection AddPostClient(this IServiceCollection services) {
     ArgumentNullException.ThrowIfNull(services);
-    services.AddIdentityHubClient(IdentityHubAddress.Origin());
+    services.AddIdentityHubIdpClient(IdentityHubAddress.Origin());
     services.AddSingleton<ISecretStore, FileSecretStore>();
     services.AddSingleton<ISentReceiptStore, FileSentReceiptStore>();
     services.AddSingleton<IMailAuthService, MailAuthService>();

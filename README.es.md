@@ -197,7 +197,9 @@ Apagar un paquete oculta menús, columnas y perfiles. Los buzones ya configurado
 
 ## Descargas
 
-Cuando existe una GitHub Release: zip portátil e instalador Windows (`postclient-{version}.exe`, autónomo — sin SDK .NET en el PC; ruta predeterminada `C:\Program Files\MaksIT\Postclient`), Flatpak Linux, DMG macOS (`osx-arm64` y `osx-x64`). Las compilaciones macOS no están firmadas: en el primer arranque, **Abrir** desde el menú contextual.
+Cuando existe una GitHub Release: zip portátil e instalador Windows (`postclient-{version}.exe`, autónomo — sin SDK .NET en el PC; ruta predeterminada `C:\Program Files\MaksIT\Postclient`), Flatpak Linux, DMG macOS (`osx-arm64` y `osx-x64`). Las compilaciones macOS no están firmadas: en el primer arranque, **Abrir** desde el menú contextual. Microsoft Store se publicará pronto.
+
+![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-published%20soon-5C2D91)
 
 ### Linux (Flatpak)
 

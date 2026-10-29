@@ -6,6 +6,7 @@ namespace MaksIT.PostClient.UI.ViewModels;
 
 public partial class MainViewModel {
   private MailPipeline? _pipeline;
+  private int _mailEpoch;
   private int _pipelineSlot;
   private string? _pipelineSticky;
   private readonly Dictionary<string, DateTimeOffset> _folderPollUtc = new(StringComparer.OrdinalIgnoreCase);
@@ -27,13 +28,8 @@ public partial class MainViewModel {
     ClearPipelineState();
   }
 
-  private void InterruptPipeline() => _pipeline?.Interrupt();
-
-  private Task PipelineHolding() {
-    var holding = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-    _indexHolding = holding;
-    return holding.Task;
-  }
+  private void NoteUiMailChange() =>
+    Interlocked.Increment(ref _mailEpoch);
 
   private void ClearPipelineState() {
     lock (_freshGate)
@@ -65,8 +61,10 @@ public partial class MainViewModel {
   }
 
   private async Task<bool> FetchNextPageAsync(CancellationToken token) {
+    var pending = false;
     var snapshot = await Dispatcher.UIThread.InvokeAsync(() => {
       TrackConnectedMailboxes();
+      pending = SyncSessionPending();
       return CaptureIndexSnapshot();
     });
     var slots = new List<PipeSlot>();
@@ -83,7 +81,7 @@ public partial class MainViewModel {
     }
 
     if (slots.Count == 0)
-      return false;
+      return pending;
     var chosen = ChooseSlot(slots);
     if (chosen < 0)
       return false;
@@ -91,15 +89,19 @@ public partial class MainViewModel {
     var key = CatalogKey(slot.MailboxId, slot.Folder);
     _folderPollUtc[key] = DateTimeOffset.UtcNow;
     var known = _archive.Uids(slot.MailboxId, slot.Folder);
+    var epoch = Volatile.Read(ref _mailEpoch);
     var listed = await slot.Session
       .ListMessagesAsync(slot.Folder, known, token, MailPipeline.HeaderPage)
       .ConfigureAwait(false);
     if (!listed.IsSuccess) {
       _pipelineSticky = null;
-      _folderFailUtc[key] = DateTimeOffset.UtcNow;
+      if (!token.IsCancellationRequested)
+        _folderFailUtc[key] = DateTimeOffset.UtcNow;
       return true;
     }
 
+    if (token.IsCancellationRequested || Volatile.Read(ref _mailEpoch) != epoch)
+      return true;
     _folderFailUtc.Remove(key);
 
     var sync = listed.Value ?? new MailFolderSync();
@@ -200,7 +202,7 @@ public partial class MainViewModel {
     var account = await Dispatcher.UIThread.InvokeAsync(() => MailboxById(job.MailboxId));
     if (account is null)
       return true;
-    var session = await Dispatcher.UIThread.InvokeAsync(() => SessionFor(account));
+    var session = await Dispatcher.UIThread.InvokeAsync(() => SyncSessionFor(account));
     var names = await Dispatcher.UIThread.InvokeAsync(() =>
       FoldersFor(account).Select(folder => (folder.Name, folder.FullName)).ToList());
     if (session is not { IsConnected: true })
@@ -217,7 +219,7 @@ public partial class MainViewModel {
       var sessions = new Dictionary<string, IMailSession>(StringComparer.OrdinalIgnoreCase);
       var ids = ReadyMailboxIds();
       foreach (var id in ids) {
-        var session = SessionFor(MailboxById(id));
+        var session = SyncSessionFor(MailboxById(id));
         if (session is { IsConnected: true })
           sessions[id] = session;
       }

@@ -17,8 +17,14 @@ public partial class App : Application {
     AvaloniaXamlLoader.Load(this);
 
   public override void OnFrameworkInitializationCompleted() {
+    ScreenshotTourOptions? tour = null;
+
+    if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime launch
+        && !ScreenshotTourOptions.TryParse(launch.Args, out tour, out var tourError))
+      FailScreenshotTour(tourError);
+
     try {
-      CompleteStartup();
+      CompleteStartup(tour);
     }
     catch (Exception ex) {
       ErrorDialog.ReportBlocking(ex);
@@ -28,13 +34,16 @@ public partial class App : Application {
     Dispatcher.UIThread.Post(ShowMain, DispatcherPriority.Loaded);
   }
 
-  private void CompleteStartup() {
+  private void CompleteStartup(ScreenshotTourOptions? tour) {
     AppPaths.EnsureDirectories();
     var services = new ServiceCollection();
     services.AddSingleton(_ => new ConfigurationFileService());
     services.AddPostClient();
     services.AddSingleton<MainViewModel>();
-    services.AddSingleton<MainWindow>();
+    services.AddSingleton(sp => new MainWindow(
+      sp.GetRequiredService<MainViewModel>(),
+      sp.GetRequiredService<ConfigurationFileService>(),
+      tour));
     _services = services.BuildServiceProvider();
 
     if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop) {
@@ -100,4 +109,20 @@ public partial class App : Application {
     if (last is not null && last != first)
       exit = last;
   }
+
+  private static void FailScreenshotTour(string? error) {
+    try {
+      if (OperatingSystem.IsWindows())
+        AttachConsole(uint.MaxValue);
+    }
+    catch (Exception) {
+      // A windowed process may have no console.
+    }
+
+    Console.Error.WriteLine(error ?? "Invalid screenshot arguments.");
+    Environment.Exit(2);
+  }
+
+  [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+  private static extern bool AttachConsole(uint processId);
 }

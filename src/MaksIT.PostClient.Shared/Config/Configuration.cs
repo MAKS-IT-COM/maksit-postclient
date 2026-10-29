@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+
+
 namespace MaksIT.PostClient.Shared.Config;
 
 
@@ -19,6 +22,9 @@ public sealed class Configuration {
   public bool GroupConversations { get; set; } = true;
 
   public string Language { get; set; } = "";
+
+  [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+  public string? WhatsNewSeenVersion { get; set; }
 
   public string GoogleClientId { get; set; } = "";
 
