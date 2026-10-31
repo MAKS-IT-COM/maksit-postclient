@@ -118,8 +118,11 @@ public sealed class MailArchiveCatalog : IDisposable {
     return store;
   }
 
-  public void UpsertHeaders(string mailboxId, IEnumerable<MailArchiveHeader> headers) =>
-    OffUi(() => Use(mailboxId, store => store.UpsertHeaders(mailboxId, headers)));
+  public void UpsertHeaders(
+    string mailboxId,
+    IEnumerable<MailArchiveHeader> headers,
+    bool updateFlags = false) =>
+    OffUi(() => Use(mailboxId, store => store.UpsertHeaders(mailboxId, headers, updateFlags)));
 
   public void SetKeywordIndexEnabled(string mailboxId, bool enabled) =>
     OffUi(() => {
@@ -146,8 +149,27 @@ public sealed class MailArchiveCatalog : IDisposable {
   public void UpdateFlags(
     string mailboxId,
     string folder,
-    IEnumerable<(uint Uid, bool IsSeen, bool IsFlagged)> flags) =>
-    OffUi(() => Use(mailboxId, store => store.UpdateFlags(mailboxId, folder, flags)));
+    IEnumerable<(uint Uid, bool IsSeen, bool IsFlagged)> flags,
+    bool respectPending = true) =>
+    OffUi(() => Use(mailboxId, store => store.UpdateFlags(mailboxId, folder, flags, respectPending)));
+
+  public void SetLocalFlags(
+    string mailboxId,
+    string folder,
+    IEnumerable<(uint Uid, bool IsSeen, bool IsFlagged)> flags,
+    bool pending = true) =>
+    OffUi(() => Use(mailboxId, store => store.SetLocalFlags(mailboxId, folder, flags, pending)));
+
+  public void ClearPendingFlags(
+    string mailboxId,
+    string folder,
+    IEnumerable<uint> uids) =>
+    OffUi(() => Use(mailboxId, store => store.ClearPendingFlags(mailboxId, folder, uids)));
+
+  public IReadOnlyList<(string Folder, uint Uid, bool IsSeen, bool IsFlagged)> ListAllPendingFlags(
+    string mailboxId) =>
+    OffUi(() => TryGet(mailboxId)?.ListAllPendingFlags(mailboxId)
+      ?? (IReadOnlyList<(string Folder, uint Uid, bool IsSeen, bool IsFlagged)>)[]);
 
   public void UpsertBody(
     string mailboxId,

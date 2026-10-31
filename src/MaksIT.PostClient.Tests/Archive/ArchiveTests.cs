@@ -192,6 +192,96 @@ public class MailArchiveStoreTests {
   }
 
   [Fact]
+  public void PendingFlags_BlockStaleServerSeenUntilAck() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertHeaders("box", [
+        new MailArchiveHeader {
+          Uid = 9,
+          Folder = "INBOX",
+          Subject = "Unread",
+          From = "a@b.c",
+          Date = DateTimeOffset.Parse("2026-01-01T10:00:00Z"),
+          IsSeen = false
+        }
+      ]);
+      store.SetLocalFlags("box", "INBOX", [(9u, true, false)], pending: true);
+      Assert.True(Assert.Single(store.ListFolder("box", "INBOX")).IsSeen);
+      store.UpdateFlags("box", "INBOX", [(9u, false, false)]);
+      Assert.True(Assert.Single(store.ListFolder("box", "INBOX")).IsSeen);
+      store.UpdateFlags("box", "INBOX", [(9u, true, false)]);
+      Assert.True(Assert.Single(store.ListFolder("box", "INBOX")).IsSeen);
+      Assert.Empty(store.ListAllPendingFlags("box"));
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
+  public void UpsertHeaders_DoesNotClobberPendingSeen() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertHeaders("box", [
+        new MailArchiveHeader {
+          Uid = 11,
+          Folder = "INBOX",
+          Subject = "A",
+          From = "a@b.c",
+          Date = DateTimeOffset.Parse("2026-01-01T10:00:00Z"),
+          IsSeen = false
+        }
+      ]);
+      store.SetLocalFlags("box", "INBOX", [(11u, true, false)], pending: true);
+      store.UpsertHeaders(
+        "box",
+        [
+          new MailArchiveHeader {
+            Uid = 11,
+            Folder = "INBOX",
+            Subject = "A renamed",
+            From = "a@b.c",
+            Date = DateTimeOffset.Parse("2026-01-01T10:00:00Z"),
+            IsSeen = false
+          }
+        ],
+        updateFlags: true);
+      var row = Assert.Single(store.ListFolder("box", "INBOX"));
+      Assert.Equal("A renamed", row.Subject);
+      Assert.True(row.IsSeen);
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
+  public void SetLocalFlags_WithoutPending_AllowsServerOverwrite() {
+    var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
+    try {
+      using var store = new MailArchiveStore(path);
+      store.UpsertHeaders("box", [
+        new MailArchiveHeader {
+          Uid = 12,
+          Folder = "INBOX",
+          Subject = "Local",
+          From = "a@b.c",
+          Date = DateTimeOffset.Parse("2026-01-01T10:00:00Z"),
+          IsSeen = false
+        }
+      ]);
+      store.SetLocalFlags("box", "INBOX", [(12u, true, false)], pending: false);
+      store.UpdateFlags("box", "INBOX", [(12u, false, false)]);
+      Assert.False(Assert.Single(store.ListFolder("box", "INBOX")).IsSeen);
+    }
+    finally {
+      DeleteArchive(path);
+    }
+  }
+
+  [Fact]
   public void UpsertHeaders_KeepsPreviousSizeWhenIncomingIsZero() {
     var path = Path.Combine(Path.GetTempPath(), "postclient-archive-" + Guid.NewGuid().ToString("N") + ".db");
     try {

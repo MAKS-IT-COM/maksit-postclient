@@ -23,12 +23,25 @@ public sealed partial class MailArchiveStore : IDisposable {
     EnsureSchema();
   }
 
-  public void UpsertHeaders(string mailboxId, IEnumerable<MailArchiveHeader> headers) {
+  public void UpsertHeaders(
+    string mailboxId,
+    IEnumerable<MailArchiveHeader> headers,
+    bool updateFlags = false) {
     ArgumentNullException.ThrowIfNull(headers);
     lock (_gate) {
       using var tx = _db.BeginTransaction();
-      foreach (var header in headers)
-        UpsertHeader(tx, mailboxId, header, updateFlags: true);
+      foreach (var header in headers) {
+        var applyFlags = updateFlags;
+        if (applyFlags && TryReadPending(tx, mailboxId, header.Folder, header.Uid, out var pending)) {
+          if (pending.IsSeen == header.IsSeen && pending.IsFlagged == header.IsFlagged)
+            ClearPending(tx, mailboxId, header.Folder, header.Uid);
+          else
+            applyFlags = false;
+        }
+
+        UpsertHeader(tx, mailboxId, header, updateFlags: applyFlags);
+      }
+
       tx.Commit();
     }
   }
@@ -36,11 +49,19 @@ public sealed partial class MailArchiveStore : IDisposable {
   public void UpdateFlags(
     string mailboxId,
     string folder,
-    IEnumerable<(uint Uid, bool IsSeen, bool IsFlagged)> flags) {
+    IEnumerable<(uint Uid, bool IsSeen, bool IsFlagged)> flags,
+    bool respectPending = true) {
     ArgumentNullException.ThrowIfNull(flags);
     lock (_gate) {
       using var tx = _db.BeginTransaction();
       foreach (var row in flags) {
+        if (respectPending && TryReadPending(tx, mailboxId, folder, row.Uid, out var pending)) {
+          if (pending.IsSeen == row.IsSeen && pending.IsFlagged == row.IsFlagged)
+            ClearPending(tx, mailboxId, folder, row.Uid);
+          else
+            continue;
+        }
+
         using var cmd = _db.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = """
@@ -54,9 +75,80 @@ public sealed partial class MailArchiveStore : IDisposable {
         cmd.Parameters.AddWithValue("$f", folder);
         cmd.Parameters.AddWithValue("$u", row.Uid);
         cmd.ExecuteNonQuery();
+        if (!respectPending)
+          ClearPending(tx, mailboxId, folder, row.Uid);
       }
 
       tx.Commit();
+    }
+  }
+
+  public void SetLocalFlags(
+    string mailboxId,
+    string folder,
+    IEnumerable<(uint Uid, bool IsSeen, bool IsFlagged)> flags,
+    bool pending = true) {
+    ArgumentNullException.ThrowIfNull(flags);
+    lock (_gate) {
+      using var tx = _db.BeginTransaction();
+      foreach (var row in flags) {
+        using (var cmd = _db.CreateCommand()) {
+          cmd.Transaction = tx;
+          cmd.CommandText = """
+            UPDATE messages
+            SET is_seen = $seen, is_flagged = $flag
+            WHERE mailbox_id = $m AND folder = $f AND uid = $u;
+            """;
+          cmd.Parameters.AddWithValue("$seen", row.IsSeen ? 1 : 0);
+          cmd.Parameters.AddWithValue("$flag", row.IsFlagged ? 1 : 0);
+          cmd.Parameters.AddWithValue("$m", mailboxId);
+          cmd.Parameters.AddWithValue("$f", folder);
+          cmd.Parameters.AddWithValue("$u", row.Uid);
+          cmd.ExecuteNonQuery();
+        }
+
+        if (pending)
+          UpsertPending(tx, mailboxId, folder, row.Uid, row.IsSeen, row.IsFlagged);
+        else
+          ClearPending(tx, mailboxId, folder, row.Uid);
+      }
+
+      tx.Commit();
+    }
+  }
+
+  public void ClearPendingFlags(
+    string mailboxId,
+    string folder,
+    IEnumerable<uint> uids) {
+    ArgumentNullException.ThrowIfNull(uids);
+    lock (_gate) {
+      using var tx = _db.BeginTransaction();
+      foreach (var uid in uids)
+        ClearPending(tx, mailboxId, folder, uid);
+      tx.Commit();
+    }
+  }
+
+  public IReadOnlyList<(string Folder, uint Uid, bool IsSeen, bool IsFlagged)> ListAllPendingFlags(
+    string mailboxId) {
+    lock (_gate) {
+      using var cmd = _db.CreateCommand();
+      cmd.CommandText = """
+        SELECT folder, uid, is_seen, is_flagged
+        FROM pending_flags
+        WHERE mailbox_id = $m;
+        """;
+      cmd.Parameters.AddWithValue("$m", mailboxId);
+      var rows = new List<(string Folder, uint Uid, bool IsSeen, bool IsFlagged)>();
+      using var reader = cmd.ExecuteReader();
+      while (reader.Read())
+        rows.Add((
+          reader.GetString(0),
+          (uint)reader.GetInt64(1),
+          reader.GetInt64(2) != 0,
+          reader.GetInt64(3) != 0));
+      return rows;
     }
   }
 
@@ -1297,11 +1389,86 @@ public sealed partial class MailArchiveStore : IDisposable {
         fingerprint TEXT PRIMARY KEY,
         dismissed_utc TEXT NOT NULL DEFAULT ''
       );
+      CREATE TABLE IF NOT EXISTS pending_flags (
+        mailbox_id TEXT NOT NULL,
+        folder TEXT NOT NULL,
+        uid INTEGER NOT NULL,
+        is_seen INTEGER NOT NULL,
+        is_flagged INTEGER NOT NULL,
+        PRIMARY KEY (mailbox_id, folder, uid)
+      );
       """;
     cmd.ExecuteNonQuery();
     EnsureColumn("messages", "trashed_utc", "TEXT NOT NULL DEFAULT ''");
     EnsureColumn("messages", "size", "INTEGER NOT NULL DEFAULT 0");
     EnsureColumn("messages", "spam_score", "REAL");
+  }
+
+  private static bool TryReadPending(
+    SqliteTransaction tx,
+    string mailboxId,
+    string folder,
+    uint uid,
+    out (bool IsSeen, bool IsFlagged) pending) {
+    using var cmd = tx.Connection!.CreateCommand();
+    cmd.Transaction = tx;
+    cmd.CommandText = """
+      SELECT is_seen, is_flagged
+      FROM pending_flags
+      WHERE mailbox_id = $m AND folder = $f AND uid = $u;
+      """;
+    cmd.Parameters.AddWithValue("$m", mailboxId);
+    cmd.Parameters.AddWithValue("$f", folder);
+    cmd.Parameters.AddWithValue("$u", uid);
+    using var reader = cmd.ExecuteReader();
+    if (!reader.Read()) {
+      pending = default;
+      return false;
+    }
+
+    pending = (reader.GetInt64(0) != 0, reader.GetInt64(1) != 0);
+    return true;
+  }
+
+  private static void UpsertPending(
+    SqliteTransaction tx,
+    string mailboxId,
+    string folder,
+    uint uid,
+    bool isSeen,
+    bool isFlagged) {
+    using var cmd = tx.Connection!.CreateCommand();
+    cmd.Transaction = tx;
+    cmd.CommandText = """
+      INSERT INTO pending_flags (mailbox_id, folder, uid, is_seen, is_flagged)
+      VALUES ($m, $f, $u, $seen, $flag)
+      ON CONFLICT(mailbox_id, folder, uid) DO UPDATE SET
+        is_seen = excluded.is_seen,
+        is_flagged = excluded.is_flagged;
+      """;
+    cmd.Parameters.AddWithValue("$m", mailboxId);
+    cmd.Parameters.AddWithValue("$f", folder);
+    cmd.Parameters.AddWithValue("$u", uid);
+    cmd.Parameters.AddWithValue("$seen", isSeen ? 1 : 0);
+    cmd.Parameters.AddWithValue("$flag", isFlagged ? 1 : 0);
+    cmd.ExecuteNonQuery();
+  }
+
+  private static void ClearPending(
+    SqliteTransaction tx,
+    string mailboxId,
+    string folder,
+    uint uid) {
+    using var cmd = tx.Connection!.CreateCommand();
+    cmd.Transaction = tx;
+    cmd.CommandText = """
+      DELETE FROM pending_flags
+      WHERE mailbox_id = $m AND folder = $f AND uid = $u;
+      """;
+    cmd.Parameters.AddWithValue("$m", mailboxId);
+    cmd.Parameters.AddWithValue("$f", folder);
+    cmd.Parameters.AddWithValue("$u", uid);
+    cmd.ExecuteNonQuery();
   }
 
   private void EnsureColumn(string table, string column, string definition) {

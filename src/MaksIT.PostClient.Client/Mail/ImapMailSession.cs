@@ -69,6 +69,10 @@ public sealed class ImapMailSession : IMailSession {
           cancellationToken).ConfigureAwait(false);
         await MailKitAuth.AuthenticateAsync(client, account, resolved.Value, cancellationToken).ConfigureAwait(false);
       }
+      catch (OperationCanceledException) {
+        client.Dispose();
+        throw;
+      }
       catch (Exception ex) {
         client.Dispose();
         return Result.UnprocessableEntity(MailAuthHint.Incoming(account, ex.Message));
@@ -116,6 +120,9 @@ public sealed class ImapMailSession : IMailSession {
       }
 
       return Result<IReadOnlyList<MailFolderInfo>>.Ok(MailFolderCatalog.Normalize(folders, layout));
+    }
+    catch (OperationCanceledException) {
+      throw;
     }
     catch (Exception ex) {
       return Result<IReadOnlyList<MailFolderInfo>>.UnprocessableEntity(null, ex.Message);
@@ -240,7 +247,12 @@ public sealed class ImapMailSession : IMailSession {
         Incomplete = range.Incomplete
       });
     }
+    catch (OperationCanceledException) {
+      ClearListCursor(folder);
+      throw;
+    }
     catch (Exception ex) {
+      ClearListCursor(folder);
       return Result<MailFolderSync>.UnprocessableEntity(null, ex.Message);
     }
   }
@@ -358,6 +370,9 @@ public sealed class ImapMailSession : IMailSession {
       var uid = await imapFolder.AppendAsync(new AppendRequest(mime), cancellationToken).ConfigureAwait(false);
       return Result<uint?>.Ok(uid?.Id);
     }
+    catch (OperationCanceledException) {
+      throw;
+    }
     catch (Exception ex) {
       return Result<uint?>.UnprocessableEntity(null, ex.Message);
     }
@@ -414,15 +429,40 @@ public sealed class ImapMailSession : IMailSession {
         else
           await CopyThenDeleteAsync(source, dest, uids, cancellationToken).ConfigureAwait(false);
       }
+      catch (OperationCanceledException) {
+        throw;
+      }
       catch (Exception) when (client.Capabilities.HasFlag(ImapCapabilities.Move)) {
-        await CopyThenDeleteAsync(source, dest, uids, cancellationToken).ConfigureAwait(false);
+        var remaining = await RemainingUidsAsync(source, uids, cancellationToken).ConfigureAwait(false);
+        if (remaining.Count > 0)
+          await CopyThenDeleteAsync(source, dest, remaining, cancellationToken).ConfigureAwait(false);
       }
 
       return Result.Ok();
     }
+    catch (OperationCanceledException) {
+      throw;
+    }
     catch (Exception ex) {
       return Result.UnprocessableEntity(ex.Message);
     }
+  }
+
+  private static async Task<IList<UniqueId>> RemainingUidsAsync(
+    IMailFolder source,
+    IList<UniqueId> uids,
+    CancellationToken cancellationToken) {
+    if (uids.Count == 0)
+      return uids;
+    var set = new UniqueIdSet();
+    foreach (var uid in uids)
+      set.Add(uid);
+    var found = await source.SearchAsync(SearchQuery.Uids(set), cancellationToken).ConfigureAwait(false);
+    if (found.Count == 0)
+      return Array.Empty<UniqueId>();
+    if (found.Count == uids.Count)
+      return uids;
+    return found.ToList();
   }
 
   private static async Task CopyThenDeleteAsync(
@@ -481,6 +521,9 @@ public sealed class ImapMailSession : IMailSession {
       catch (Exception ex) when (attempt == 0 && IsBrokenConnection(ex)) {
         DropSocket();
       }
+      catch (OperationCanceledException) {
+        throw;
+      }
       catch (Exception ex) {
         return Result.UnprocessableEntity(ex.Message);
       }
@@ -517,6 +560,9 @@ public sealed class ImapMailSession : IMailSession {
         .ConfigureAwait(false);
       await parent.CreateAsync(leaf, true, cancellationToken).ConfigureAwait(false);
       return Result.Ok();
+    }
+    catch (OperationCanceledException) {
+      throw;
     }
     catch (Exception ex) {
       return Result.UnprocessableEntity(ex.Message);
@@ -560,6 +606,9 @@ public sealed class ImapMailSession : IMailSession {
         .ConfigureAwait(false);
       await imapFolder.RenameAsync(parent, leaf, cancellationToken).ConfigureAwait(false);
       return Result.Ok();
+    }
+    catch (OperationCanceledException) {
+      throw;
     }
     catch (Exception ex) {
       return Result.UnprocessableEntity(ex.Message);
@@ -613,6 +662,9 @@ public sealed class ImapMailSession : IMailSession {
       }
 
       return Result.Ok();
+    }
+    catch (OperationCanceledException) {
+      throw;
     }
     catch (Exception ex) {
       return Result.UnprocessableEntity(ex.Message);
@@ -672,6 +724,9 @@ public sealed class ImapMailSession : IMailSession {
 
       return Result.Ok();
     }
+    catch (OperationCanceledException) {
+      throw;
+    }
     catch (Exception ex) {
       return Result.UnprocessableEntity(ex.Message);
     }
@@ -706,6 +761,9 @@ public sealed class ImapMailSession : IMailSession {
         MessageFlags.Seen,
         cancellationToken).ConfigureAwait(false);
       return Result.Ok();
+    }
+    catch (OperationCanceledException) {
+      throw;
     }
     catch (Exception ex) {
       return Result.UnprocessableEntity(ex.Message);
@@ -1019,6 +1077,9 @@ public sealed class ImapMailSession : IMailSession {
       var rows = DistinctUids(chunk);
       if (rows.Count > 0 || folder.Count == 0)
         return rows;
+    }
+    catch (OperationCanceledException) {
+      throw;
     }
     catch {
     }

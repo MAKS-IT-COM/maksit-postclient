@@ -100,22 +100,25 @@ public partial class MainViewModel {
       return true;
     }
 
-    if (token.IsCancellationRequested || Volatile.Read(ref _mailEpoch) != epoch)
+    if (token.IsCancellationRequested)
       return true;
+    var applyFlags = Volatile.Read(ref _mailEpoch) == epoch;
     _folderFailUtc.Remove(key);
 
     var sync = listed.Value ?? new MailFolderSync();
-    ApplyFolderSync(slot.MailboxId, slot.Folder, sync);
+    ApplyFolderSync(slot.MailboxId, slot.Folder, sync, applyFlags);
     var fresh = sync.Headers.Where(header => !known.Contains(header.Id)).ToList();
-    if (fresh.Count > 0) {
+    var openFolder = false;
+    await UiAsync(() => {
+      openFolder = SelectedMailbox?.Id.Equals(slot.MailboxId, StringComparison.OrdinalIgnoreCase) == true
+        && SelectedFolder?.FullName.Equals(slot.Folder, StringComparison.OrdinalIgnoreCase) == true;
+      if (fresh.Count > 0 && openFolder)
+        NoticeNewMail(fresh);
+    }).ConfigureAwait(false);
+    if (fresh.Count > 0)
       EnqueueFreshRules(slot.MailboxId, slot.Folder, fresh);
-      await UiAsync(() => {
-        if (SelectedMailbox?.Id.Equals(slot.MailboxId, StringComparison.OrdinalIgnoreCase) == true
-            && SelectedFolder?.FullName.Equals(slot.Folder, StringComparison.OrdinalIgnoreCase) == true)
-          NoticeNewMail(fresh);
-      }).ConfigureAwait(false);
+    if (openFolder && (fresh.Count > 0 || (applyFlags && sync.Flags.Count > 0)))
       await ShowArchiveAsync(slot.MailboxId, slot.Folder, token).ConfigureAwait(false);
-    }
 
     await SetIndexLineAsync(GlobalIndexLine(), token).ConfigureAwait(false);
     var counts = _archive.FolderCounts(slot.MailboxId, slot.Folder);

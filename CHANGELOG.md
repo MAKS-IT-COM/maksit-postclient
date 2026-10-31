@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-10-31
+
+Unread and flag updates stay local when the server store is cancelled or races with sync. Pending Seen/Flagged wait for STORE ack before background sync can overwrite them.
+
+### Fixed
+
+- Opening an unread message no longer brings the unread dot back when you select another row: mark-as-read is not cancelled with the reading pane, and IMAP cancel is not treated as a store failure.
+- Manual Mark Read/Unread/Flag and folder mark-all-read keep optimistic state off the busy `_work` token; IMAP flag stores use a non-folder CTS and pending archive flags until STORE succeeds (or soft “not connected”, which stays pending and flushes on reconnect).
+- Background sync and header upserts no longer clobber newer local Seen/Flagged; `UpsertHeaders` skips flag overwrite by default and `UpdateFlags` respects pending UIDs.
+- IMAP MOVE no longer falls back to copy-then-delete on cancel; remaining UIDs are checked before copy/expunge. Cross-mailbox moves delete each source UID after a successful copy.
+- Rules and headless sync write archive flags only after a successful STORE. SyncFolder no longer advances past a folder on list failure.
+- POP3 Mark Read works locally; spam junk/inbox destinations resolve per message mailbox; Priority is restored on failed flag updates.
+
 ## [0.4.4] - 2026-10-29
 
 HTML mail blocks remote images by default. Windows setup upgrades keep Identity Hub sibling DLLs. Store MSIX is built with each release.

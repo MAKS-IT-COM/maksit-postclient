@@ -1829,7 +1829,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       return;
     if (IsLoadedBody(row.Header) && _reading is not null) {
       if (!row.Header.IsSeen)
-        _ = MarkOpenedReadAsync(row.Header, CancellationToken.None);
+        _ = MarkOpenedReadAsync(row.Header);
       ShowMessageWindow(_reading);
       return;
     }
@@ -1932,34 +1932,47 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
   [RelayCommand(CanExecute = nameof(CanOrganize))]
   private async Task MarkSpamAsync() {
     var rows = TargetRows();
-    if (rows.Count == 0 || SelectedMailbox is null)
+    if (rows.Count == 0)
       return;
     foreach (var row in rows)
       _archive.MarkSpam(row.MailboxId, row.Header.Folder, row.Header.Id, EmbeddingModelSpec.Id);
-    var junk = JunkFolder(SelectedMailbox);
-    if (string.IsNullOrWhiteSpace(junk)) {
-      Status = Copy.SpamNoJunk;
-      PaintSpam(rows);
-      return;
+    var moved = false;
+    foreach (var group in rows.GroupBy(row => row.MailboxId, StringComparer.OrdinalIgnoreCase)) {
+      var box = MailboxById(group.Key) ?? SelectedMailbox;
+      if (box is null)
+        continue;
+      var junk = JunkFolder(box);
+      if (string.IsNullOrWhiteSpace(junk))
+        continue;
+      moved = true;
+      await MoveRowsAsync(group.ToList(), junk);
     }
 
-    await MoveRowsAsync(rows, junk);
+    if (!moved) {
+      Status = Copy.SpamNoJunk;
+      PaintSpam(rows);
+    }
   }
 
   [RelayCommand(CanExecute = nameof(CanOrganize))]
   private async Task MarkNotSpamAsync() {
     var rows = TargetRows();
-    if (rows.Count == 0 || SelectedMailbox is null)
+    if (rows.Count == 0)
       return;
     foreach (var row in rows)
       _archive.DismissMessage(row.MailboxId, row.Header.Folder, row.Header.Id);
-    var inbox = InboxOf(SelectedMailbox)?.FullName ?? "";
-    if (string.IsNullOrWhiteSpace(inbox)) {
-      PaintSpam(rows);
-      return;
-    }
+    foreach (var group in rows.GroupBy(row => row.MailboxId, StringComparer.OrdinalIgnoreCase)) {
+      var box = MailboxById(group.Key) ?? SelectedMailbox;
+      if (box is null)
+        continue;
+      var inbox = InboxOf(box)?.FullName ?? "";
+      if (string.IsNullOrWhiteSpace(inbox)) {
+        PaintSpam(group);
+        continue;
+      }
 
-    await MoveRowsAsync(rows, inbox);
+      await MoveRowsAsync(group.ToList(), inbox);
+    }
   }
 
   public IReadOnlyList<SpamListItem> SpamExamples() =>
@@ -2197,7 +2210,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       row => row.Header.Priority = priority);
   }
 
-  [RelayCommand(CanExecute = nameof(CanOrganize), AllowConcurrentExecutions = true)]
+  [RelayCommand(CanExecute = nameof(CanOrganize))]
   private async Task DeleteMessagesAsync() {
     var rows = TargetRows();
     if (rows.Count == 0)
@@ -2375,27 +2388,59 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var session = ActiveSession;
     var box = SelectedMailbox;
     var folder = SelectedFolder;
-    if (session is not { IsConnected: true, SupportsFolders: true } || box is null || folder is null)
+    if (box is null || folder is null)
       return;
-    await RunAsync(Copy.UpdatingFlags, async token => {
-      NoteUiMailChange();
-      var result = await session.SetFolderSeenAsync(folder.FullName, seen, token);
-      if (!result.IsSuccess) {
-        Status = string.Join(" ", result.Messages);
-        return;
-      }
+    NoteUiMailChange();
+    var previous = Messages.Select(row => (row, row.Header.IsSeen, row.Header.IsFlagged)).ToList();
+    foreach (var row in Messages) {
+      row.Header.IsSeen = seen;
+      row.RefreshMarks();
+    }
 
+    folder.Unread = seen ? 0 : folder.Total;
+    var pending = UsesImap(box);
+    if (Messages.Count > 0)
+      _archive.SetLocalFlags(
+        box.Id,
+        folder.FullName,
+        Messages.Select(row => (row.Header.Id, seen, row.Header.IsFlagged)),
+        pending);
+    else
       _archive.SetSeen(box.Id, folder.FullName, seen);
-      foreach (var row in Messages) {
-        row.Header.IsSeen = seen;
-        row.RefreshMarks();
-      }
+    NotifyFolderCounts();
+    RefreshFolderStats();
+    Status = seen ? Copy.FolderMarkedRead : Copy.FolderMarkedUnread;
+    if (session is not { IsConnected: true, SupportsFolders: true })
+      return;
+    Result result;
+    try {
+      result = await session.SetFolderSeenAsync(folder.FullName, seen, CancellationToken.None);
+    }
+    catch (OperationCanceledException) {
+      return;
+    }
 
-      folder.Unread = seen ? 0 : folder.Total;
-      NotifyFolderCounts();
-      RefreshFolderStats();
-      Status = seen ? Copy.FolderMarkedRead : Copy.FolderMarkedUnread;
-    });
+    if (result.IsSuccess) {
+      _archive.ClearPendingFlags(box.Id, folder.FullName, Messages.Select(row => row.Header.Id));
+      return;
+    }
+
+    if (IsSoftFlagFailure(result))
+      return;
+    foreach (var item in previous) {
+      item.row.Header.IsSeen = item.IsSeen;
+      item.row.RefreshMarks();
+    }
+
+    _archive.SetLocalFlags(
+      box.Id,
+      folder.FullName,
+      previous.Select(item => (item.row.Header.Id, item.IsSeen, item.IsFlagged)),
+      pending: false);
+    ApplyOpenedFolderCounts();
+    NotifyFolderCounts();
+    RefreshFolderStats();
+    Status = string.Join(" ", result.Messages);
   }
 
   private async Task<bool> ConfirmAsync(string title, string message) {
@@ -3561,21 +3606,25 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       }
 
       if (read.Count > 0) {
-        await session.SetMessageFlagsAsync(folder, read, new MailFlagUpdate { Seen = true }, token);
-        _archive.UpdateFlags(
-          box.Id,
-          folder,
-          headers.Where(h => read.Contains(h.Id))
-            .Select(h => (h.Id, true, h.IsFlagged || flagged.Contains(h.Id))));
+        var stored = await session.SetMessageFlagsAsync(
+          folder, read, new MailFlagUpdate { Seen = true }, token);
+        if (stored.IsSuccess)
+          _archive.UpdateFlags(
+            box.Id,
+            folder,
+            headers.Where(h => read.Contains(h.Id))
+              .Select(h => (h.Id, true, h.IsFlagged || flagged.Contains(h.Id))));
       }
 
       if (flagged.Count > 0) {
-        await session.SetMessageFlagsAsync(folder, flagged, new MailFlagUpdate { Flagged = true }, token);
-        _archive.UpdateFlags(
-          box.Id,
-          folder,
-          headers.Where(h => flagged.Contains(h.Id))
-            .Select(h => (h.Id, h.IsSeen || read.Contains(h.Id), true)));
+        var stored = await session.SetMessageFlagsAsync(
+          folder, flagged, new MailFlagUpdate { Flagged = true }, token);
+        if (stored.IsSuccess)
+          _archive.UpdateFlags(
+            box.Id,
+            folder,
+            headers.Where(h => flagged.Contains(h.Id))
+              .Select(h => (h.Id, h.IsSeen || read.Contains(h.Id), true)));
       }
     }
 
@@ -3624,23 +3673,16 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         continue;
       await EnsureFoldersForRulesAsync(destBox.Id);
       foreach (var id in pair.Value) {
-        if (await CopyUidToMailboxAsync(source, sourceSession, destBox, sourceFolder, pair.Key.Folder, id, token))
-          copied.Add(id);
+        if (!await CopyUidToMailboxAsync(source, sourceSession, destBox, sourceFolder, pair.Key.Folder, id, token))
+          continue;
+        await RemoveCopiedUidsAsync(source, sourceSession, sourceFolder, [id], token);
+        copied.Add(id);
       }
     }
 
     if (copied.Count == 0)
       return;
-    var unique = copied.Distinct().ToList();
-    if (sourceSession is { IsConnected: true, SupportsFolders: true }) {
-      var trash = MailRetention.ResolveTrash(sourceFolders);
-      if (!string.IsNullOrWhiteSpace(trash) && !trash.Equals(sourceFolder, StringComparison.OrdinalIgnoreCase))
-        await sourceSession.MoveMessagesAsync(sourceFolder, unique, trash, token);
-      else
-        await sourceSession.SetMessageFlagsAsync(sourceFolder, unique, new MailFlagUpdate { Deleted = true }, token);
-    }
-
-    DropArchived(source.Id, sourceFolder, unique);
+    RemoveDroppedRows(source.Id, sourceFolder, copied.Distinct().ToList());
   }
 
   private async Task<bool> CopyUidToMailboxAsync(
@@ -3874,6 +3916,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         if (missingFolders)
           await LoadFoldersAsync(box, live, token).ConfigureAwait(false);
         KickSyncSession(box, password);
+        await FlushPendingFlagsAsync(box).ConfigureAwait(false);
         return true;
       }
 
@@ -3904,6 +3947,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         pst.StorePathChanged += path => PersistPstStorePath(box, path);
       await LoadFoldersAsync(box, session, token).ConfigureAwait(false);
       KickSyncSession(box, password);
+      await FlushPendingFlagsAsync(box).ConfigureAwait(false);
       await UiAsync(() => {
         EnsureIndexing(box.Id);
         NotifyFolderCommands();
@@ -3913,6 +3957,33 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     finally {
       lock (_connections)
         _connecting.Remove(box.Id);
+    }
+  }
+
+  private async Task FlushPendingFlagsAsync(MailboxAccount box) {
+    if (!UsesImap(box))
+      return;
+    var session = SessionFor(box);
+    if (session is not { IsConnected: true, SupportsFolders: true })
+      return;
+    var pending = _archive.ListAllPendingFlags(box.Id);
+    foreach (var group in pending.GroupBy(item => item.Folder, StringComparer.OrdinalIgnoreCase)) {
+      foreach (var item in group) {
+        Result result;
+        try {
+          result = await session.SetMessageFlagsAsync(
+            group.Key,
+            [item.Uid],
+            new MailFlagUpdate { Seen = item.IsSeen, Flagged = item.IsFlagged },
+            CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) {
+          return;
+        }
+
+        if (result.IsSuccess)
+          _archive.ClearPendingFlags(box.Id, group.Key, [item.Uid]);
+      }
     }
   }
 
@@ -3936,21 +4007,24 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     }
   }
 
-  private void ApplyFolderSync(string mailboxId, string folder, MailFolderSync sync) {
+  private void ApplyFolderSync(
+    string mailboxId,
+    string folder,
+    MailFolderSync sync,
+    bool applyFlags = true) {
     if (!EnsureArchive(mailboxId))
       return;
     var ready = IsInitialSyncComplete(mailboxId);
     _archive.SetKeywordIndexEnabled(mailboxId, ready);
-    if (sync.Flags.Count > 0)
+    if (applyFlags && sync.Flags.Count > 0)
       _archive.UpdateFlags(mailboxId, folder, sync.Flags.Select(f => (f.Id, f.IsSeen, f.IsFlagged)));
-    _archive.UpsertHeaders(mailboxId, sync.Headers.Select(MailArchiveMap.FromHeader));
+    _archive.UpsertHeaders(mailboxId, sync.Headers.Select(MailArchiveMap.FromHeader), updateFlags: false);
     if (sync.Present is not null) {
       var keep = sync.Present.ToHashSet();
       var gone = _archive.Uids(mailboxId, folder).Where(uid => !keep.Contains(uid)).ToList();
       if (gone.Count > 0)
         DropArchived(mailboxId, folder, gone);
     }
-
   }
 
   private bool EnsureArchive(string mailboxId) {
@@ -4000,10 +4074,9 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       }
 
       token.ThrowIfCancellationRequested();
-      if (Volatile.Read(ref _mailEpoch) != epoch)
-        return;
+      var applyFlags = Volatile.Read(ref _mailEpoch) == epoch;
       var sync = result.Value ?? new MailFolderSync();
-      ApplyFolderSync(box.Id, folder, sync);
+      ApplyFolderSync(box.Id, folder, sync, applyFlags);
       var fresh = sync.Headers.Where(h => !known.Contains(h.Id)).ToList();
       if (known.Count > 0) {
         await UiAsync(() => {
@@ -4325,11 +4398,14 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     StoreArchivedBody(box.Id, header, body);
     await Dispatcher.UIThread.InvokeAsync(async () => {
       MarkRowAttachments(header);
-      if (SelectedMessage is null
-          || SelectedMessage.Header.Id != header.Id
-          || !SelectedMessage.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase)) {
+      var stillSelected = SelectedMessage is not null
+        && SelectedMessage.Header.Id == header.Id
+        && SelectedMessage.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase);
+      if (!stillSelected) {
         if (Status == Copy.OpeningMessage)
           Status = "";
+        // Body finished after the user moved on — still keep the Seen mark.
+        await MarkOpenedReadAsync(header).ConfigureAwait(true);
         return;
       }
 
@@ -4353,7 +4429,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
           Status = explain;
       }
 
-      await MarkOpenedReadAsync(header, token).ConfigureAwait(true);
+      await MarkOpenedReadAsync(header).ConfigureAwait(true);
       if (_pendingWindow is { } pending
           && pending.Header.Id == header.Id
           && pending.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase)) {
@@ -4387,7 +4463,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     MessageWindowRequested?.Invoke(vm);
   }
 
-  private async Task MarkOpenedReadAsync(MailMessageHeader header, CancellationToken token) {
+  private async Task MarkOpenedReadAsync(MailMessageHeader header) {
     var row = Messages.FirstOrDefault(m =>
       m.Header.Id == header.Id
       && m.Header.Folder.Equals(header.Folder, StringComparison.OrdinalIgnoreCase));
@@ -4405,28 +4481,52 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var flagged = row.Header.IsFlagged;
     row.Header.IsSeen = true;
     row.RefreshMarks();
+    var pending = box is not null && UsesImap(box);
     if (box is not null)
-      _archive.UpdateFlags(box.Id, folder, [(row.Header.Id, true, flagged)]);
+      _archive.SetLocalFlags(box.Id, folder, [(row.Header.Id, true, flagged)], pending);
     NotifyFolderCounts();
     RefreshFolderStats();
     var session = SessionFor(box);
-    if (session is not { SupportsFolders: true })
+    if (session is not { IsConnected: true, SupportsFolders: true })
       return;
-    var result = await session.SetMessageFlagsAsync(
-      folder,
-      [row.Header.Id],
-      new MailFlagUpdate { Seen = true },
-      token).ConfigureAwait(true);
-    if (result.IsSuccess)
+    Result result;
+    try {
+      result = await session.SetMessageFlagsAsync(
+        folder,
+        [row.Header.Id],
+        new MailFlagUpdate { Seen = true },
+        CancellationToken.None).ConfigureAwait(true);
+    }
+    catch (OperationCanceledException) {
+      return;
+    }
+
+    if (result.IsSuccess) {
+      if (box is not null)
+        _archive.ClearPendingFlags(box.Id, folder, [row.Header.Id]);
+      return;
+    }
+
+    if (IsSoftFlagFailure(result))
       return;
     if (folderRow is not null)
       ApplyUnreadDelta(folderRow, [row], false);
     row.Header.IsSeen = false;
     row.RefreshMarks();
     if (box is not null)
-      _archive.UpdateFlags(box.Id, folder, [(row.Header.Id, false, flagged)]);
+      _archive.SetLocalFlags(box.Id, folder, [(row.Header.Id, false, flagged)], pending: false);
     NotifyFolderCounts();
     RefreshFolderStats();
+  }
+
+  private static bool IsSoftFlagFailure(Result result) {
+    foreach (var message in result.Messages) {
+      if (message.Contains("Not connected", StringComparison.OrdinalIgnoreCase)
+          || message.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+        return true;
+    }
+
+    return false;
   }
 
   private void ApplyReading(MailMessageBody body, bool keepKind = false) {
@@ -4987,8 +5087,10 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
       NoteUiMailChange();
       var copied = new List<uint>();
       foreach (var id in ids) {
-        if (await CopyUidToMailboxAsync(sourceBox, sourceSession, destBox, source, dest, id, token))
-          copied.Add(id);
+        if (!await CopyUidToMailboxAsync(sourceBox, sourceSession, destBox, source, dest, id, token))
+          continue;
+        await RemoveCopiedUidsAsync(sourceBox, sourceSession, source, [id], token);
+        copied.Add(id);
       }
 
       if (copied.Count == 0) {
@@ -4996,7 +5098,6 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
         return;
       }
 
-      await RemoveCopiedUidsAsync(sourceBox, sourceSession, source, copied, token);
       ApplyFolderMoveCounts(sourceBox, destBox, source, dest, copied.Count, rows);
       RemoveDroppedRows(sourceBox.Id, source, copied);
       await LoadFoldersAsync(destBox, destSession, token);
@@ -5121,68 +5222,99 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     var targets = rows ?? TargetRows();
     if (targets.Count == 0)
       return false;
-    var ok = false;
-    await RunAsync(Copy.UpdatingFlags, async token => {
-      foreach (var group in targets.GroupBy(row => MailMessageKey.Of(row.MailboxId, row.Header.Folder, 0))) {
-        var box = MailboxById(group.Key.MailboxId) ?? SelectedMailbox;
-        var session = SessionFor(box);
-        if (session is not { SupportsFolders: true }) {
-          Status = Copy.Connecting;
-          return;
+    var ok = true;
+    Status = Copy.UpdatingFlags;
+    foreach (var group in targets.GroupBy(row => MailMessageKey.Of(row.MailboxId, row.Header.Folder, 0))) {
+      var box = MailboxById(group.Key.MailboxId) ?? SelectedMailbox;
+      var session = SessionFor(box);
+      var folder = group.Key.Folder;
+      var groupRows = group.ToList();
+      var previous = groupRows
+        .Select(row => (row, row.Header.IsSeen, row.Header.IsFlagged, row.Header.Priority))
+        .ToList();
+      var remote = session is { SupportsFolders: true };
+      var pending = box is not null && UsesImap(box) && !update.Deleted;
+      if (!remote && box is null) {
+        Status = Copy.Connecting;
+        ok = false;
+        continue;
+      }
+
+      NoteUiMailChange();
+      if (update.Seen is { } seen && SelectedFolder is { } current
+          && current.FullName.Equals(folder, StringComparison.OrdinalIgnoreCase))
+        ApplyUnreadDelta(current, groupRows, seen);
+      if (apply is not null) {
+        foreach (var row in groupRows) {
+          apply(row);
+          row.RefreshMarks();
         }
+      }
 
-        NoteUiMailChange();
-        var folder = group.Key.Folder;
-        var groupRows = group.ToList();
-        var previous = groupRows.Select(row => (row, row.Header.IsSeen, row.Header.IsFlagged)).ToList();
-        if (update.Seen is { } seen && SelectedFolder is { } current
-            && current.FullName.Equals(folder, StringComparison.OrdinalIgnoreCase))
-          ApplyUnreadDelta(current, groupRows, seen);
-        if (apply is not null) {
-          foreach (var row in groupRows) {
-            apply(row);
-            row.RefreshMarks();
-          }
+      if (box is not null && apply is not null)
+        _archive.SetLocalFlags(
+          box.Id,
+          folder,
+          groupRows.Select(r => (r.Header.Id, r.Header.IsSeen, r.Header.IsFlagged)),
+          pending);
+      NotifyFolderCounts();
+      RefreshFolderStats();
+      if (!remote || session is null) {
+        if (apply is not null)
+          continue;
+        Status = Copy.Connecting;
+        ok = false;
+        continue;
+      }
 
-          if (box is not null)
-            _archive.UpdateFlags(
-              box.Id,
-              folder,
-              groupRows.Select(r => (r.Header.Id, r.Header.IsSeen, r.Header.IsFlagged)));
-        }
-
-        NotifyFolderCounts();
-        RefreshFolderStats();
-        var result = await session.SetMessageFlagsAsync(
+      Result result;
+      try {
+        result = await session.SetMessageFlagsAsync(
           folder,
           TargetIds(groupRows),
           update,
-          token).ConfigureAwait(true);
-        if (result.IsSuccess)
-          continue;
-        foreach (var item in previous) {
-          item.row.Header.IsSeen = item.IsSeen;
-          item.row.Header.IsFlagged = item.IsFlagged;
-          item.row.RefreshMarks();
-        }
-
-        if (box is not null)
-          _archive.UpdateFlags(
-            box.Id,
-            folder,
-            previous.Select(item => (item.row.Header.Id, item.IsSeen, item.IsFlagged)));
-        if (SelectedFolder is { } open
-            && open.FullName.Equals(folder, StringComparison.OrdinalIgnoreCase))
-          ApplyOpenedFolderCounts();
-        NotifyFolderCounts();
-        RefreshFolderStats();
-        Status = string.Join(" ", result.Messages);
-        return;
+          CancellationToken.None).ConfigureAwait(true);
+      }
+      catch (OperationCanceledException) {
+        continue;
       }
 
+      if (result.IsSuccess) {
+        if (box is not null && pending)
+          _archive.ClearPendingFlags(box.Id, folder, TargetIds(groupRows));
+        continue;
+      }
+
+      if (IsSoftFlagFailure(result) || update.Deleted) {
+        if (!result.IsSuccess && update.Deleted)
+          ok = false;
+        continue;
+      }
+
+      foreach (var item in previous) {
+        item.row.Header.IsSeen = item.IsSeen;
+        item.row.Header.IsFlagged = item.IsFlagged;
+        item.row.Header.Priority = item.Priority;
+        item.row.RefreshMarks();
+      }
+
+      if (box is not null && apply is not null)
+        _archive.SetLocalFlags(
+          box.Id,
+          folder,
+          previous.Select(item => (item.row.Header.Id, item.IsSeen, item.IsFlagged)),
+          pending: false);
+      if (SelectedFolder is { } open
+          && open.FullName.Equals(folder, StringComparison.OrdinalIgnoreCase))
+        ApplyOpenedFolderCounts();
+      NotifyFolderCounts();
+      RefreshFolderStats();
+      Status = string.Join(" ", result.Messages);
+      ok = false;
+    }
+
+    if (ok)
       Status = "Updated.";
-      ok = true;
-    });
     return ok;
   }
 

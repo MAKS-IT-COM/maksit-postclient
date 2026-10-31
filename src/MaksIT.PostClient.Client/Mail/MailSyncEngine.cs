@@ -200,12 +200,12 @@ public sealed class MailSyncEngine {
     var page = await session.ListMessagesAsync(folder, known, cancellationToken, MailPipeline.HeaderPage)
       .ConfigureAwait(false);
     if (!page.IsSuccess)
-      return true;
+      return false;
     var sync = page.Value ?? new MailFolderSync();
     _archive.SetKeywordIndexEnabled(box.Id, box.InitialSyncCompleted);
     if (sync.Flags.Count > 0)
       _archive.UpdateFlags(box.Id, folder, sync.Flags.Select(f => (f.Id, f.IsSeen, f.IsFlagged)));
-    _archive.UpsertHeaders(box.Id, sync.Headers.Select(MailArchiveMap.FromHeader));
+    _archive.UpsertHeaders(box.Id, sync.Headers.Select(MailArchiveMap.FromHeader), updateFlags: false);
     if (sync.Present is not null) {
       var keep = sync.Present.ToHashSet();
       var gone = _archive.Uids(box.Id, folder).Where(uid => !keep.Contains(uid)).ToList();
@@ -343,18 +343,30 @@ public sealed class MailSyncEngine {
     }
 
     if (read.Count > 0) {
-      await session.SetMessageFlagsAsync(folder, read, new MailFlagUpdate { Seen = true }, cancellationToken)
+      var stored = await session
+        .SetMessageFlagsAsync(folder, read, new MailFlagUpdate { Seen = true }, cancellationToken)
         .ConfigureAwait(false);
-      _archive.UpdateFlags(
-        box.Id,
-        folder,
-        headers.Where(header => read.Contains(header.Id))
-          .Select(header => (header.Id, true, header.IsFlagged || flagged.Contains(header.Id))));
+      if (stored.IsSuccess)
+        _archive.UpdateFlags(
+          box.Id,
+          folder,
+          headers.Where(header => read.Contains(header.Id))
+            .Select(header => (header.Id, true, header.IsFlagged || flagged.Contains(header.Id))),
+          respectPending: true);
     }
 
-    if (flagged.Count > 0)
-      await session.SetMessageFlagsAsync(folder, flagged, new MailFlagUpdate { Flagged = true }, cancellationToken)
+    if (flagged.Count > 0) {
+      var stored = await session
+        .SetMessageFlagsAsync(folder, flagged, new MailFlagUpdate { Flagged = true }, cancellationToken)
         .ConfigureAwait(false);
+      if (stored.IsSuccess)
+        _archive.UpdateFlags(
+          box.Id,
+          folder,
+          headers.Where(header => flagged.Contains(header.Id))
+            .Select(header => (header.Id, header.IsSeen || read.Contains(header.Id), true)),
+          respectPending: true);
+    }
   }
 
   private async Task RetentionAsync(

@@ -73,6 +73,9 @@ public sealed class PstMailSession : IMailSession {
         OpenStore(path);
         return Task.FromResult(Result.Ok());
       }
+      catch (OperationCanceledException) {
+        throw;
+      }
       catch (Exception ex) {
         return Task.FromResult(Result.UnprocessableEntity(WriteError(ex)));
       }
@@ -103,6 +106,9 @@ public sealed class PstMailSession : IMailSession {
 
         return Task.FromResult(Result<IReadOnlyList<MailFolderInfo>>.Ok(
           MailFolderCatalog.Normalize(folders, MailFolderLayout.Store)));
+      }
+      catch (OperationCanceledException) {
+        throw;
       }
       catch (Exception ex) {
         return Task.FromResult(Result<IReadOnlyList<MailFolderInfo>>.UnprocessableEntity(null, ex.Message));
@@ -279,6 +285,9 @@ public sealed class PstMailSession : IMailSession {
         Incomplete = incomplete
       });
     }
+    catch (OperationCanceledException) {
+      throw;
+    }
     catch (Exception ex) {
       return Result<MailFolderSync>.UnprocessableEntity(null, ex.Message);
     }
@@ -328,6 +337,9 @@ public sealed class PstMailSession : IMailSession {
       document = EmailDocument.Load(eml);
       using var stream = new MemoryStream(eml, writable: false);
       mime = await MimeMessage.LoadAsync(stream, cancellationToken).ConfigureAwait(false);
+    }
+    catch (OperationCanceledException) {
+      throw;
     }
     catch (Exception ex) {
       return Result<uint?>.UnprocessableEntity(null, ex.Message);
@@ -602,6 +614,15 @@ public sealed class PstMailSession : IMailSession {
         var copy = ConvertToUnicodePst(path, cancellationToken);
         if (!copy.IsSuccess)
           return copy;
+      }
+      catch (OperationCanceledException) {
+        try {
+          OpenStore(path);
+        }
+        catch {
+        }
+
+        throw;
       }
       catch (Exception ex) {
         try {

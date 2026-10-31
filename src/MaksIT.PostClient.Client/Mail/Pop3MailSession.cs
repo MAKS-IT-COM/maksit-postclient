@@ -55,6 +55,10 @@ public sealed class Pop3MailSession : IMailSession {
           cancellationToken).ConfigureAwait(false);
         await MailKitAuth.AuthenticateAsync(client, account, resolved.Value, cancellationToken).ConfigureAwait(false);
       }
+      catch (OperationCanceledException) {
+        client.Dispose();
+        throw;
+      }
       catch (Exception ex) {
         client.Dispose();
         return Result.UnprocessableEntity(MailAuthHint.Incoming(account, ex.Message));
@@ -159,6 +163,9 @@ public sealed class Pop3MailSession : IMailSession {
         Incomplete = true
       });
     }
+    catch (OperationCanceledException) {
+      throw;
+    }
     catch (Exception ex) {
       return Result<MailFolderSync>.UnprocessableEntity(null, ex.Message);
     }
@@ -180,10 +187,11 @@ public sealed class Pop3MailSession : IMailSession {
     if (client is null)
       return Result<MailMessageBody>.UnprocessableEntity(null, "Not connected.");
 
-    using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-    using var abort = linked.Token.Register(DropSocket);
-    if (!interactive)
-      linked.CancelAfter(MailFetch.BackfillTimeout);
+    using var timeout = interactive ? null : new CancellationTokenSource(MailFetch.BackfillTimeout);
+    using var linked = timeout is null
+      ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+      : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+    using var abort = timeout is null ? default : timeout.Token.Register(DropSocket);
     MimeMessage mime;
     try {
       var index = (int)id;
