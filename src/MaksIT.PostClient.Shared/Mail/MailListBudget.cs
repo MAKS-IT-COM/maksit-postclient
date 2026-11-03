@@ -4,6 +4,7 @@ namespace MaksIT.PostClient.Shared.Mail;
 public static class MailListBudget {
   public readonly record struct Slice(int Start, int End, int Take, int NextOffset, bool Incomplete);
 
+  /// <summary>Newest-first window over a stable sequence index space (POP3 / PST).</summary>
   public static Slice NewestRange(int count, int offset, int budget) {
     if (count <= 0 || offset >= count || budget <= 0)
       return new Slice(0, -1, 0, Math.Max(0, offset), false);
@@ -14,5 +15,15 @@ public static class MailListBudget {
     var start = end - take + 1;
     var next = offset + take;
     return new Slice(start, end, take, next, next < count);
+  }
+
+  /// <summary>Newest-first window over a pre-ordered UID / id list (IMAP SEARCH).</summary>
+  public static Slice UidPage(int count, int offset, int budget) {
+    if (count <= 0 || offset >= count || budget <= 0)
+      return new Slice(0, -1, 0, Math.Max(0, offset), false);
+
+    var take = Math.Min(budget, count - offset);
+    var next = offset + take;
+    return new Slice(offset, offset + take - 1, take, next, next < count);
   }
 }

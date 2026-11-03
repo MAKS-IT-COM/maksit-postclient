@@ -94,7 +94,9 @@ public partial class MainViewModel {
       .ListMessagesAsync(slot.Folder, known, token, MailPipeline.HeaderPage)
       .ConfigureAwait(false);
     if (!listed.IsSuccess) {
-      _pipelineSticky = null;
+      // Keep sticky so a transient list error retries the same folder instead of restarting
+      // every label from the newest page and never reaching older mail.
+      _pipelineSticky = key;
       if (!token.IsCancellationRequested)
         _folderFailUtc[key] = DateTimeOffset.UtcNow;
       return true;

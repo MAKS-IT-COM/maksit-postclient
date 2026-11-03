@@ -59,23 +59,23 @@ If you find this project useful, please consider supporting its development:
 
 Typical desktop and web mail treats a PEC **busta** or an ETSI REM evidence part as just another attachment. Postclient is written around that evidence:
 
-- **Unwrap PEC / REM envelopes** — read the inner `postacert.eml` (the message the recipient was meant to see) instead of the gestore wrapper; Type column **PEC**, **RIC**, **REM**, or digitally signed **SIG**.
-- **Delivery column from operator evidence** — accettazione, avvenuta-consegna, ETSI `SubmissionAcceptance` / `Delivery` / `Retrieval`, LRE and AR24 avis, De-Mail Zustellung and Abholbestätigung, acuse de recibo. After SMTP send, **Sent** is matched to Inbox/Ricevute ricevute by Message-Id, `daticert.xml`, and subject prefixes. Italian PEC has **no read receipt**: avvenuta consegna is deposit in the certified mailbox.
-- **FatturaPA preview** — Italian e-invoice XML as a readable view (XML parser, not generative AI).
-- **Fascicolo of original `.eml`** — export selected messages as the files a notaio, PA desk, bank, or court can keep.
-- **From is a mailbox picker** — you cannot type a free From; send uses the SMTP identity of the connected account.
-- **Practice labels on this PC** — tag a condominium, a client file, an IMU notice. Labels are local, not a studio-wide database.
-- **Full-folder local archive** — Get Messages stores the **whole IMAP folder** in `mail.db` plus `.eml` on disk (not a last-N window). Keyword FTS on subject, body, PDF/XML/HTML/CSV/JSON attachment text, and labels.
-- **On-device meaning search (RAG)** — optional EmbeddingGemma 300M in **Settings → Indices…**. Vectors stay in `mail.db`. Mail never leaves the machine. Rebuild or repair keyword and meaning indices.
-- **Rules across mailboxes** — move, delete, flag, label; a destination folder can live on another account, including an attached **folder store**. Import JSON or a legacy `.rwz` file; export is JSON.
-- **Folder stores** — create, attach, detach, or move a directory that holds `.eml` plus its own `mail.db` (keyword + meaning index). **Import Outlook PST…** copies into a store; it does not register the `.pst` as a mailbox. Default store path: `%LocalAppData%\Postclient\stores\{name}` (portable: `{install}/data/stores/{name}`).
-- **Country packs** — **Settings → Features** turns Italy (PEC, FatturaPA, fascicolo), Europe (eIDAS REM), France, Germany, Spain, and Switzerland evidence labels on or off. Ordinary IMAP stays available.
+- **Unwrap PEC / REM envelopes** - read the inner `postacert.eml` (the message the recipient was meant to see) instead of the gestore wrapper; Type column **PEC**, **RIC**, **REM**, or digitally signed **SIG**.
+- **Delivery column from operator evidence** - accettazione, avvenuta-consegna, ETSI `SubmissionAcceptance` / `Delivery` / `Retrieval`, LRE and AR24 avis, De-Mail Zustellung and Abholbestätigung, acuse de recibo. After SMTP send, **Sent** is matched to Inbox/Ricevute ricevute by Message-Id, `daticert.xml`, and subject prefixes. Italian PEC has **no read receipt**: avvenuta consegna is deposit in the certified mailbox.
+- **FatturaPA preview** - Italian e-invoice XML as a readable view (XML parser, not generative AI).
+- **Fascicolo of original `.eml`** - export selected messages as the files a notaio, PA desk, bank, or court can keep.
+- **From is a mailbox picker** - you cannot type a free From; send uses the SMTP identity of the connected account.
+- **Practice labels on this PC** - tag a condominium, a client file, an IMU notice. Labels are local, not a studio-wide database.
+- **Full-folder local archive** - Get Messages stores the **whole IMAP folder** in `mail.db` plus `.eml` on disk (not a last-N window). Keyword FTS on subject, body, PDF/XML/HTML/CSV/JSON attachment text, and labels.
+- **On-device meaning search (RAG)** - optional EmbeddingGemma 300M in **Settings -> Indices...**. Vectors stay in `mail.db`. Mail never leaves the machine. Rebuild or repair keyword and meaning indices.
+- **Rules across mailboxes** - move, delete, flag, label; a destination folder can live on another account, including an attached **folder store**. Import JSON or a legacy `.rwz` file; export is JSON.
+- **Folder stores** - create, attach, detach, or move a directory that holds `.eml` plus its own `mail.db` (keyword + meaning index). **Import Outlook PST...** copies into a store; it does not register the `.pst` as a mailbox. Default store path: `%LocalAppData%\Postclient\stores\{name}` (portable: `{install}/data/stores/{name}`).
+- **Country packs** - **Settings -> Features** turns Italy (PEC, FatturaPA, fascicolo), Europe (eIDAS REM), France, Germany, Spain, and Switzerland evidence labels on or off. Ordinary IMAP stays available.
 
 ## Who it is for
 
 ### Private individuals
 
-Daily client for one or more addresses: Gmail or Microsoft 365 next to a personal **PEC** (Italy) or an IMAP **REM** mailbox (EU). Search a condominium notice, a tax file, or a PA communication years later without leaving the originals on someone else’s server.
+Daily client for one or more addresses: Gmail or Microsoft 365 next to a personal **PEC** (Italy) or an IMAP **REM** mailbox (EU). Search a condominium notice, a tax file, or a PA communication years later without leaving the originals on someone else's server.
 
 Typical use: certified and ordinary mail in one window; see whether the gestore accepted and deposited a PEC; print or save a PDF; export the original `.eml` if a municipality, bank, or court asks for it.
 
@@ -95,19 +95,19 @@ Several mailboxes at once. Presets fill hosts and ports:
 |--|--|
 | Gmail | IMAP/SMTP; Google sign-in through Identity Hub (`identity.maks-it.com`) or a Gmail app password |
 | Microsoft 365 | IMAP/SMTP; Microsoft sign-in through Identity Hub. Most of these accounts reject a mailbox password |
-| IT PEC — Aruba | `imaps.pec.aruba.it` / `smtps.pec.aruba.it` (POP3: `pop3s.pec.aruba.it`) |
-| IT PEC — InfoCert Legalmail | `mbox.cert.legalmail.it` / `sendm.cert.legalmail.it`. Username is often the InfoCert User ID, not the address |
-| IT/EU PEC — Namirial | `imaps.sicurezzapostale.it` / `smtps.sicurezzapostale.it` |
-| IT PEC — Poste Italiane | `mail.postecert.it` |
-| IT PEC — Register.it | `imap.pec-email.com` / `smtp.pec-email.com` |
-| IT PEC — Libero | `mail.postacert.it.net` |
-| EU — Intesi Group | `imap.ig-trustmail.com` / `smtp.ig-trustmail.com` |
+| IT PEC - Aruba | `imaps.pec.aruba.it` / `smtps.pec.aruba.it` (POP3: `pop3s.pec.aruba.it`) |
+| IT PEC - InfoCert Legalmail | `mbox.cert.legalmail.it` / `sendm.cert.legalmail.it`. Username is often the InfoCert User ID, not the address |
+| IT/EU PEC - Namirial | `imaps.sicurezzapostale.it` / `smtps.sicurezzapostale.it` |
+| IT PEC - Poste Italiane | `mail.postecert.it` |
+| IT PEC - Register.it | `imap.pec-email.com` / `smtp.pec-email.com` |
+| IT PEC - Libero | `mail.postacert.it.net` |
+| EU - Intesi Group | `imap.ig-trustmail.com` / `smtp.ig-trustmail.com` |
 | IMAP / POP3 | Any host the operator gave you. Set **mailbox kind** to Italian PEC or EU REM if that mailbox is certified (including a custom domain) |
 | Folder store | Local bucket on disk (`postclient.store.json` + `mail.db` + `.eml`). No password and no SMTP. Create, attach, detach, or move from the File menu. |
 
 Certified IMAP mailboxes use the gestore password, or an app password if the gestore has 2FA. **AR24** (France), **De-Mail** (Germany), **IncaMail** (Switzerland), and **Lleida** (Spain) are usually not IMAP. If that operator gave you IMAP/POP3 hosts, choose **IMAP / POP3**. Otherwise this client cannot open that mailbox; it can still display ETSI REM evidence on messages you import as `.eml`.
 
-Gmail and Microsoft 365 sign-in uses **Identity Hub** at `https://identity.maks-it.com` (covered app `MaksIT.PostClient`). Account Settings opens `/desktop-login?provider=Google` or `Microsoft` in the built-in WebView. Hub session material stays in `secrets.bin`; IMAP/SMTP use a short-lived **IdP mailbox token** (XOAUTH2). Hub keeps the IdP refresh in its vault and is transparent to mail protocols — on connect PostClient asks Hub for a fresh mailbox token (and renews the Hub session when needed) so Gmail and Outlook stay signed in. If an older build stored a session without a refresh token, sign in once more from Account Settings. Override the origin with `POSTCLIENT_IDENTITY_HUB` (Compose: `http://localhost:8080`). Password / app password still work for PEC and generic IMAP.
+Gmail and Microsoft 365 sign-in uses **Identity Hub** at `https://identity.maks-it.com` (covered app id `MaksIT.PostClient`, commercial name **MaksIT Postclient**). Account Settings opens `/desktop-login?provider=Google|Microsoft&app=MaksIT.PostClient` in the built-in WebView. Hub session material stays in `secrets.bin`; IMAP/SMTP use a short-lived **IdP mailbox token** (XOAUTH2). Hub keeps the IdP refresh in its vault and is transparent to mail protocols - on connect PostClient asks Hub for a fresh mailbox token (and renews the Hub session when needed) so Gmail and Outlook stay signed in. If an older build stored a session without a refresh token, sign in once more from Account Settings. Override the origin with `POSTCLIENT_IDENTITY_HUB` (Compose: `http://localhost:8080`). Password / app password still work for PEC and generic IMAP.
 
 Passwords and Hub tokens stay next to settings (`DPAPI` on Windows, file mode `600` on Linux/macOS), never in `settings.json`.
 
@@ -118,29 +118,29 @@ Italian certified mail is a **busta** produced by the gestore:
 - transport message with `X-Trasporto: posta-certificata`, `daticert.xml`, and the original as `postacert.eml`;
 - ricevute (`X-Ricevuta`) in **Inbox** and **Ricevute**: accettazione, presa-in-carico, avvenuta-consegna, non-accettazione, mancata-consegna, rilevazione-virus, preavviso-errore-consegna.
 
-View → **Unwrap PEC/REM envelope** shows the inner `postacert.eml`. The Type column marks **PEC** (transport) or **RIC** (ricevuta).
+View -> **Unwrap PEC/REM envelope** shows the inner `postacert.eml`. The Type column marks **PEC** (transport) or **RIC** (ricevuta).
 
-Italian PEC has **no read receipt**. **Avvenuta consegna** means the message was deposited in the recipient’s certified mailbox, not that a person opened it.
+Italian PEC has **no read receipt**. **Avvenuta consegna** means the message was deposited in the recipient's certified mailbox, not that a person opened it.
 
 ## European REM (eIDAS registered electronic mail)
 
 When the message carries ETSI REM evidence (`REMEvidence` / `urn:etsi:rem`, or a part name such as `remevidence` / `rem-md`), the client treats it as **REM**. Event types map onto the same delivery column as PEC:
 
-- `SubmissionAcceptance` → accepted by the QTSP;
-- `Delivery` / LRE or AR24 avis de réception / De-Mail Zustellung / acuse de recibo → deposited;
-- `ContentConsignment` / `Retrieval` / De-Mail `Abholbestätigung` → the recipient retrieved the content (closest European equivalent of “read”);
-- rejection, virus, non-delivery, `DeliveryExpiration` → failed.
+- `SubmissionAcceptance` -> accepted by the QTSP;
+- `Delivery` / LRE or AR24 avis de réception / De-Mail Zustellung / acuse de recibo -> deposited;
+- `ContentConsignment` / `Retrieval` / De-Mail `Abholbestätigung` -> the recipient retrieved the content (closest European equivalent of "read");
+- rejection, virus, non-delivery, `DeliveryExpiration` -> failed.
 
 S/MIME (`smime.p7s` / `smime.p7m`) is shown as digitally signed; it is not PEC and not REM.
 
 ## Delivery column after send
 
-After SMTP send, Postclient stores the outbound **Message-Id** and, when you open **Sent**, reconciles gestore ricevute from **Inbox** and **Ricevute**. That wait applies only to accounts whose kind is PEC or REM (a PEC/REM preset, or IMAP/POP3 with that mailbox kind). Ordinary Gmail, Microsoft 365, and IMAP just report as sent. Matching uses, in order: `daticert.xml` `<msgid>`, `X-Riferimento-Message-ID`, `In-Reply-To`, PEC `identificativo`, then subject prefixes (`ACCETTAZIONE:`, `CONSEGNA:`, `AVIS DE RECEPTION:`, `ACUSE DE RECIBO:`, `ZUSTELLBESTAETIGUNG:`, `ABHOLBESTAETIGUNG:`, …).
+After SMTP send, Postclient stores the outbound **Message-Id** and, when you open **Sent**, reconciles gestore ricevute from **Inbox** and **Ricevute**. That wait applies only to accounts whose kind is PEC or REM (a PEC/REM preset, or IMAP/POP3 with that mailbox kind). Ordinary Gmail, Microsoft 365, and IMAP just report as sent. Matching uses, in order: `daticert.xml` `<msgid>`, `X-Riferimento-Message-ID`, `In-Reply-To`, PEC `identificativo`, then subject prefixes (`ACCETTAZIONE:`, `CONSEGNA:`, `AVIS DE RECEPTION:`, `ACUSE DE RECIBO:`, `ZUSTELLBESTAETIGUNG:`, `ABHOLBESTAETIGUNG:`, ...).
 
 | Evidence | Mark | Meaning |
 |--|--|--|
 | PEC `accettazione` / `presa-in-carico`, ETSI `SubmissionAcceptance` | Accepted | The gestore took the message |
-| PEC `avvenuta-consegna`, ETSI `Delivery`, LRE/AR24 avis, De-Mail Zustellung | Delivered | Deposited in the recipient **certified mailbox** — Italian PEC has **no read receipt** |
+| PEC `avvenuta-consegna`, ETSI `Delivery`, LRE/AR24 avis, De-Mail Zustellung | Delivered | Deposited in the recipient **certified mailbox** - Italian PEC has **no read receipt** |
 | ETSI `ContentConsignment` / `Retrieval`, De-Mail `Abholbestätigung` | Retrieved | Recipient picked up the content |
 | `non-accettazione`, `mancata-consegna`, virus, ETSI rejection | Failed | Gestore reported non-acceptance or failed delivery |
 
@@ -150,13 +150,13 @@ Desktop notices fire for new PEC, ricevute, and REM (Windows toast, macOS notifi
 
 ## Reading, folders, compose
 
-- Folder tree follows the server (Inbox, Ricevute/Receipts, Drafts, Sent, Archive, Junk, Trash, plus custom folders). Nested IMAP paths show as nested folders, including Gmail’s `[Gmail]/…` labels under `[Gmail]`. Standard folders that the server stores as `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` sit next to Inbox, not under it. Gmail uses `/` as the separator, so a label like `P.IVA` stays one folder. System folders cannot be deleted. You can create a folder, empty one (to Trash, or permanently in Trash), mark all read/unread, delete a custom folder, and drag messages onto a folder. Which accounts and nested folders are expanded or collapsed is kept in `settings.json`.
+- Folder tree follows the server (Inbox, Ricevute/Receipts, Drafts, Sent, Archive, Junk, Trash, plus custom folders). Nested IMAP paths show as nested folders, including Gmail's `[Gmail]/...` labels under `[Gmail]`. Standard folders that the server stores as `INBOX.Drafts` / `INBOX.Sent` / `INBOX.Trash` sit next to Inbox, not under it. Gmail uses `/` as the separator, so a label like `P.IVA` stays one folder. System folders cannot be deleted. You can create a folder, empty one (to Trash, or permanently in Trash), mark all read/unread, delete a custom folder, and drag messages onto a folder. Which accounts and nested folders are expanded or collapsed is kept in `settings.json`.
 - List columns: unread, flag, attachments, delivery, type (PEC / RIC / REM / SIG), from, subject, date (local `yyyy-MM-dd HH:mm`), size, practice label.
 - View: HTML (OS web engine), plain text, raw source, or **FatturaPA**. Layout: list above reading, or three columns (folders, list, reading).
 - **Block remote content** (on by default) keeps HTML mail from loading images or tracking pixels from the internet; use **Show images** on a message when you want remotes for that view only. Inline attachments still show.
 - **Group conversations** indents replies in the folder list using Message-ID / In-Reply-To / References (depth up to 8). PEC ricevute that share the same original sit together. There is no separate conversation pane.
 - Message actions: reply, reply all, forward, open in a new window, read/unread, flag, priority, mark as spam, not spam, delete. **Shift+click** and **Ctrl+click** select several messages or folders. Delete (toolbar, **Del**, empty folder) moves the selection to Trash. Deleting from Trash is permanent.
-- Compose is **plain text**. To, Cc, Bcc are address chips. Attachments are listed on the composer. **Send attachments as ZIP** packs dropped files (optional password). Send uses the selected mailbox’s SMTP identity only.
+- Compose is **plain text**. To, Cc, Bcc are address chips. Attachments are listed on the composer. **Send attachments as ZIP** packs dropped files (optional password). Send uses the selected mailbox's SMTP identity only.
 
 HTML uses the OS engine: **WebView2** on Windows (profile under the data folder), **WebKitGTK** on Linux, **WKWebView** on macOS. If the engine is missing, the text body is shown instead.
 
@@ -172,11 +172,11 @@ Fedora: `gtk3 webkit2gtk4.1 libsoup3`.
 
 Get Messages indexes the **whole IMAP folder** into a local SQLite store (`mail.db`) plus `.eml` objects on disk. POP3 only fills Inbox. Indexing runs in the background; the status bar shows progress.
 
-- **Settings → Indices…**: keyword index (FTS) plus optional EmbeddingGemma 300M (~300 MB) meaning index. The ONNX package downloads once into the machine folder (`ProgramData\MaksIT\Postclient\models`, or `/var/lib/maksit/postclient/models` on Linux) and is shared by every account and the sync service. Vectors stay in `mail.db` on this PC. Device: Auto / CPU / GPU (Windows DirectML). Rebuild or repair if search looks wrong. Weights use Google’s Gemma Terms.
+- **Settings -> Indices...**: keyword index (FTS) plus optional EmbeddingGemma 300M (~300 MB) meaning index. The ONNX package downloads once into the machine folder (`ProgramData\MaksIT\Postclient\models`, or `/var/lib/maksit/postclient/models` on Linux) and is shared by every account and the sync service. Vectors stay in `mail.db` on this PC. Device: Auto / CPU / GPU (Windows DirectML). Rebuild or repair if search looks wrong. Weights use Google's Gemma Terms.
 
 Search (current folder) covers subject, body, attachment text (PDF and text/XML/HTML/CSV/JSON), practice labels, and meaning when the model is ready. The search box has an × that clears the text. Labels exist only on this PC.
 
-The archive is **only on this PC**. File → Open archive folder / Export archive copies `mail.db` and the `.eml` files. Paths:
+The archive is **only on this PC**. File -> Open archive folder / Export archive copies `mail.db` and the `.eml` files. Paths:
 
 | OS | Config | Data |
 |--|--|--|
@@ -198,27 +198,27 @@ IMAP **QUOTA** from the gestore (when the server supports it) is a thin bar on t
 | New store | File menu: empty bucket (`Inbox`, `Drafts`, `Sent Items`, `Deleted Items`) with `postclient.store.json` and `mail.db`. |
 | Attach store | File menu: pick a folder that already has `postclient.store.json`. Recovers mail + search after an AppData wipe. |
 | Move / Detach store | Copy the whole directory (or unregister it). The folder stays on disk when detached. |
-| Retention | **Settings → Retention…**: days per folder (`0` = forever). Expired folder mail is moved to Trash after Get Messages. On Trash, `0` keeps it forever and a number of days permanently deletes older Trash. |
-| Background sync | **Settings → Background sync**: a boot-time service (Windows service, Linux system systemd unit). It syncs every saved mailbox with nobody signed in. **Share this account** only lets other people on this PC open that mailbox. |
-| Shared account | **Account settings → Share this account with other users on this PC**: that mailbox moves to the machine folder (`ProgramData\MaksIT\Postclient`, or `Public` when ProgramData is not writable; `/var/lib/maksit/postclient` on Linux; `/Users/Shared/MaksIT/Postclient` on macOS). Other users see it when they open Postclient. Passwords are not copied. |
-| Easy Migration | **File → Easy Migration → Create bundle…** asks for a passphrase twice in one window, then Save. The `.postbundle` holds mail, accounts, secrets, and the shared model folder. **Open bundle…** restores it into this PC’s Postclient folders and rewrites store paths. Background sync stays off until you turn it on here. |
-| Spam marks | **Mark as spam** remembers that message on this PC and teaches every mailbox, even after the message or mailbox is gone. Similar mail is only a hint. **Not spam** drops that memory and returns the message to Inbox. Moving mail into Junk does not teach the filter. **Settings → Indices… → Spam marks…** lists what was learned. |
-| Updates and logs | **Help → Check for updates…** asks GitHub for the latest release and can download the package for this system. **Help → Logs** opens a copyable window over the app log folder. **Help → About** lists Info, Privacy, Security, and Support at maks-it.com. |
-| Rules | **Settings → Rules**: **Import rules…** reads this app’s JSON export or a legacy `.rwz` file. **Export rules…** writes JSON. Each rule is bound to an **account**; a move folder can live on another mailbox (including a store). They run on Get Messages, on import, and from **Run all rules**. |
+| Retention | **Settings -> Retention...**: days per folder (`0` = forever). Expired folder mail is moved to Trash after Get Messages. On Trash, `0` keeps it forever and a number of days permanently deletes older Trash. |
+| Background sync | **Settings -> Background sync**: a boot-time service (Windows service, Linux system systemd unit). It syncs every saved mailbox with nobody signed in. **Share this account** only lets other people on this PC open that mailbox. |
+| Shared account | **Account settings -> Share this account with other users on this PC**: that mailbox moves to the machine folder (`ProgramData\MaksIT\Postclient`, or `Public` when ProgramData is not writable; `/var/lib/maksit/postclient` on Linux; `/Users/Shared/MaksIT/Postclient` on macOS). Other users see it when they open Postclient. Passwords are not copied. |
+| Easy Migration | **File -> Easy Migration -> Create bundle...** asks for a passphrase twice in one window, then Save. The `.postbundle` holds mail, accounts, secrets, and the shared model folder. **Open bundle...** restores it into this PC's Postclient folders and rewrites store paths. Background sync stays off until you turn it on here. |
+| Spam marks | **Mark as spam** remembers that message on this PC and teaches every mailbox, even after the message or mailbox is gone. Similar mail is only a hint. **Not spam** drops that memory and returns the message to Inbox. Moving mail into Junk does not teach the filter. **Settings -> Indices... -> Spam marks...** lists what was learned. |
+| Updates and logs | **Help -> Check for updates...** asks GitHub for the latest release and can download the package for this system. **Help -> Logs** opens a copyable window over the app log folder. **Help -> About** lists Info, Privacy, Security, and Support at maks-it.com. |
+| Rules | **Settings -> Rules**: **Import rules...** reads this app's JSON export or a legacy `.rwz` file. **Export rules...** writes JSON. Each rule is bound to an **account**; a move folder can live on another mailbox (including a store). They run on Get Messages, on import, and from **Run all rules**. |
 | Print | Readable HTML of the (optionally unwrapped) message |
 | Save PDF | Same content as a PDF |
 | Save attachments ZIP | All attachments of the open message |
-| Export selected EML (fascicolo) | The original `.eml` files — what a notaio or PA can keep as the message |
+| Export selected EML (fascicolo) | The original `.eml` files - what a notaio or PA can keep as the message |
 
 Opened messages are also stored as `.eml` under the data folder. The `.eml` files are the originals; PDF/print are a reading copy.
 
 ## Interface language
 
-View → Language: **English**, **Italiano**, **Français**, **Deutsch**, or **Español**. Folder names from the server (Posta in arrivo, Gesendet, Messages envoyés, Enviados, …) are mapped to Inbox/Sent/… in the UI language.
+View -> Language: **English**, **Italiano**, **Français**, **Deutsch**, or **Español**. Folder names from the server (Posta in arrivo, Gesendet, Messages envoyés, Enviados, ...) are mapped to Inbox/Sent/... in the UI language.
 
 ## Country packs
 
-**Settings → Features** is a checkbox matrix of **certified-mail** UI only. Ordinary IMAP/POP3, search, practice labels, mbox/`.pst` import, and attached data files stay on. Rows are certified-mail features; columns are **Italy**, **Europe**, **France**, **Germany**, **Spain**, **Switzerland**. The header checkbox turns every feature in that column on or off.
+**Settings -> Features** is a checkbox matrix of **certified-mail** UI only. Ordinary IMAP/POP3, search, practice labels, mbox/`.pst` import, and attached data files stay on. Rows are certified-mail features; columns are **Italy**, **Europe**, **France**, **Germany**, **Spain**, **Switzerland**. The header checkbox turns every feature in that column on or off.
 
 | Pack | What it unlocks | Default |
 |--|--|--|
@@ -238,7 +238,7 @@ Turn off a pack to hide its menus, columns, and account presets. Existing mailbo
 
 ## Getting started
 
-Install a build from [Releases](https://github.com/MAKS-IT-COM/maksit-postclient/releases): Windows portable zip and setup (`postclient-{version}.exe`, self-contained — no .NET SDK on the PC; default path `C:\Program Files\MaksIT\Postclient`), Linux Flatpak, macOS DMG (`osx-arm64` and `osx-x64`). Microsoft Store product ID `9N7F29XPK5W4` (listing after first submission). WinGet listing comes later from the same setup exe.
+Install a build from [Releases](https://github.com/MAKS-IT-COM/maksit-postclient/releases): Windows portable zip and setup (`postclient-{version}.exe`, self-contained - no .NET SDK on the PC; default path `C:\Program Files\MaksIT\Postclient`), Linux Flatpak, macOS DMG (`osx-arm64` and `osx-x64`). Microsoft Store product ID `9N7F29XPK5W4` (listing after first submission). WinGet listing comes later from the same setup exe.
 
 Or from `src/`:
 
@@ -310,7 +310,7 @@ Desktop mail client for PEC, REM, and IMAP. Not a QTSP, a new PEC or REM address
 
 ## License
 
-Apache 2.0 — see [LICENSE.md](LICENSE.md).
+Apache 2.0 - see [LICENSE.md](LICENSE.md).
 
 © Maksym Sadovnychyy (MAKS-IT)
 

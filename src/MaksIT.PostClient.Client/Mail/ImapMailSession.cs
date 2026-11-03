@@ -19,7 +19,7 @@ public sealed class ImapMailSession : IMailSession {
   private MailAuthMaterial? _material;
   private CancellationTokenSource? _alive;
   private readonly Dictionary<string, int> _listOffset = new(StringComparer.OrdinalIgnoreCase);
-  private readonly Dictionary<string, HashSet<uint>> _listedUids = new(StringComparer.OrdinalIgnoreCase);
+  private readonly Dictionary<string, List<UniqueId>> _listUids = new(StringComparer.OrdinalIgnoreCase);
 
   private const MessageSummaryItems FlagItems =
     MessageSummaryItems.UniqueId | MessageSummaryItems.Flags;
@@ -209,58 +209,75 @@ public sealed class ImapMailSession : IMailSession {
         });
       }
 
-      int offset;
-      HashSet<uint> listed;
-      lock (_gate) {
-        _listOffset.TryGetValue(folder, out offset);
-        if (!_listedUids.TryGetValue(folder, out listed!)) {
-          listed = [];
-          _listedUids[folder] = listed;
-        }
-      }
-
-      var range = MailListBudget.NewestRange(imapFolder.Count, offset, itemBudget);
-      if (range.Take <= 0) {
-        ClearListCursor(folder);
-        return Result<MailFolderSync>.Ok(new MailFolderSync { Present = listed.ToList() });
-      }
-
-      var chunkRows = await FetchRangeAsync(
-        imapFolder,
-        range.Start,
-        range.End,
-        ListItems,
-        extraHeaders,
-        cancellationToken).ConfigureAwait(false);
-      foreach (var id in IdsOf(chunkRows))
-        listed.Add(id);
-      lock (_gate) {
-        if (range.Incomplete)
-          _listOffset[folder] = range.NextOffset;
-        else
-          ClearListCursor(folder);
-      }
-
-      return Result<MailFolderSync>.Ok(new MailFolderSync {
-        Headers = HeadersOf(folder, chunkRows),
-        Present = range.Incomplete ? null : listed.ToList(),
-        Incomplete = range.Incomplete
-      });
+      return await ListMessagesPagedAsync(
+        folder, imapFolder, extraHeaders, itemBudget, cancellationToken).ConfigureAwait(false);
     }
     catch (OperationCanceledException) {
-      ClearListCursor(folder);
+      // Keep the list cursor so the next page can resume after Interrupt / soft cancel.
       throw;
     }
     catch (Exception ex) {
-      ClearListCursor(folder);
+      // Keep the list cursor across transient IMAP errors so large folders can finish.
       return Result<MailFolderSync>.UnprocessableEntity(null, ex.Message);
     }
+  }
+
+  private async Task<Result<MailFolderSync>> ListMessagesPagedAsync(
+    string folder,
+    IMailFolder imapFolder,
+    string[]? extraHeaders,
+    int itemBudget,
+    CancellationToken cancellationToken) {
+    List<UniqueId>? plan;
+    int offset;
+    lock (_gate) {
+      _listUids.TryGetValue(folder, out plan);
+      _listOffset.TryGetValue(folder, out offset);
+    }
+
+    if (plan is null) {
+      var searched = await imapFolder.SearchAsync(SearchQuery.All, cancellationToken).ConfigureAwait(false);
+      plan = searched.OrderByDescending(uid => uid.Id).ToList();
+      lock (_gate) {
+        _listUids[folder] = plan;
+        _listOffset[folder] = 0;
+        offset = 0;
+      }
+    }
+
+    var range = MailListBudget.UidPage(plan.Count, offset, itemBudget);
+    if (range.Take <= 0) {
+      var present = plan.Select(uid => uid.Id).ToList();
+      ClearListCursor(folder);
+      return Result<MailFolderSync>.Ok(new MailFolderSync { Present = present });
+    }
+
+    var page = plan.GetRange(range.Start, range.Take);
+    var chunkRows = await FetchByUidsAsync(imapFolder, page, extraHeaders, cancellationToken)
+      .ConfigureAwait(false);
+
+    // Empty FETCH on a non-empty UID page is usually transient - retry the same page.
+    if (page.Count > 0 && chunkRows.Count == 0)
+      return Result<MailFolderSync>.Ok(new MailFolderSync { Incomplete = true });
+
+    lock (_gate) {
+      if (range.Incomplete)
+        _listOffset[folder] = range.NextOffset;
+      else
+        ClearListCursor(folder);
+    }
+
+    return Result<MailFolderSync>.Ok(new MailFolderSync {
+      Headers = HeadersOf(folder, chunkRows),
+      Present = range.Incomplete ? null : plan.Select(uid => uid.Id).ToList(),
+      Incomplete = range.Incomplete
+    });
   }
 
   private void ClearListCursor(string folder) {
     lock (_gate) {
       _listOffset.Remove(folder);
-      _listedUids.Remove(folder);
+      _listUids.Remove(folder);
     }
   }
 
@@ -897,6 +914,8 @@ public sealed class ImapMailSession : IMailSession {
     lock (_gate) {
       client = _imap;
       _imap = null;
+      _listOffset.Clear();
+      _listUids.Clear();
     }
 
     if (client is null)

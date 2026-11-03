@@ -219,8 +219,9 @@ public sealed class MailSyncEngine {
       await ApplyRulesAsync(configuration, box, session, folder, slice, names, cancellationToken)
         .ConfigureAwait(false);
     }
-    if (sync.Incomplete && fresh.Count == 0)
-      return true;
+
+    // Newest-first pages often have no fresh UIDs once the top of the folder is archived.
+    // Incomplete still means older pages remain - keep walking instead of marking the folder done.
     return !sync.Incomplete;
   }
 

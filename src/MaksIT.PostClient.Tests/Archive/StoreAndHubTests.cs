@@ -11,17 +11,20 @@ namespace MaksIT.PostClient.Tests.Archive;
 
 public class IdentityHubAddressTests {
   [Fact]
-  public void DesktopLoginUrl_UsesOfficialPathAndProvider() {
+  public void DesktopLoginUrl_UsesOfficialPathProviderAndCoveredApp() {
     var previous = Environment.GetEnvironmentVariable(IdentityHubAddress.Env);
     try {
       Environment.SetEnvironmentVariable(IdentityHubAddress.Env, null);
       var google = IdentityHubAddress.DesktopLoginUrl(MailAuthKind.Google);
       Assert.StartsWith(IdentityHubAddress.Production, google);
       Assert.Contains("/desktop-login?provider=Google", google);
+      Assert.Contains("&app=" + IdentityHubAddress.CoveredApplicationId, google);
+      Assert.Equal("MaksIT.PostClient", IdentityHubAddress.CoveredApplicationId);
       Assert.DoesNotContain("127.0.0.1", google);
       Assert.DoesNotContain("purpose=", google);
       var microsoft = IdentityHubAddress.DesktopLoginUrl(MailAuthKind.Microsoft);
       Assert.Contains("/desktop-login?provider=Microsoft", microsoft);
+      Assert.Contains("&app=" + IdentityHubAddress.CoveredApplicationId, microsoft);
     }
     finally {
       Environment.SetEnvironmentVariable(IdentityHubAddress.Env, previous);

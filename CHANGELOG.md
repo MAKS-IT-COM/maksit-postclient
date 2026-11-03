@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-11-03
+
+Folder sync keeps paging older IMAP mail after the newest page is already archived. Identity Hub desktop login passes the covered app id.
+
+### Fixed
+- Folder sync no longer stops after the newest page when those messages are already archived. Headless and in-app sync keep paging older mail (Gmail and other IMAP) until the folder is fully listed.
+- IMAP header sync pages by UID SEARCH instead of shifting sequence numbers, keeps the list cursor across soft cancel and transient errors, and retries an empty FETCH page instead of skipping it.
+
+### Changed
+- Bump **MaksIT.IdentityHub.Client** to **4.0.0** (covered applications `{ Id, Name }`; desktop login `?app={Id}`).
+- Identity Hub desktop login URL includes covered app id: `/desktop-login?provider=…&app=MaksIT.PostClient` (`IdentityHubAddress.CoveredApplicationId`).
+
 ## [0.4.5] - 2026-10-31
 
 Unread and flag updates stay local when the server store is cancelled or races with sync. Pending Seen/Flagged wait for STORE ack before background sync can overwrite them.
@@ -13,7 +25,7 @@ Unread and flag updates stay local when the server store is cancelled or races w
 ### Fixed
 
 - Opening an unread message no longer brings the unread dot back when you select another row: mark-as-read is not cancelled with the reading pane, and IMAP cancel is not treated as a store failure.
-- Manual Mark Read/Unread/Flag and folder mark-all-read keep optimistic state off the busy `_work` token; IMAP flag stores use a non-folder CTS and pending archive flags until STORE succeeds (or soft “not connected”, which stays pending and flushes on reconnect).
+- Manual Mark Read/Unread/Flag and folder mark-all-read keep optimistic state off the busy `_work` token; IMAP flag stores use a non-folder CTS and pending archive flags until STORE succeeds (or soft "not connected", which stays pending and flushes on reconnect).
 - Background sync and header upserts no longer clobber newer local Seen/Flagged; `UpsertHeaders` skips flag overwrite by default and `UpdateFlags` respects pending UIDs.
 - IMAP MOVE no longer falls back to copy-then-delete on cancel; remaining UIDs are checked before copy/expunge. Cross-mailbox moves delete each source UID after a successful copy.
 - Rules and headless sync write archive flags only after a successful STORE. SyncFolder no longer advances past a folder on list failure.
@@ -25,7 +37,7 @@ HTML mail blocks remote images by default. Windows setup upgrades keep Identity 
 
 ### Added
 
-- **View → Block remote content** stops HTML mail from loading images and tracking pixels from the internet (on by default). Inline attachments still show; **Show images** loads remotes for the open message only.
+- **View -> Block remote content** stops HTML mail from loading images and tracking pixels from the internet (on by default). Inline attachments still show; **Show images** loads remotes for the open message only.
 
 ### Changed
 
@@ -37,12 +49,12 @@ HTML mail blocks remote images by default. Windows setup upgrades keep Identity 
 
 ## [0.4.3] - 2026-10-29
 
-Gmail and Microsoft mailbox sign-in uses Identity Hub IdP-only. Hub keeps the IdP refresh in its vault; Postclient renews mailbox tokens automatically. Help shows What’s New after upgrade. Store and Flathub packaging notes.
+Gmail and Microsoft mailbox sign-in uses Identity Hub IdP-only. Hub keeps the IdP refresh in its vault; Postclient renews mailbox tokens automatically. Help shows What's New after upgrade. Store and Flathub packaging notes.
 
 ### Added
 
 - Microsoft Store and Flathub submission notes under `packaging/` (listing copy in English, Italian, French, German, and Spanish).
-- **Help → What’s New** shows the changelog once after each upgrade (seen version is remembered in settings).
+- **Help -> What's New** shows the changelog once after each upgrade (seen version is remembered in settings).
 - Screenshot tour helpers under `utils/tools/` and `assets/screenshots/` for store listings.
 
 ### Changed
@@ -53,7 +65,7 @@ Gmail and Microsoft mailbox sign-in uses Identity Hub IdP-only. Hub keeps the Id
 ### Fixed
 
 - Opening a message, a subfolder, or the star uses the window's own mailbox connection. Background sync keeps a separate connection, so a long sync no longer blocks those updates or puts the old unread mark back.
-- Reading a message from an Outlook data file after a write no longer fails with “End of stream”: EML export allows dropping opaque MAPI metadata that has no portable equivalent.
+- Reading a message from an Outlook data file after a write no longer fails with "End of stream": EML export allows dropping opaque MAPI metadata that has no portable equivalent.
 
 ## [0.4.2] - 2026-10-04
 
@@ -76,12 +88,12 @@ Create bundle asks for the passphrase once, then opens Save. About lists the com
 
 ### Changed
 
-- **Help → About** lists Info, Privacy, Security, and Support (`info@`, `privacy@`, `security@`, `support@maks-it.com`) instead of one personal address.
+- **Help -> About** lists Info, Privacy, Security, and Support (`info@`, `privacy@`, `security@`, `support@maks-it.com`) instead of one personal address.
 - The English, Italian, French, German, and Spanish READMEs describe folder stores, Easy Migration, background sync, spam marks, and the current menus.
 
 ### Fixed
 
-- **File → Easy Migration → Create bundle…** asks for the passphrase and the repeat in one window. The save dialog opens after that window closes.
+- **File -> Easy Migration -> Create bundle...** asks for the passphrase and the repeat in one window. The save dialog opens after that window closes.
 - Windows setup keeps an existing desktop shortcut when the checkbox is off on upgrade. Installing the shortcut removes a second desktop icon, including the "(2)" copy.
 
 ## [0.4.0] - 2026-09-27
@@ -90,10 +102,10 @@ Background sync runs at boot with nobody signed in. Easy Migration packs this PC
 
 ### Added
 
-- **File → Easy Migration** writes a `.postbundle` locked with a passphrase (mail, accounts, secrets, and the shared model folder). **Open bundle…** restores it into this PC’s Postclient folders and rewrites store paths. The background sync service is not reinstalled.
+- **File -> Easy Migration** writes a `.postbundle` locked with a passphrase (mail, accounts, secrets, and the shared model folder). **Open bundle...** restores it into this PC's Postclient folders and rewrites store paths. The background sync service is not reinstalled.
 - The message search box has an × that clears the text.
-- **Settings → Background sync** installs a boot-time service (Windows service as Local Service, Linux systemd system unit). It syncs every saved mailbox with nobody signed in. Passwords are copied into the machine store so the service can sign in to the mail servers. **Share this account** only lets other people on this PC open that mailbox.
-- **Mark as spam** remembers that message on this PC and teaches every mailbox, even after the message or mailbox is gone. Similar mail is only a hint. **Not spam** drops that memory and returns the message to Inbox. Moving mail into Junk does not teach the filter. **Settings → Indices… → Spam marks…** lists what was learned.
+- **Settings -> Background sync** installs a boot-time service (Windows service as Local Service, Linux systemd system unit). It syncs every saved mailbox with nobody signed in. Passwords are copied into the machine store so the service can sign in to the mail servers. **Share this account** only lets other people on this PC open that mailbox.
+- **Mark as spam** remembers that message on this PC and teaches every mailbox, even after the message or mailbox is gone. Similar mail is only a hint. **Not spam** drops that memory and returns the message to Inbox. Moving mail into Junk does not teach the filter. **Settings -> Indices... -> Spam marks...** lists what was learned.
 - The meaning-search model lives in the same machine folder (`models` under ProgramData or `/var/lib/maksit/postclient`), so every account and the sync service share one download. An existing copy in the user profile is copied across on startup.
 - Layout upgrades live in `Upgrades` (folders, models, archive files, PST stores). Each one records `InstallsOver`, the last release that still has the old layout, so it can be removed once that version is no longer supported. SQL schema stays with the archive store.
 
@@ -166,7 +178,7 @@ First sync paints mail as it arrives, meaning search can use a discrete GPU, and
 
 ### Added
 
-- **Help → Logs** opens a copyable window over the app log folder.
+- **Help -> Logs** opens a copyable window over the app log folder.
 
 ### Changed
 
@@ -189,7 +201,7 @@ Expired folder mail goes to Trash; Trash can be kept forever or purged after a n
 
 ### Changed
 
-- **Settings → Retention…**: folder days (`0` = keep forever) now **move** older messages to Trash after Get Messages, instead of deleting them permanently. The Trash row uses the same days field: `0` keeps Trash forever, a number of days **permanently deletes** old Trash. The grid shows the action per row.
+- **Settings -> Retention...**: folder days (`0` = keep forever) now **move** older messages to Trash after Get Messages, instead of deleting them permanently. The Trash row uses the same days field: `0` keeps Trash forever, a number of days **permanently deletes** old Trash. The grid shows the action per row.
 - Delete (toolbar, **Del**, empty folder, delete rules) moves messages to Trash. If Trash is missing, it is created. Deleting from Trash is still permanent. Local stores honor Trash when emptying a folder.
 
 ### Fixed
@@ -209,8 +221,8 @@ Folder stores replace attached Outlook data files, Gmail/Microsoft sign-in goes 
 
 ### Added
 
-- Folder **stores** replace Outlook data files as mailboxes: **File → New store…**, **Attach store…**, **Move store…**, and **Detach store**. Import PST copies into a store under `%LocalAppData%\Postclient\stores\` (or portable `data/stores/`). Each IMAP/POP3 account and each store has its own `mail.db` (FTS + meaning index). Search and move merge or copy across those databases without rebuilding embeddings.
-- **Settings → Retention…**: per-folder days (`0` = keep forever). Older mail is deleted permanently (not Trash) after Get Messages.
+- Folder **stores** replace Outlook data files as mailboxes: **File -> New store...**, **Attach store...**, **Move store...**, and **Detach store**. Import PST copies into a store under `%LocalAppData%\Postclient\stores\` (or portable `data/stores/`). Each IMAP/POP3 account and each store has its own `mail.db` (FTS + meaning index). Search and move merge or copy across those databases without rebuilding embeddings.
+- **Settings -> Retention...**: per-folder days (`0` = keep forever). Older mail is deleted permanently (not Trash) after Get Messages.
 - IMAP/POP3 usage on the account node in the folder tree. Gmail and Microsoft sign-in go through **Identity Hub** (`https://identity.maks-it.com/desktop-login?provider=`). Hub JWT is stored in `secrets.bin`; IMAP uses a short-lived mailbox token (XOAUTH2). Override the Hub origin with `POSTCLIENT_IDENTITY_HUB`.
 - Folder tree expand/collapse for accounts and nested folders is stored in `settings.json`.
 - **Shift+click** and **Ctrl+click** select several messages or folders. Delete (including the **Del** key) and drag-move apply to the whole selection.
@@ -241,13 +253,13 @@ On-device meaning search, Outlook data files as mailboxes, rules, extra UI langu
 
 ### Added
 
-- **Settings → Indices…**: keyword index (FTS) and optional meaning index (RAG) with EmbeddingGemma 300M. The ~300 MB ONNX package downloads from Hugging Face (`onnx-community/embeddinggemma-300m-ONNX`: graph, weights sidecar, tokenizer). GitHub releases do not carry those files. Vectors stay in `mail.db` on this PC. Device Auto / CPU / GPU (Windows DirectML). Rebuild keyword, rebuild meaning, or repair leftover rows.
-- **File → Check for updates…** asks GitHub for the latest release and can download the matching package. **File → About Postclient** matches the WVC210 About card (brand, version, credits, email, license, copyright, maks-it.com).
-- Attach a `.pst` / `.ost` as its own mailbox (File menu or account type *data file*). Unicode `.pst` is writable (folders, flags, move, delete). An `.ost` or ANSI `.pst` is copied to a Unicode `.pst` on first write. **New data file** creates an empty Unicode `.pst`. Right-click an attached store to **Detach data file**; the file stays on disk. File → Import still copies mail into another account.
-- **Settings → Rules**: import Outlook `.rwz` (Rules Wizard) or JSON, export JSON, and edit rules (enable, conditions, move/delete/flag/label). Each rule belongs to an account; a move can target a folder on another mailbox, including an attached data file. A move folder name stays red until it matches that mailbox (name, full path, or last path segment). **Run all rules** applies them to existing mail. Saved in `settings.json`. They also run on Get Messages and on import.
+- **Settings -> Indices...**: keyword index (FTS) and optional meaning index (RAG) with EmbeddingGemma 300M. The ~300 MB ONNX package downloads from Hugging Face (`onnx-community/embeddinggemma-300m-ONNX`: graph, weights sidecar, tokenizer). GitHub releases do not carry those files. Vectors stay in `mail.db` on this PC. Device Auto / CPU / GPU (Windows DirectML). Rebuild keyword, rebuild meaning, or repair leftover rows.
+- **File -> Check for updates...** asks GitHub for the latest release and can download the matching package. **File -> About Postclient** matches the WVC210 About card (brand, version, credits, email, license, copyright, maks-it.com).
+- Attach a `.pst` / `.ost` as its own mailbox (File menu or account type *data file*). Unicode `.pst` is writable (folders, flags, move, delete). An `.ost` or ANSI `.pst` is copied to a Unicode `.pst` on first write. **New data file** creates an empty Unicode `.pst`. Right-click an attached store to **Detach data file**; the file stays on disk. File -> Import still copies mail into another account.
+- **Settings -> Rules**: import Outlook `.rwz` (Rules Wizard) or JSON, export JSON, and edit rules (enable, conditions, move/delete/flag/label). Each rule belongs to an account; a move can target a folder on another mailbox, including an attached data file. A move folder name stays red until it matches that mailbox (name, full path, or last path segment). **Run all rules** applies them to existing mail. Saved in `settings.json`. They also run on Get Messages and on import.
 - Compose: **Send attachments as ZIP** packs dropped files into one archive before SMTP. A prompt asks for the ZIP name (from the subject) and an optional password. Attach files by dragging them onto the compose window.
-- View → Language: **Français**, **Deutsch**, and **Español** (English and Italian were already there).
-- **Settings → Features**: country packs for certified-mail UI (Italy PEC/FatturaPA/fascicolo, Europe eIDAS REM, France/Germany/Spain/Switzerland evidence labels). Ordinary IMAP stays on. Header checkboxes turn a whole pack on or off.
+- View -> Language: **Français**, **Deutsch**, and **Español** (English and Italian were already there).
+- **Settings -> Features**: country packs for certified-mail UI (Italy PEC/FatturaPA/fascicolo, Europe eIDAS REM, France/Germany/Spain/Switzerland evidence labels). Ordinary IMAP stays on. Header checkboxes turn a whole pack on or off.
 
 ### Fixed
 
@@ -256,15 +268,15 @@ On-device meaning search, Outlook data files as mailboxes, rules, extra UI langu
 - Selecting one or more messages enables Delete, Move, Flag, and mark read/unread again after drag-and-drop or a list refresh. Opening a message no longer locks the toolbar.
 - Move and delete drop keyword and meaning rows for those messages; the meaning indexer wakes so destination mail is re-indexed.
 - Indices window stays usable while the meaning model downloads; **Download model** is disabled when the files are already in the models folder.
-- **Settings → Rules**: **Import rules…** is the same button for this app’s JSON export and for Outlook `.rwz`.
+- **Settings -> Rules**: **Import rules...** is the same button for this app's JSON export and for Outlook `.rwz`.
 
 ### Changed
 
 - Keyword/body indexing processes all messages in one queue (like the meaning index), not folder by folder. The status bar shows `Indexing N left` instead of a folder name.
 - Toolbar layout control is one toggle: list above reading vs three columns.
-- Settings menu: **Indices…** (was Semantic search) manages the keyword index and the meaning index together.
+- Settings menu: **Indices...** (was Semantic search) manages the keyword index and the meaning index together.
 - Meaning-model download is Hugging Face only (public onnx-community repo). GitHub is not a source for the weights.
-- After SMTP send, Sent reconciles gestore ricevute only for PEC/REM accounts (presets, or IMAP/POP3 with mailbox kind PEC/REM). Ordinary IMAP/Gmail/Outlook just reports sent. Leftover “Waiting for ricevuta” marks from ordinary mailboxes are dropped.
+- After SMTP send, Sent reconciles gestore ricevute only for PEC/REM accounts (presets, or IMAP/POP3 with mailbox kind PEC/REM). Ordinary IMAP/Gmail/Outlook just reports sent. Leftover "Waiting for ricevuta" marks from ordinary mailboxes are dropped.
 - Account Settings: IMAP/POP3 accounts set **mailbox kind** (ordinary, Italian PEC, EU REM) so a custom-domain gestore still waits for ricevute. Presets keep their kind; Gmail, Outlook, and PST stay ordinary.
 
 ## [0.1.0] - 2026-09-13
@@ -286,5 +298,5 @@ First release of Postclient: a desktop mail client for Windows, Linux, and macOS
 - Print / PDF / selected `.eml` fascicolo; save all attachments as ZIP; FatturaPA XML preview (parser, not AI).
 - Import EML, Thunderbird mbox, and Outlook PST/OST (no Outlook install).
 - Self-contained `win-x64` portable zip and Windows setup exe, Linux Flatpak via WSL Debian (no .NET SDK on the user PC).
-- Apple-style squircle product icon (envelope glyph, MAKS.IT cyan→navy) for the exe, window chrome, tray, WiX setup, and Flatpak. Not the brand origami M.
+- Apple-style squircle product icon (envelope glyph, MAKS.IT cyan->navy) for the exe, window chrome, tray, WiX setup, and Flatpak. Not the brand origami M.
 - Unsigned `osx-arm64` and `osx-x64` DMGs attached when a GitHub Release is published (first launch: Open from the context menu).

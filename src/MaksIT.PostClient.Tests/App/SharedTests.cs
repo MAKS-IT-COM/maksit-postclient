@@ -585,6 +585,19 @@ public class MailListBudgetTests {
     Assert.Equal(199, last.End);
     Assert.False(last.Incomplete);
   }
+
+  [Fact]
+  public void UidPage_WalksNewestFirstList() {
+    var first = MailListBudget.UidPage(1000, 0, 200);
+    Assert.Equal(0, first.Start);
+    Assert.Equal(199, first.End);
+    Assert.Equal(200, first.Take);
+    Assert.True(first.Incomplete);
+    var last = MailListBudget.UidPage(1000, 800, 200);
+    Assert.Equal(800, last.Start);
+    Assert.Equal(999, last.End);
+    Assert.False(last.Incomplete);
+  }
 }
 
 

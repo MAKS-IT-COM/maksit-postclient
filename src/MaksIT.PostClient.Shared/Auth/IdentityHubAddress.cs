@@ -4,6 +4,7 @@ namespace MaksIT.PostClient.Shared.Auth;
 public static class IdentityHubAddress {
   public const string Env = "POSTCLIENT_IDENTITY_HUB";
   public const string Production = "https://identity.maks-it.com";
+  public const string CoveredApplicationId = "MaksIT.PostClient";
 
   public static string Origin() {
     var fromEnv = Environment.GetEnvironmentVariable(Env);
@@ -16,7 +17,9 @@ public static class IdentityHubAddress {
     var provider = MailAuthKind.Normalize(authKind) == MailAuthKind.Microsoft
       ? "Microsoft"
       : "Google";
-    return Origin() + "/desktop-login?provider=" + provider;
+    return Origin()
+      + "/desktop-login?provider=" + Uri.EscapeDataString(provider)
+      + "&app=" + Uri.EscapeDataString(CoveredApplicationId);
   }
 
   public static bool IsHubUrl(Uri? uri) {
