@@ -114,7 +114,11 @@ public sealed partial class FolderRowViewModel : ObservableObject {
 
 
 public sealed partial class FolderNodeViewModel : ObservableObject {
+  public const string AllEmailsId = "__all_emails__";
+
   public bool IsAccount { get; init; }
+
+  public bool IsAllEmails { get; init; }
 
   public MailboxAccount? Mailbox { get; init; }
 
@@ -126,13 +130,25 @@ public sealed partial class FolderNodeViewModel : ObservableObject {
   public ObservableCollection<FolderNodeViewModel> Children { get; } = [];
 
   public string Title =>
-    IsAccount ? Mailbox?.Label ?? UiLocale.Copy.Mailbox : Folder?.Name ?? "";
+    IsAllEmails
+      ? UiLocale.Copy.AllEmails
+      : IsAccount
+        ? Mailbox?.Label ?? UiLocale.Copy.Mailbox
+        : Folder?.Name ?? "";
 
   public string Glyph =>
-    IsAccount ? "✉" : MailFolderRole.Glyph(Folder?.Name, Folder?.FullName);
+    IsAllEmails
+      ? "📥"
+      : IsAccount
+        ? "✉"
+        : MailFolderRole.Glyph(Folder?.Name, Folder?.FullName);
 
   public int Unread =>
-    IsAccount ? ChildUnread() : Folder?.Unread ?? 0;
+    IsAllEmails
+      ? Folder?.Unread ?? 0
+      : IsAccount
+        ? ChildUnread()
+        : Folder?.Unread ?? 0;
 
   private int ChildUnread() {
     var n = 0;
@@ -191,6 +207,13 @@ public sealed partial class FolderNodeViewModel : ObservableObject {
     OnPropertyChanged(nameof(QuotaPercent));
     OnPropertyChanged(nameof(QuotaTip));
   }
+
+  public static FolderNodeViewModel AllEmails(FolderRowViewModel folder) =>
+    new() {
+      IsAllEmails = true,
+      Folder = folder,
+      IsExpanded = false
+    };
 
   public static FolderNodeViewModel Account(MailboxAccount box, bool expanded = true) =>
     new() {

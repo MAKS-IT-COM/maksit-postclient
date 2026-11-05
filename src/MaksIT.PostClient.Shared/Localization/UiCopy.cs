@@ -332,6 +332,8 @@ public sealed partial class UiCopy {
 
   public string Folders { get; init; } = "";
 
+  public string AllEmails { get; init; } = "";
+
   public string SearchPlaceholder { get; init; } = "";
 
   public string ClearSearch { get; init; } = "";
@@ -844,6 +846,7 @@ public sealed partial class UiCopy {
       Delete = "Delete",
       MoveTo = "Move To",
       Folders = "Folders",
+      AllEmails = "All emails",
       SearchPlaceholder = "Search subject, body, attachments, labels, meaning",
       ClearSearch = "Clear search",
       Label = "Label",
@@ -883,7 +886,7 @@ public sealed partial class UiCopy {
       RemoveAccount = "Remove Account",
       AccountHint = "Gmail and Outlook use OAuth when you Sign in. Italian PEC and EU QTSP mailboxes fill IMAP/SMTP. Other accounts use IMAP/POP3 and a password (DPAPI on Windows, mode 600 on Linux).",
       ShareAccount = "Share this account with other users on this PC",
-      ShareAccountHint = "Other people on this PC can open this mailbox. The sync service already keeps every mailbox in {0}, with or without this box checked.",
+      ShareAccountHint = "Mail and sign-in secrets move to {0}. Other people on this PC can open this mailbox without signing in again.",
       DisplayName = "Display name",
       Address = "Address",
       Username = "Username (if different)",
@@ -1150,6 +1153,7 @@ public sealed partial class UiCopy {
       Delete = "Elimina",
       MoveTo = "Sposta in",
       Folders = "Cartelle",
+      AllEmails = "Tutte le email",
       SearchPlaceholder = "Cerca oggetto, corpo, allegati, etichette, significato",
       ClearSearch = "Cancella ricerca",
       Label = "Etichetta",
@@ -1189,7 +1193,7 @@ public sealed partial class UiCopy {
       RemoveAccount = "Rimuovi account",
       AccountHint = "Gmail e Outlook usano OAuth con Accedi. PEC italiane e caselle QTSP UE compilano IMAP/SMTP. Gli altri account usano IMAP/POP3 e una password (DPAPI su Windows, mode 600 su Linux).",
       ShareAccount = "Condividi questo account con gli altri utenti di questo PC",
-      ShareAccountHint = "Le altre persone su questo PC possono aprire questa casella. Il servizio di sync tiene già ogni casella in {0}, con o senza questa opzione.",
+      ShareAccountHint = "La posta e i segreti di accesso si spostano in {0}. Le altre persone su questo PC possono aprire questa casella senza accedere di nuovo.",
       DisplayName = "Nome visualizzato",
       Address = "Indirizzo",
       Username = "Nome utente (se diverso)",

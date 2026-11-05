@@ -26,4 +26,32 @@ public static class MailListBudget {
     var next = offset + take;
     return new Slice(offset, offset + take - 1, take, next, next < count);
   }
+
+  /// <summary>
+  /// Advance a UID page after FETCH. Partial or empty pages stay on the same offset until
+  /// <paramref name="maxMisses"/>, then the page is skipped so sync cannot stick forever.
+  /// </summary>
+  public static (int NextOffset, int NextMissStreak, bool Incomplete) AdvanceUidPage(
+    int planCount,
+    int offset,
+    int take,
+    int fetchedInPage,
+    int missStreak,
+    int maxMisses = 3) {
+    if (take <= 0 || offset >= planCount)
+      return (Math.Min(offset, Math.Max(0, planCount)), 0, false);
+
+    if (fetchedInPage >= take) {
+      var next = offset + take;
+      return (next, 0, next < planCount);
+    }
+
+    var streak = missStreak + 1;
+    if (streak >= Math.Max(1, maxMisses)) {
+      var next = offset + take;
+      return (next, 0, next < planCount);
+    }
+
+    return (offset, streak, true);
+  }
 }

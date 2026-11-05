@@ -19,6 +19,7 @@ public sealed class ImapMailSession : IMailSession {
   private MailAuthMaterial? _material;
   private CancellationTokenSource? _alive;
   private readonly Dictionary<string, int> _listOffset = new(StringComparer.OrdinalIgnoreCase);
+  private readonly Dictionary<string, int> _listMisses = new(StringComparer.OrdinalIgnoreCase);
   private readonly Dictionary<string, List<UniqueId>> _listUids = new(StringComparer.OrdinalIgnoreCase);
 
   private const MessageSummaryItems FlagItems =
@@ -230,18 +231,21 @@ public sealed class ImapMailSession : IMailSession {
     CancellationToken cancellationToken) {
     List<UniqueId>? plan;
     int offset;
+    int misses;
     lock (_gate) {
       _listUids.TryGetValue(folder, out plan);
       _listOffset.TryGetValue(folder, out offset);
+      _listMisses.TryGetValue(folder, out misses);
     }
 
     if (plan is null) {
-      var searched = await imapFolder.SearchAsync(SearchQuery.All, cancellationToken).ConfigureAwait(false);
-      plan = searched.OrderByDescending(uid => uid.Id).ToList();
+      plan = await BuildUidPlanAsync(imapFolder, cancellationToken).ConfigureAwait(false);
       lock (_gate) {
         _listUids[folder] = plan;
         _listOffset[folder] = 0;
+        _listMisses[folder] = 0;
         offset = 0;
+        misses = 0;
       }
     }
 
@@ -255,28 +259,71 @@ public sealed class ImapMailSession : IMailSession {
     var page = plan.GetRange(range.Start, range.Take);
     var chunkRows = await FetchByUidsAsync(imapFolder, page, extraHeaders, cancellationToken)
       .ConfigureAwait(false);
-
-    // Empty FETCH on a non-empty UID page is usually transient - retry the same page.
-    if (page.Count > 0 && chunkRows.Count == 0)
-      return Result<MailFolderSync>.Ok(new MailFolderSync { Incomplete = true });
+    var fetched = IdsOf(chunkRows).ToHashSet();
+    // Count only UIDs from this page so DistinctUids cannot inflate progress.
+    var fetchedInPage = page.Count(uid => fetched.Contains(uid.Id));
+    var (nextOffset, nextMisses, incomplete) = MailListBudget.AdvanceUidPage(
+      plan.Count,
+      offset,
+      range.Take,
+      fetchedInPage,
+      misses);
 
     lock (_gate) {
-      if (range.Incomplete)
-        _listOffset[folder] = range.NextOffset;
+      if (incomplete) {
+        _listOffset[folder] = nextOffset;
+        _listMisses[folder] = nextMisses;
+      }
       else
         ClearListCursor(folder);
     }
 
     return Result<MailFolderSync>.Ok(new MailFolderSync {
       Headers = HeadersOf(folder, chunkRows),
-      Present = range.Incomplete ? null : plan.Select(uid => uid.Id).ToList(),
-      Incomplete = range.Incomplete
+      Present = incomplete ? null : plan.Select(uid => uid.Id).ToList(),
+      Incomplete = incomplete
     });
+  }
+
+  private static async Task<List<UniqueId>> BuildUidPlanAsync(
+    IMailFolder imapFolder,
+    CancellationToken cancellationToken) {
+    var searched = await imapFolder.SearchAsync(SearchQuery.All, cancellationToken).ConfigureAwait(false);
+    var plan = searched.OrderByDescending(uid => uid.Id).ToList();
+    // Gmail labels sometimes report EXISTS higher than SEARCH ALL. Fill gaps from sequence UIDs.
+    if (plan.Count >= imapFolder.Count || imapFolder.Count <= 0)
+      return plan;
+
+    try {
+      var rows = await FetchRangeAsync(
+        imapFolder,
+        0,
+        -1,
+        MessageSummaryItems.UniqueId,
+        extraHeaders: null,
+        cancellationToken).ConfigureAwait(false);
+      var seen = plan.Select(uid => uid.Id).ToHashSet();
+      foreach (var row in rows) {
+        if (!row.UniqueId.IsValid || !seen.Add(row.UniqueId.Id))
+          continue;
+        plan.Add(row.UniqueId);
+      }
+
+      plan = plan.OrderByDescending(uid => uid.Id).ToList();
+    }
+    catch (OperationCanceledException) {
+      throw;
+    }
+    catch {
+    }
+
+    return plan;
   }
 
   private void ClearListCursor(string folder) {
     lock (_gate) {
       _listOffset.Remove(folder);
+      _listMisses.Remove(folder);
       _listUids.Remove(folder);
     }
   }
@@ -915,6 +962,7 @@ public sealed class ImapMailSession : IMailSession {
       client = _imap;
       _imap = null;
       _listOffset.Clear();
+      _listMisses.Clear();
       _listUids.Clear();
     }
 

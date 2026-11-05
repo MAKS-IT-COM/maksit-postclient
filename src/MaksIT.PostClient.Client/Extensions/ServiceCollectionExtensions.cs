@@ -12,7 +12,9 @@ public static class ServiceCollectionExtensions {
   public static IServiceCollection AddPostClient(this IServiceCollection services) {
     ArgumentNullException.ThrowIfNull(services);
     services.AddIdentityHubIdpClient(IdentityHubAddress.Origin());
-    services.AddSingleton<ISecretStore, FileSecretStore>();
+    services.AddSingleton<ISecretStore>(_ => new LayeredSecretStore(
+      new FileSecretStore(),
+      new SharedSecretStore()));
     services.AddSingleton<ISentReceiptStore, FileSentReceiptStore>();
     services.AddSingleton<IMailAuthService, MailAuthService>();
     services.AddSingleton<IMailSessionFactory, MailSessionFactory>();

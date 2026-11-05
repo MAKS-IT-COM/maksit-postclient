@@ -6,6 +6,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-11-05
+
+Sidebar **All emails** combines every Inbox. Sharing an account moves its archive and sign-in secrets with the setting. IMAP no longer stalls mid-folder after a partial FETCH.
+
+### Changed
+- Account setting **Share this account with other users on this PC** moves the mailbox archive and its sign-in secrets: on -> `ProgramData` shared folder (+ `service-secrets.bin`), off -> this user's account folder and `secrets.bin` (replaces a stale archive copy at the destination).
+- Folder sidebar starts with **All emails** (combined Inboxes from every account) above the account list.
+
+### Fixed
+- Identity Hub sign-in window: **Back** returns from Privacy/Terms (WebView history, or reload of the desktop-login URL).
+- IMAP folder sync no longer marks a label done after a partial FETCH: empty/partial pages retry (then skip after a few misses), and when SEARCH ALL returns fewer UIDs than EXISTS the plan is filled from sequence UIDs (Ebay-style 15-of-29 stalls).
+
+## [0.4.7] - 2026-11-04
+
+### Changed
+- Hub sign-in window title/status use **MaksIT Postclient** / “Waiting for sign-in…”, not “Identity Hub”.
+
 ## [0.4.6] - 2026-11-03
 
 Folder sync keeps paging older IMAP mail after the newest page is already archived. Identity Hub desktop login passes the covered app id.

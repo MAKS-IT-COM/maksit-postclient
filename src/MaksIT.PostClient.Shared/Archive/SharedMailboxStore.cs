@@ -6,8 +6,9 @@ namespace MaksIT.PostClient.Shared.Archive;
 
 
 /// <summary>
-/// Moves one opted-in mailbox between the user profile and the shared folder.
-/// The account file has no password. Each user keeps their own secret.
+/// Moves one mailbox between the user profile and the shared folder when Shared toggles.
+/// Shared=true publishes under ProgramData; Shared=false keeps mail under the user profile.
+/// Mailbox password and OAuth tokens move with the share flag via SharedSecretStore.
 /// </summary>
 public static class SharedMailboxStore {
   private static readonly JsonSerializerOptions Json = new() {
@@ -56,16 +57,33 @@ public static class SharedMailboxStore {
     ArgumentNullException.ThrowIfNull(account);
     if (account.IsLocalStore)
       return Result.BadRequest("A local store keeps the folder you chose.");
+    if (string.IsNullOrWhiteSpace(privateRoot))
+      return Result.BadRequest("A private account folder is required.");
+
     account.Shared = shared;
+    account.ArchiveStoreId = "";
     var central = SharedMailPaths.AccountDirectory(account.Id);
-    if (!privateRoot.Equals(central, StringComparison.OrdinalIgnoreCase)) {
-      var moved = Move(privateRoot, central);
+    if (shared) {
+      if (!privateRoot.Equals(central, StringComparison.OrdinalIgnoreCase)) {
+        var moved = Move(privateRoot, central, replaceDest: true);
+        if (!moved.IsSuccess)
+          return moved;
+      }
+
+      return Publish(account);
+    }
+
+    if (!central.Equals(privateRoot, StringComparison.OrdinalIgnoreCase)
+        && Directory.Exists(central)
+        && Directory.GetFileSystemEntries(central).Length > 0) {
+      var moved = Move(central, privateRoot, replaceDest: true);
       if (!moved.IsSuccess)
         return moved;
     }
 
-    account.ArchiveStoreId = "";
-    return Publish(account);
+    DropLocalAccountFile(privateRoot);
+    RemovePublished(account.Id);
+    return Result.Ok();
   }
 
   public static Result Publish(MailboxAccount account) {
@@ -90,6 +108,16 @@ public static class SharedMailboxStore {
     }
   }
 
+  private static void DropLocalAccountFile(string privateRoot) {
+    try {
+      var file = Path.Combine(privateRoot, "account.json");
+      if (File.Exists(file))
+        File.Delete(file);
+    }
+    catch {
+    }
+  }
+
   private static void RemovePublished(string mailboxId) {
     var file = SharedMailPaths.AccountFile(mailboxId);
     if (File.Exists(file))
@@ -99,28 +127,41 @@ public static class SharedMailboxStore {
       Directory.Delete(dir);
   }
 
-  private static Result Move(string source, string dest) {
+  private static Result Move(string source, string dest, bool replaceDest) {
     try {
+      if (source.Equals(dest, StringComparison.OrdinalIgnoreCase))
+        return Result.Ok();
       if (!Directory.Exists(source)) {
         Directory.CreateDirectory(dest);
-        ShareWithOtherUsers(dest);
+        if (IsSharedRoot(dest))
+          ShareWithOtherUsers(dest);
         return Result.Ok();
       }
 
-      if (Directory.Exists(dest) && Directory.GetFileSystemEntries(dest).Length > 0)
-        return Result.BadRequest("The shared folder already has mail for this account.");
+      if (Directory.Exists(dest) && Directory.GetFileSystemEntries(dest).Length > 0) {
+        if (!replaceDest)
+          return Result.BadRequest("The destination folder already has mail for this account.");
+        Directory.Delete(dest, recursive: true);
+      }
+
       var parent = Path.GetDirectoryName(dest);
       if (!string.IsNullOrWhiteSpace(parent))
         Directory.CreateDirectory(parent);
       if (Directory.Exists(dest))
         Directory.Delete(dest);
       Directory.Move(source, dest);
-      ShareWithOtherUsers(dest);
+      if (IsSharedRoot(dest))
+        ShareWithOtherUsers(dest);
       return Result.Ok();
     }
     catch (Exception ex) {
       return Result.BadRequest(ex.Message);
     }
+  }
+
+  private static bool IsSharedRoot(string directory) {
+    var root = SharedMailPaths.Root();
+    return directory.StartsWith(root, StringComparison.OrdinalIgnoreCase);
   }
 
   private static void ShareWithOtherUsers(string directory) {

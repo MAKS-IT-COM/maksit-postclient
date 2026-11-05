@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 
 
@@ -51,7 +52,7 @@ public partial class IdentityHubLoginWindow : Window {
     _poll.Tick += (_, _) => _ = TryCompleteFromWebViewAsync();
     HubWeb.EnvironmentRequested += (_, args) => WebViewSetup.Apply(args, identityHub: true);
     HubWeb.AdapterCreated += (_, _) => LoadHub(force: false);
-    HubWeb.NavigationCompleted += (_, _) => _ = TryCompleteFromWebViewAsync();
+    HubWeb.NavigationCompleted += (_, _) => OnNavigationCompleted();
     HubWeb.WebMessageReceived += OnWebMessage;
     HubWeb.NewWindowRequested += OnNewWindow;
     Opened += OnOpened;
@@ -61,15 +62,55 @@ public partial class IdentityHubLoginWindow : Window {
 
   private void OnOpened(object? sender, EventArgs e) {
     LoadHub(force: false);
-    StatusText.Text = "Waiting for Identity Hub… keep this window open until it closes itself.";
+    StatusText.Text = "Waiting for sign-in… keep this window open until it closes itself.";
+    UpdateBackButton();
     _poll.Start();
+  }
+
+  private void OnNavigationCompleted() {
+    UpdateBackButton();
+    _ = TryCompleteFromWebViewAsync();
+  }
+
+  private void UpdateBackButton() {
+    try {
+      BackButton.IsEnabled = !_done && (HubWeb.CanGoBack || IsAwayFromSignIn());
+    }
+    catch {
+      BackButton.IsEnabled = !_done && IsAwayFromSignIn();
+    }
+  }
+
+  private bool IsAwayFromSignIn() {
+    if (HubWeb.Source is not { } current || IsEmptyDocument(current))
+      return false;
+    if (!Uri.TryCreate(_url, UriKind.Absolute, out var start))
+      return false;
+    return !string.Equals(current.GetLeftPart(UriPartial.Path), start.GetLeftPart(UriPartial.Path), StringComparison.OrdinalIgnoreCase);
+  }
+
+  private void OnBackClick(object? sender, RoutedEventArgs e) {
+    if (_done)
+      return;
+    try {
+      if (HubWeb.CanGoBack) {
+        HubWeb.GoBack();
+        return;
+      }
+    }
+    catch {
+      // Fall through to reload the sign-in URL.
+    }
+
+    LoadHub(force: true);
+    UpdateBackButton();
   }
 
   private void LoadHub(bool force) {
     if (_done)
       return;
     if (!Uri.TryCreate(_url, UriKind.Absolute, out var target)) {
-      StatusText.Text = "Unable to open Identity Hub.";
+      StatusText.Text = "Unable to open sign-in.";
       return;
     }
 
@@ -78,10 +119,11 @@ public partial class IdentityHubLoginWindow : Window {
     try {
       HubWeb.Source = target;
       _started = true;
+      UpdateBackButton();
     }
     catch {
       if (!_started)
-        StatusText.Text = "Unable to open Identity Hub.";
+        StatusText.Text = "Unable to open sign-in.";
     }
   }
 
@@ -121,6 +163,7 @@ public partial class IdentityHubLoginWindow : Window {
       return;
     _done = true;
     _poll.Stop();
+    BackButton.IsEnabled = false;
     Close(json);
   }
 }

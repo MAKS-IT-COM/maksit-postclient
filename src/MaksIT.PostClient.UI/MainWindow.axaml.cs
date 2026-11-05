@@ -281,7 +281,7 @@ public partial class MainWindow : Window {
       };
       var json = await window.ShowDialog<string?>(_accountWindow ?? this);
       if (string.IsNullOrWhiteSpace(json))
-        vm.CancelIdentityHubSignIn("Identity Hub sign-in cancelled.");
+        vm.CancelIdentityHubSignIn("Sign-in cancelled.");
       else
         await vm.CompleteIdentityHubSignIn(kind, json);
     }

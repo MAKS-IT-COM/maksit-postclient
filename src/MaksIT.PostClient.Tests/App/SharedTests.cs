@@ -598,6 +598,24 @@ public class MailListBudgetTests {
     Assert.Equal(999, last.End);
     Assert.False(last.Incomplete);
   }
+
+  [Fact]
+  public void AdvanceUidPage_RetriesPartialFetchUntilMissLimit() {
+    var retry = MailListBudget.AdvanceUidPage(29, 0, 29, fetchedInPage: 15, missStreak: 0);
+    Assert.Equal(0, retry.NextOffset);
+    Assert.Equal(1, retry.NextMissStreak);
+    Assert.True(retry.Incomplete);
+
+    var skip = MailListBudget.AdvanceUidPage(29, 0, 29, fetchedInPage: 15, missStreak: 2);
+    Assert.Equal(29, skip.NextOffset);
+    Assert.Equal(0, skip.NextMissStreak);
+    Assert.False(skip.Incomplete);
+
+    var full = MailListBudget.AdvanceUidPage(29, 0, 29, fetchedInPage: 29, missStreak: 1);
+    Assert.Equal(29, full.NextOffset);
+    Assert.Equal(0, full.NextMissStreak);
+    Assert.False(full.Incomplete);
+  }
 }
 
 
@@ -875,6 +893,63 @@ public class MailPriorityTests {
     Assert.Equal("High priority", MailPriority.Label(MailPriority.High));
     Assert.Equal("Low priority", MailPriority.Label(MailPriority.Low));
     Assert.Equal("Normal priority", MailPriority.Label(MailPriority.Normal));
+  }
+}
+
+
+[Collection(ProcessEnvironment.Name)]
+public class LayeredSecretStoreTests {
+  [Fact]
+  public void GetFallsBackToShared_AndPublishMovesMailboxKeys() {
+    var previous = Environment.GetEnvironmentVariable(SharedMailPaths.Env);
+    var root = Path.Combine(Path.GetTempPath(), "postclient-layered-" + Guid.NewGuid().ToString("N"));
+    Environment.SetEnvironmentVariable(SharedMailPaths.Env, root);
+    var userPath = Path.Combine(Path.GetTempPath(), "postclient-user-secrets-" + Guid.NewGuid().ToString("N") + ".bin");
+    try {
+      var user = new FileSecretStore(userPath);
+      var shared = new SharedSecretStore();
+      var layered = new LayeredSecretStore(user, shared);
+      Assert.True(user.Put(FileSecretStore.MailboxKey("box"), "pw").IsSuccess);
+      Assert.True(user.Put(FileSecretStore.OAuthKey("box"), "tok").IsSuccess);
+      Assert.True(layered.PublishMailbox("box").IsSuccess);
+      Assert.Null(user.Get(FileSecretStore.MailboxKey("box")).Value);
+      Assert.Equal("pw", shared.Get(FileSecretStore.MailboxKey("box")).Value);
+      Assert.Equal("pw", layered.Get(FileSecretStore.MailboxKey("box")).Value);
+      Assert.True(layered.WithdrawMailbox("box").IsSuccess);
+      Assert.Equal("pw", user.Get(FileSecretStore.MailboxKey("box")).Value);
+      Assert.Null(shared.Get(FileSecretStore.MailboxKey("box")).Value);
+    }
+    finally {
+      Environment.SetEnvironmentVariable(SharedMailPaths.Env, previous);
+      if (Directory.Exists(root))
+        Directory.Delete(root, recursive: true);
+      if (File.Exists(userPath))
+        File.Delete(userPath);
+    }
+  }
+
+  [Fact]
+  public void PutRefreshesPublishedSharedCopy() {
+    var previous = Environment.GetEnvironmentVariable(SharedMailPaths.Env);
+    var root = Path.Combine(Path.GetTempPath(), "postclient-layered-put-" + Guid.NewGuid().ToString("N"));
+    Environment.SetEnvironmentVariable(SharedMailPaths.Env, root);
+    var userPath = Path.Combine(Path.GetTempPath(), "postclient-user-secrets-put-" + Guid.NewGuid().ToString("N") + ".bin");
+    try {
+      var user = new FileSecretStore(userPath);
+      var shared = new SharedSecretStore();
+      var layered = new LayeredSecretStore(user, shared);
+      Assert.True(shared.Put(FileSecretStore.MailboxKey("box"), "old").IsSuccess);
+      Assert.True(layered.Put(FileSecretStore.MailboxKey("box"), "new").IsSuccess);
+      Assert.Equal("new", shared.Get(FileSecretStore.MailboxKey("box")).Value);
+      Assert.Equal("new", user.Get(FileSecretStore.MailboxKey("box")).Value);
+    }
+    finally {
+      Environment.SetEnvironmentVariable(SharedMailPaths.Env, previous);
+      if (Directory.Exists(root))
+        Directory.Delete(root, recursive: true);
+      if (File.Exists(userPath))
+        File.Delete(userPath);
+    }
   }
 }
 

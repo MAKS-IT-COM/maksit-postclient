@@ -1,8 +1,8 @@
 # Postclient
 
-![Line Coverage](https://img.shields.io/badge/Line%20Coverage-60.4%25-green)
-![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-46.3%25-yellowgreen)
-![Method Coverage](https://img.shields.io/badge/Method%20Coverage-63.1%25-green)
+![Line Coverage](https://img.shields.io/badge/Line%20Coverage-60.5%25-green)
+![Branch Coverage](https://img.shields.io/badge/Branch%20Coverage-46.7%25-yellowgreen)
+![Method Coverage](https://img.shields.io/badge/Method%20Coverage-63.9%25-green)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE.md)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D6)
