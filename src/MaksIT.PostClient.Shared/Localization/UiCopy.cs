@@ -332,7 +332,9 @@ public sealed partial class UiCopy {
 
   public string Folders { get; init; } = "";
 
-  public string AllEmails { get; init; } = "";
+  public string AllInboxes { get; init; } = "";
+
+  public string AllInboxesHint { get; init; } = "";
 
   public string SearchPlaceholder { get; init; } = "";
 
@@ -846,7 +848,8 @@ public sealed partial class UiCopy {
       Delete = "Delete",
       MoveTo = "Move To",
       Folders = "Folders",
-      AllEmails = "All emails",
+      AllInboxes = "All inboxes",
+      AllInboxesHint = "Only each account's Inbox - not labels or other folders - so this list stays about what needs attention across mailboxes.",
       SearchPlaceholder = "Search subject, body, attachments, labels, meaning",
       ClearSearch = "Clear search",
       Label = "Label",
@@ -1153,7 +1156,8 @@ public sealed partial class UiCopy {
       Delete = "Elimina",
       MoveTo = "Sposta in",
       Folders = "Cartelle",
-      AllEmails = "Tutte le email",
+      AllInboxes = "Tutte le caselle",
+      AllInboxesHint = "Solo la Posta in arrivo di ogni account - non etichette o altre cartelle - cosi l'elenco resta su cio che richiede attenzione tra le caselle.",
       SearchPlaceholder = "Cerca oggetto, corpo, allegati, etichette, significato",
       ClearSearch = "Cancella ricerca",
       Label = "Etichetta",

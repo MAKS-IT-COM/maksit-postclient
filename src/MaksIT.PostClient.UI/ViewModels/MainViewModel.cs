@@ -3277,7 +3277,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     if (existing is null) {
       var folder = new FolderRowViewModel {
         FullName = FolderNodeViewModel.AllEmailsId,
-        Name = Copy.AllEmails
+        Name = Copy.AllInboxes
       };
       FolderTree.Insert(0, FolderNodeViewModel.AllEmails(folder));
       return;
@@ -3289,7 +3289,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
     }
 
     if (existing.Folder is { } row)
-      row.Name = Copy.AllEmails;
+      row.Name = Copy.AllInboxes;
     existing.NotifyCounts();
   }
 
@@ -3312,7 +3312,7 @@ public partial class MainViewModel : ObservableObject, IAsyncDisposable {
 
     node.Folder.Total = total;
     node.Folder.Unread = unread;
-    node.Folder.Name = Copy.AllEmails;
+    node.Folder.Name = Copy.AllInboxes;
     node.NotifyCounts();
   }
 

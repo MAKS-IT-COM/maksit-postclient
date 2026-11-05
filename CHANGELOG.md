@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic
 
 ## [Unreleased]
 
+## [0.4.9] - 2026-11-05
+
+### Changed
+- Sidebar **All emails** renamed to **All inboxes**, with a tooltip that it only combines each account's Inbox (not labels or other folders).
+
 ## [0.4.8] - 2026-11-05
 
 Sidebar **All emails** combines every Inbox. Sharing an account moves its archive and sign-in secrets with the setting. IMAP no longer stalls mid-folder after a partial FETCH.

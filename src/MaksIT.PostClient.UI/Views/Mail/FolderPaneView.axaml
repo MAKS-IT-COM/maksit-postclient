@@ -72,7 +72,7 @@
               <TextBlock Text="{Binding Title}"
                          FontWeight="{Binding Weight}"
                          TextTrimming="CharacterEllipsis"
-                         ToolTip.Tip="{Binding QuotaTip}" />
+                         ToolTip.Tip="{Binding Tip}" />
               <ProgressBar Height="3"
                            Minimum="0"
                            Maximum="100"

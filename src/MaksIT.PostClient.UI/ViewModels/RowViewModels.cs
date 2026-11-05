@@ -131,10 +131,15 @@ public sealed partial class FolderNodeViewModel : ObservableObject {
 
   public string Title =>
     IsAllEmails
-      ? UiLocale.Copy.AllEmails
+      ? UiLocale.Copy.AllInboxes
       : IsAccount
         ? Mailbox?.Label ?? UiLocale.Copy.Mailbox
         : Folder?.Name ?? "";
+
+  public string Tip =>
+    IsAllEmails
+      ? UiLocale.Copy.AllInboxesHint
+      : QuotaTip;
 
   public string Glyph =>
     IsAllEmails
@@ -193,6 +198,7 @@ public sealed partial class FolderNodeViewModel : ObservableObject {
 
   public void NotifyCounts() {
     OnPropertyChanged(nameof(Title));
+    OnPropertyChanged(nameof(Tip));
     OnPropertyChanged(nameof(Unread));
     OnPropertyChanged(nameof(UnreadLabel));
     OnPropertyChanged(nameof(HasUnread));
